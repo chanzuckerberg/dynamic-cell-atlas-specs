@@ -1,0 +1,70 @@
+"""Drift guard: the committed generated artifacts must match `make schema`.
+
+The LinkML schema is the single source of truth; the JSON Schema and Pydantic
+models are generated and committed. If someone edits the YAML without
+regenerating (or hand-edits a generated file), CI fails here.
+
+Skipped when linkml is not installed — it is a dev-only tool, not a runtime
+dependency, so the artifacts are validated wherever the dev toolchain exists.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Relative paths, run from REPO_ROOT — must match the Makefile exactly.
+# gen-pydantic embeds the schema path it is given into the module's `source_file`
+# metadata, so the invocation has to mirror `make schema` to be reproducible.
+SCHEMA = "schema/v0.2/dca_experimental_metadata.yaml"
+JSON_OUT = (
+    REPO_ROOT
+    / "schema"
+    / "v0.2"
+    / "generated"
+    / "dca_experimental_metadata.schema.json"
+)
+PYDANTIC_OUT = (
+    REPO_ROOT
+    / "helpers"
+    / "src"
+    / "dca_helpers"
+    / "validation"
+    / "versions"
+    / "v0_2"
+    / "_generated_models.py"
+)
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("gen-json-schema") is None or shutil.which("gen-pydantic") is None,
+    reason="linkml generators not installed (dev-only tool)",
+)
+
+
+def _run(cmd: list[str]) -> str:
+    proc = subprocess.run(
+        cmd, capture_output=True, text=True, check=True, cwd=REPO_ROOT
+    )
+    return proc.stdout
+
+
+def test_json_schema_in_sync_with_yaml():
+    regenerated = _run(["gen-json-schema", "--no-metadata", SCHEMA])
+    committed = JSON_OUT.read_text()
+    assert regenerated == committed, (
+        "schema/v0.2/generated/dca_experimental_metadata.schema.json is stale. "
+        "Run `make schema` and commit the result."
+    )
+
+
+def test_pydantic_models_in_sync_with_yaml():
+    regenerated = _run(["gen-pydantic", SCHEMA])
+    committed = PYDANTIC_OUT.read_text()
+    assert regenerated == committed, (
+        "helpers/src/dca_helpers/validation/versions/v0_2/_generated_models.py is "
+        "stale. Run `make schema` and commit the result."
+    )

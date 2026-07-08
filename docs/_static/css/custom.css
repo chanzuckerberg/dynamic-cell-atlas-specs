@@ -1,0 +1,332 @@
+/* Custom styles for Dynamic Cell Atlas Specifications */
+/* Biohub Brand Identity Implementation */
+
+/* === BIOHUB BRAND CUSTOM PROPERTIES === */
+:root {
+  /* Brand colors */
+  --bh-black:      #000000;
+  --bh-white:      #FFFFFF;
+  --bh-periwinkle: #6E4FF9;
+  --bh-iris:       #33029C;
+  --bh-indigo:     #1D004D;
+
+  /* Docs theme (technical: 70% white, 20% black, 10% periwinkle) */
+  --bh-bg:              #FFFFFF;
+  --bh-surface:         #F5F5F5;
+  --bh-text:            #000000;
+  --bh-text-secondary:  #333333;
+  --bh-accent:          #6E4FF9;
+  --bh-border:          #000000;
+
+  /* Typography */
+  --bh-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --bh-font-weight-regular: 400;
+  --bh-font-weight-bold: 700;
+
+}
+
+/* Override pydata-sphinx-theme color variables at matching specificity */
+html:not([data-theme]),
+html[data-theme="light"] {
+  --pst-color-primary: #6E4FF9;
+  --pst-color-primary-bg: #F5F5F5;
+  --pst-color-secondary: #33029C;
+  --pst-color-accent: #6E4FF9;
+  --pst-color-link: #6E4FF9;
+  --pst-color-link-hover: #33029C;
+}
+
+/* === BASE TYPOGRAPHY OVERRIDES === */
+body, .bd-main {
+  font-family: var(--bh-font);
+  font-weight: var(--bh-font-weight-regular);
+  line-height: 1.6;
+}
+
+/* Headlines — all sans-serif, black text */
+h1, .h1 {
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-bold) !important;
+  color: var(--bh-text) !important;
+}
+
+h2, .h2 {
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-bold) !important;
+  color: var(--bh-text) !important;
+}
+
+h3, .h3 {
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-bold) !important;
+  color: var(--bh-text) !important;
+}
+
+h4, .h4,
+h5, .h5,
+h6, .h6 {
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-regular) !important;
+  color: var(--bh-text) !important;
+}
+
+/* Links — periwinkle accent, underline on hover only */
+a, a:visited {
+  color: var(--bh-accent) !important;
+  text-decoration: none !important;
+}
+
+a:hover, a:focus {
+  color: var(--bh-iris) !important;
+  text-decoration: underline !important;
+}
+
+/* === NAVIGATION === */
+.bd-navbar {
+  background-color: var(--bh-white) !important;
+  border-bottom: 1px solid var(--bh-black) !important;
+}
+
+.navbar-brand.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.navbar-brand .logo__image {
+  height: 3rem;
+  width: auto;
+  position: relative;
+  top: 0.15rem;
+}
+
+.navbar-brand .logo__title {
+  color: var(--bh-text) !important;
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-bold) !important;
+  margin: 0;
+  line-height: 1;
+}
+
+.navbar-nav .nav-link {
+  color: var(--bh-black) !important;
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-regular) !important;
+}
+
+.navbar-nav .nav-link:hover {
+  color: var(--bh-accent) !important;
+}
+
+/* Sidebar navigation */
+.bd-sidebar .nav > li > a {
+  color: var(--bh-text) !important;
+  font-family: var(--bh-font) !important;
+}
+
+.bd-sidebar .nav > li > a:hover {
+  color: var(--bh-accent) !important;
+  background-color: var(--bh-surface) !important;
+}
+
+.bd-sidebar .nav > li > a.current {
+  color: var(--bh-accent) !important;
+  border-left: 3px solid var(--bh-accent);
+  background-color: var(--bh-white) !important;
+}
+
+/* === PREV/NEXT NAVIGATION === */
+.prev-next-area {
+  border-top: 1px solid #ddd;
+}
+
+.prev-next-area a {
+  color: var(--bh-text) !important;
+}
+
+.prev-next-area a:hover {
+  color: var(--bh-accent) !important;
+}
+
+.prev-next-subtitle {
+  color: var(--bh-text-secondary) !important;
+}
+
+.prev-next-title {
+  color: var(--bh-accent) !important;
+}
+
+/* === FOOTER — black background, white text === */
+.bd-footer {
+  background-color: var(--bh-black) !important;
+  color: var(--bh-white) !important;
+}
+
+.bd-footer a,
+.bd-footer a:visited {
+  color: var(--bh-white) !important;
+}
+
+.bd-footer a:hover,
+.bd-footer a:focus {
+  color: var(--bh-periwinkle) !important;
+}
+
+.bd-footer .footer-items__end,
+.bd-footer .footer-items__start,
+.bd-footer .footer-items__center,
+.bd-footer .footer-item {
+  color: var(--bh-white) !important;
+}
+
+.bd-footer p {
+  color: var(--bh-white) !important;
+}
+
+/* === BUTTONS === */
+.btn-primary {
+  background-color: var(--bh-black) !important;
+  border-color: var(--bh-black) !important;
+  color: var(--bh-white) !important;
+  font-family: var(--bh-font) !important;
+  font-weight: var(--bh-font-weight-regular) !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--bh-accent) !important;
+  border-color: var(--bh-accent) !important;
+}
+
+/* GitHub icon color */
+.navbar-icon-links .fab {
+  color: var(--bh-black) !important;
+}
+
+.navbar-icon-links .fab:hover {
+  color: var(--bh-accent) !important;
+}
+
+/* Set light mode as default (brand spec is light-mode only) */
+html[data-theme=""] {
+  color-scheme: light;
+}
+
+html[data-mode=""] {
+  color-scheme: light;
+}
+
+body[data-default-mode=""] {
+  color-scheme: light;
+}
+
+/* RFC 2119 keyword styling */
+strong {
+    font-weight: 600;
+}
+
+/* Make MUST/SHOULD/MAY keywords stand out — black, bold */
+strong:contains("MUST"),
+strong:contains("SHOULD"),
+strong:contains("MAY"),
+strong:contains("REQUIRED"),
+strong:contains("RECOMMENDED"),
+strong:contains("OPTIONAL") {
+    color: var(--bh-text);
+    text-transform: uppercase;
+    font-weight: var(--bh-font-weight-bold);
+}
+
+/* === CODE BLOCKS — black bg, white text === */
+.highlight {
+    margin: 1em 0;
+}
+
+.highlight pre {
+    background-color: var(--bh-surface) !important;
+    color: var(--bh-text) !important;
+    border-left: 3px solid var(--bh-accent);
+}
+
+/* === ADMONITIONS === */
+.admonition {
+    margin: 1.5em 0;
+    padding: 0.75em 1.25em;
+    border-left: 4px solid var(--bh-accent);
+    background-color: var(--bh-white);
+    border-radius: 0 4px 4px 0;
+    font-family: var(--bh-font);
+}
+
+.admonition-title {
+    font-family: var(--bh-font) !important;
+    font-weight: var(--bh-font-weight-bold) !important;
+    color: var(--bh-text) !important;
+    margin-bottom: 0.5em;
+}
+
+.admonition.note {
+    border-color: var(--bh-accent);
+    background-color: var(--bh-surface);
+}
+
+.admonition.tip,
+.admonition.hint {
+    border-color: var(--bh-text-secondary);
+    background-color: var(--bh-surface);
+}
+
+.admonition.attention,
+.admonition.warning {
+    border-color: var(--bh-black);
+    background-color: var(--bh-surface);
+}
+
+.admonition.important,
+.admonition.caution {
+    border-color: var(--bh-indigo);
+    background-color: var(--bh-surface);
+}
+
+/* === TABLE STYLING — clean black/white/gray === */
+table {
+    border-collapse: collapse;
+    margin: 1em 0;
+}
+
+table th,
+table td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+    font-family: var(--bh-font);
+}
+
+table th {
+    background-color: var(--bh-surface);
+    font-weight: var(--bh-font-weight-bold);
+    color: var(--bh-text);
+}
+
+/* Alternate table row colors for better readability */
+table tr:nth-child(even) {
+    background-color: #FAFAFA;
+}
+
+/* Improve readability of technical specifications */
+.section {
+    margin-bottom: 2em;
+}
+
+/* Style for draft watermark when needed */
+.draft-watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 6em;
+    color: rgba(0, 0, 0, 0.08);
+    z-index: -1;
+    pointer-events: none;
+    font-weight: bold;
+}

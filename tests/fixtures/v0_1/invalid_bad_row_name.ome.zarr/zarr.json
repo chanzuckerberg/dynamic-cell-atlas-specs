@@ -1,0 +1,15 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.5",
+      "plate": {
+        "rows": [{"name": "A!"}],
+        "columns": [{"name": "1"}],
+        "wells": [],
+        "acquisitions": [{"id": 0}]
+      }
+    }
+  }
+}
