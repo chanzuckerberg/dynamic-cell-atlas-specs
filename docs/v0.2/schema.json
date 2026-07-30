@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chanzuckerberg/dynamic-cell-atlas-specs/main/docs/v0.2/schema.json",
+  "title": "DCA Metadata Schema",
+  "description": "Schema for per-channel metadata and normalization statistics in DCA datasets.",
+  "type": "object",
+  "properties": {
+    "dca": {
+      "type": "object",
+      "description": "Top-level DCA namespace in zarr.json, mirroring the OME-Zarr 'ome' key.",
+      "required": [
+        "version",
+        "url",
+        "channels",
+        "normalization_statistics"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Version of the DCA specification.",
+          "const": "0.2"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL pointing to the version of the specification in the GitHub repository.",
+          "const": "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/v0.2/schema.json"
+        },
+        "channels": {
+          "type": "array",
+          "description": "Per-channel metadata array. Each element corresponds to one channel by index in the C axis. Distinct from omero.channels (position-level display hints).",
+          "items": {
+            "$ref": "#/$defs/ChannelMetadata"
+          }
+        },
+        "normalization_statistics": {
+          "$ref": "#/$defs/NormalizationStatistics"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ChannelMetadata": {
+      "type": "object",
+      "description": "Metadata for a single image channel. See channel-metadata.rst.",
+      "required": [
+        "name",
+        "index",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Short channel name of a few words. Should match a potential OME-NGFF omero.channels label.",
+          "examples": [
+            "GFP",
+            "mCherry",
+            "Phase2D",
+            "Focus3D",
+            "nuclei_prediction",
+            "membrane_prediction"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based channel index in the C axis."
+        },
+        "channel_type": {
+          "type": "string",
+          "enum": [
+            "fluorescence",
+            "chromogenic",
+            "labelfree",
+            "predicted"
+          ],
+          "description": "Broad classification of channel acquisition type."
+        },
+        "description": {
+          "type": "string",
+          "description": "Rich natural language description suitable for text embedding. Recommended format — fluorescent: '{biological_target} visualized via {marker}'; labelfree: '{reconstruction_type} label-free imaging'; predicted: '{biological_target} predicted by virtual staining'."
+        },
+        "biological_annotation": {
+          "$ref": "#/$defs/BiologicalAnnotation"
+        }
+      },
+      "examples": [
+        {
+          "name": "Phase2D",
+          "index": 0,
+          "channel_type": "labelfree",
+          "description": "Projected 2D reconstruction of label-free brightfield imaging"
+        },
+        {
+          "name": "GFP",
+          "index": 2,
+          "channel_type": "fluorescence",
+          "biological_annotation": {
+            "biological_target": "chaperones",
+            "marker": "HSPA1B",
+            "marker_type": "endogenous_tag"
+          },
+          "description": "Max projected chaperones visualized via HSPA1B"
+        },
+        {
+          "name": "mCherry",
+          "index": 3,
+          "channel_type": "fluorescence",
+          "biological_annotation": {
+            "biological_target": "actin filament",
+            "marker": "FastAct_SPY555 Live Cell Dye",
+            "marker_type": "live_cell_dye"
+          },
+          "description": "Max projected actin filament visualized via FastAct_SPY555 Live Cell Dye"
+        },
+        {
+          "name": "nuclei_prediction",
+          "index": 4,
+          "channel_type": "predicted",
+          "biological_annotation": {
+            "biological_target": "nuclei"
+          },
+          "description": "Nuclei predicted by virtual staining"
+        },
+        {
+          "name": "membrane_prediction",
+          "index": 5,
+          "channel_type": "predicted",
+          "biological_annotation": {
+            "biological_target": "membrane"
+          },
+          "description": "Membrane predicted by virtual staining"
+        }
+      ]
+    },
+    "IntensityStatistics": {
+      "type": "object",
+      "description": "Summary intensity statistics for a channel over a given scope (dataset or single timepoint).",
+      "required": [
+        "p1",
+        "p5",
+        "p95",
+        "p99"
+      ],
+      "properties": {
+        "p1": {
+          "type": "number",
+          "description": "1st percentile of pixel intensities."
+        },
+        "p5": {
+          "type": "number",
+          "description": "5th percentile of pixel intensities."
+        },
+        "p95": {
+          "type": "number",
+          "description": "95th percentile of pixel intensities."
+        },
+        "p99": {
+          "type": "number",
+          "description": "99th percentile of pixel intensities."
+        },
+        "p95_p5": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Robust range: 95th percentile minus 5th percentile."
+        },
+        "p99_p1": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wide robust range: 99th percentile minus 1st percentile."
+        },
+        "mean": {
+          "type": "number",
+          "description": "Arithmetic mean of pixel intensities."
+        },
+        "std": {
+          "type": "number",
+          "description": "Standard deviation of pixel intensities."
+        },
+        "median": {
+          "type": "number",
+          "description": "Median (50th percentile) of pixel intensities."
+        },
+        "iqr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Interquartile range (75th percentile minus 25th percentile)."
+        }
+      }
+    },
+    "NormalizationMetadata": {
+      "type": "object",
+      "description": "Parameters recorded when computing normalization statistics, for reproducibility.",
+      "properties": {
+        "grid": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Spatial downsampling factor used when computing statistics (e.g. 16 means every 16th pixel was sampled)."
+        }
+      }
+    },
+    "ChannelNormalization": {
+      "type": "object",
+      "description": "Normalization statistics for a single channel. See normalization-statistics.rst.",
+      "required": [
+        "dataset_statistics"
+      ],
+      "properties": {
+        "dataset_statistics": {
+          "$ref": "#/$defs/IntensityStatistics",
+          "description": "Statistics computed over all spatial dimensions and timepoints for this channel."
+        },
+        "timepoint_statistics": {
+          "type": "object",
+          "description": "Per-timepoint statistics keyed by zero-based timepoint index.",
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/IntensityStatistics"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "NormalizationStatistics": {
+      "type": "object",
+      "description": "Per-channel normalization statistics keyed by zero-based channel index. See normalization-statistics.rst.",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/NormalizationMetadata",
+          "description": "Optional parameters recorded when computing normalization statistics."
+        }
+      },
+      "patternProperties": {
+        "^[0-9]+$": {
+          "$ref": "#/$defs/ChannelNormalization"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BiologicalAnnotation": {
+      "type": "object",
+      "description": "Categorical metadata describing the biological target of the channel. All fields are optional.",
+      "properties": {
+        "biological_target": {
+          "type": "string",
+          "description": "Target organelle, structure, or protein class visualized.",
+          "examples": [
+            "chaperones",
+            "actin filament",
+            "nuclei",
+            "membrane",
+            "mitochondria",
+            "endoplasmic reticulum",
+            "Golgi",
+            "nucleus"
+          ]
+        },
+        "marker": {
+          "type": "string",
+          "description": "Specific reagent, protein, or dye used.",
+          "examples": [
+            "HSPA1B",
+            "FastAct_SPY555 Live Cell Dye",
+            "Hoechst",
+            "Mitotracker",
+            "virtual stain"
+          ]
+        },
+        "marker_type": {
+          "type": "string",
+          "enum": [
+            "endogenous_tag",
+            "live_cell_dye",
+            "fixed_dye",
+            "antibody"
+          ],
+          "description": "Mechanism of labeling."
+        },
+        "cpg_labeled_structure": {
+          "type": "string",
+          "enum": [
+            "β-tubulin",
+            "Endoplasmic Reticulum",
+            "f-Actin",
+            "Golgi, Plasma Membrane",
+            "Golgi, Plasma Membrane, f-Actin",
+            "Lysosomes",
+            "Lysosomes, Endosomes",
+            "Mitochondria",
+            "Nucleus",
+            "Nucleolus, Cytoplasmic RNA",
+            "Nucleus, Nucleolus, Cytoplasmic RNA",
+            "None",
+            "Unknown"
+          ],
+          "description": "Optional. CellPainting Gallery harmonized cellular structure made visible."
+        },
+        "cpg_labeled_molecule": {
+          "type": "string",
+          "enum": [
+            "Acidic Compartments",
+            "β-tubulin",
+            "DNA",
+            "DNA, RNA",
+            "f-Actin",
+            "f-Actin, N-acetyl-D-glucosamine",
+            "Glycoproteins",
+            "Mitochondria",
+            "N-acetyl-D-glucosamine",
+            "RNA",
+            "None",
+            "Unknown"
+          ],
+          "description": "Optional. CellPainting Gallery harmonized molecular target the reagent binds."
+        }
+      }
+    }
+  }
+}
