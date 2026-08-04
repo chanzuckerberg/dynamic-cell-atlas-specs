@@ -1,0 +1,9 @@
+sphinx>=5.0
+pydata-sphinx-theme
+sphinxcontrib-mermaid
+sphinx-reredirects
+sphinx-autobuild
+
+# Testing dependencies
+pytest>=7.0
+pyyaml>=6.0
