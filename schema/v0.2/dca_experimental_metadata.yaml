@@ -1,0 +1,1415 @@
+id: https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata
+name: dca_experimental_metadata
+title: DCA Experimental Metadata
+description: >-
+  LinkML schema for Dynamic Cell Atlas experimental metadata (v0.2) — the single
+  source of truth for the acquisition, study/sample, and perturbation context
+  curated for DCA datasets.
+
+  Metadata is curated into a sibling Parquet (the source of truth) and written to the
+  ``zarr.json`` ``dca`` block (alongside the machine-measured channels + normalization
+  statistics); required, recommended and optional fields alike go to both. Only the
+  required floor MUST be present; whatever is present is validated. Every value carries its
+  provenance as plain columns alongside it (citation incl. grounding match +
+  grounded flag + source_kind), blank when not applicable, in both stores. A field is promoted into
+  the required floor when verifiable, schema-stable, and consistently scoped.
+
+  Anchoring: the overall Study / Biosample / Specimen / acquisition structure follows
+  the REMBI reporting guideline; within it, instrument / acquisition fields →
+  Bio-Formats / OME; study & people → OME ``Experiment`` / ``Experimenter`` + Broad CellPainting Gallery; cell line & organism → CellPainting Gallery + NCBITaxon;
+  perturbation → OME ``Reagent`` + CPG + JUMP. Concepts with no equivalent in those
+  sources are added as DCA-native extensions (REMBI-derived).
+
+license: MIT
+default_range: string
+default_prefix: dca
+
+prefixes:
+  dca: https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata/
+  linkml: https://w3id.org/linkml/
+  # Bio-Formats / OME data model (group 1 core acquisition fields)
+  OME: https://www.openmicroscopy.org/Schemas/OME/2016-06#
+  bioformats: https://bio-formats.readthedocs.io/en/v8.5.0/metadata-summary.html#
+  # REMBI (Sarkans et al. 2021, Nat Methods) — anchors the overall Study / Biosample /
+  # Specimen / acquisition reporting structure, and the reference for DCA-native fields
+  # with no Bio-Formats / CPG equivalent
+  REMBI: https://www.nature.com/articles/s41592-021-01166-8#
+  # Broad CellPainting Gallery harmonized ontology. It also harmonizes the associated
+  # perturbation metadata tables (compound / orf / crispr), so it is the single linkout.
+  cpg: https://github.com/broadinstitute/cellpainting-gallery-metadata/blob/main/harmonized_ontology.json#
+  # CZI cross-modality descriptive-metadata standard v1.1.0 (CELLxGENE-aligned) —
+  # organism, tissue, disease, development stage, assay as ontology_term_id + label
+  # pairs. v1.1.0 also incorporates Cellosaurus: cell lines are expressed as
+  # tissue_type "cell line" + a CVCL term in tissue_ontology_term_id.
+  cxmod: https://github.com/chanzuckerberg/data-guidance/blob/main/standards/cross-modality/1.1.0/schema.md#
+  # schema.org base vocabulary — used here for dataset-level
+  # name / license / citation / datePublished.
+  sc: https://schema.org/
+  # External ontologies for cross-spec (OPS) alignment
+  FBbi: http://purl.obolibrary.org/obo/FBbi_
+  NCBITaxon: http://purl.obolibrary.org/obo/NCBITaxon_
+  NCBIGene: http://purl.obolibrary.org/obo/NCBIGene_
+  HGNC: http://identifiers.org/hgnc.symbol/
+  ensembl: http://identifiers.org/ensembl/
+  PubChem: http://identifiers.org/pubchem.compound/
+  EFO: http://www.ebi.ac.uk/efo/EFO_
+  CVCL: https://www.cellosaurus.org/CVCL_
+  MONDO: http://purl.obolibrary.org/obo/MONDO_
+  UBERON: http://purl.obolibrary.org/obo/UBERON_
+  CL: http://purl.obolibrary.org/obo/CL_
+  ZFA: http://purl.obolibrary.org/obo/ZFA_
+  HsapDv: http://purl.obolibrary.org/obo/HsapDv_
+  MmusDv: http://purl.obolibrary.org/obo/MmusDv_
+  ZFS: http://purl.obolibrary.org/obo/ZFS_
+  FBdv: http://purl.obolibrary.org/obo/FBdv_
+  WBls: http://purl.obolibrary.org/obo/WBls_
+  PATO: http://purl.obolibrary.org/obo/PATO_
+  ops: https://github.com/chanzuckerberg/ops-schema/blob/main/standards/ops/0.1.0/experimental-metadata.md#
+  sdc: https://github.com/chanzuckerberg/dataset-catalog#
+  # cryoET Data Portal core schema (cdp-common v2.0.0) — CZI sibling standard; DCA's
+  # biosample and specimen axes map to its flat organism / tissue / cell-type / strain /
+  # development-stage / sample-preparation slots (close mappings: cryoET splits name + id,
+  # DCA uses ontology_term_id + label).
+  cdp: https://github.com/chanzuckerberg/cryoet-data-portal-backend/blob/main/schema/core/v2.0.0/common.yaml#
+
+imports:
+  - linkml:types
+
+# ---------------------------------------------------------------------------
+# Enumerations — small, stable controlled vocabularies for group 1.
+# Values mirror the OME data model where one exists.
+# ---------------------------------------------------------------------------
+enums:
+  MicroscopeType:
+    description: OME Microscope.Type vocabulary.
+    permissible_values:
+      Upright: {}
+      Inverted: {}
+      Dissection: {}
+      Electrophysiology: {}
+      Other: {}
+
+  ObjectiveImmersion:
+    description: OME Objective.Immersion vocabulary.
+    permissible_values:
+      Oil: {}
+      Water: {}
+      WaterDipping: {}
+      Air: {}
+      Multi: {}
+      Glycerol: {}
+      Other: {}
+
+  ObjectiveCorrection:
+    description: OME Objective.Correction vocabulary.
+    permissible_values:
+      UV: {}
+      PlanApo: {}
+      PlanFluor: {}
+      SuperFluor: {}
+      VioletCorrected: {}
+      Achro: {}
+      Achromat: {}
+      Fluor: {}
+      Fl: {}
+      Neofluar: {}
+      Apo: {}
+      Other: {}
+
+  DetectorType:
+    description: OME Detector.Type vocabulary.
+    permissible_values:
+      CCD: {}
+      EMCCD: {}
+      CMOS: {}
+      PMT: {}
+      Photodiode: {}
+      Other: {}
+
+  ProvenanceSourceKind:
+    description: >-
+      How the value was obtained, which determines whether the provenance fields
+      (citation + grounding) are **required**: required for ``agent`` values, optional
+      for ``human`` and ``original_data``. DCA-defined.
+    permissible_values:
+      agent:
+        description: >-
+          Extracted by an agent from a source document. The provenance
+          fields (citation + grounding-gate result) are REQUIRED.
+      human:
+        description: >-
+          Manually entered by a person. Provenance is optional (the citation MAY be
+          blank).
+      original_data:
+        description: >-
+          Taken directly from the data source's own provided metadata (e.g. a
+          metadata CSV on the source website), not prose-extracted. Provenance optional.
+
+  MatchStatus:
+    description: >-
+      Result of an agent's deterministic grounding gate locating a cited quote
+      in its source page. Carried with the value so the grounding result
+      stays auditable downstream, where the raw source corpus is unavailable.
+    permissible_values:
+      exact:
+        description: Quote found verbatim in the cited source page.
+      fuzzy:
+        description: >-
+          Quote located above the difflib similarity threshold (minor whitespace /
+          punctuation differences) — still grounded.
+      none:
+        description: Quote not found in the cited source page (ungrounded).
+
+  PerturbationModality:
+    description: >-
+      How the perturbation acts. Normalized superset of CellPainting Gallery
+      ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]) and JUMP
+      ``perturbation_modality`` ([compound, orf, crispr, unknown]). Values are
+      lowercased to reconcile the two casings; ``unknown`` from JUMP is retained.
+    permissible_values:
+      compound:
+        description: Small-molecule / chemical perturbation.
+        exact_mappings: [cpg:Treatment_Category]
+      orf:
+        description: Open reading frame overexpression.
+      crispr:
+        description: CRISPR knockout / interference / activation.
+      shrna:
+        description: Short hairpin RNA knockdown (CPG only).
+      mirna:
+        description: microRNA perturbation (CPG only).
+      sirna:
+        description: >-
+          Small interfering RNA knockdown — transient, transfected synthetic
+          duplex, distinct from the vector-delivered, stably-expressed ``shrna``.
+          Not in the CPG/JUMP source vocabularies (e.g. RxRx1's ``sirna`` column).
+      physical:
+        description: Physical perturbation (e.g. heat shock, irradiation).
+      biological:
+        description: Biological perturbation (e.g. pathogen, ligand, co-culture).
+      other:
+        description: Perturbation not covered by the categories above.
+      unknown:
+        description: Modality not determinable (JUMP only).
+
+  PerturbationControlClass:
+    description: >-
+      Control role of a well. Reconciles CellPainting Gallery
+      ``Treatment_Control_Class`` ([Control, Treatment, NegCon, PosCon]) and JUMP
+      control ``pert_type`` ([negcon, poscon, empty]). CPG's redundant "Control" is
+      dropped in favor of the explicit negcon/poscon; JUMP's ``empty`` is kept.
+    permissible_values:
+      treatment:
+        description: Experimental (non-control) perturbation.
+      negcon:
+        description: Negative control.
+      poscon:
+        description: Positive control.
+      empty:
+        description: Empty / untreated well (JUMP).
+
+  TissueType:
+    description: >-
+      CZI cross-modality ``tissue_type`` (v1.1.0), plus ``unknown`` for sources that do
+      not record what the sample was.
+    close_mappings: [cdp:preparation_sample_type]
+    permissible_values:
+      tissue: {}
+      "cell culture": {}
+      "cell line": {}
+      organoid: {}
+      unknown:
+        description: >-
+          Sample type not determinable from the source. For image corpora assembled
+          without a per-image manifest (e.g. segmentation training sets pooled from
+          many studies), where the sample type genuinely is not recorded. Carries the
+          same meaning as the ``unknown`` sentinel on the ontology-term slots, and is
+          likewise not a shortcut for "not looked up yet".
+
+  SpecimenState:
+    description: >-
+      Specimen state at imaging time — the coarse, mutually-exclusive live-vs-fixed
+      axis. DCA controlled vocabulary (REMBI-derived); no source ontology structures
+      this state cleanly across specimen types. Specific preparation methods (fixation
+      subtype, permeabilization, sectioning, whole-mount, clearing, expansion) are
+      recorded in ``Specimen.preparation_method``.
+    permissible_values:
+      live:
+        description: Imaged alive / unfixed (e.g. live-cell or live organoid imaging).
+      fixed:
+        description: Chemically or cryo-fixed before imaging.
+      unknown:
+        description: State not determinable from the source.
+
+  TimeSampling:
+    description: >-
+      Whether an image group's timepoints are evenly spaced in time. DCA controlled
+      vocabulary: OME-NGFF v0.5 expresses spacing only as a uniform ``t``-axis scale,
+      so a non-uniform acquisition has no way to say so without this.
+    permissible_values:
+      uniform:
+        description: >-
+          Evenly spaced; the ``t``-axis scale describes the spacing. The meaning of an
+          absent ``time_sampling``, so an existing store keeps its current reading.
+      variable:
+        description: >-
+          Not evenly spaced, so the ``t``-axis scale cannot describe it and
+          ``timestamps`` is authoritative. Requires ``timestamps``; not a way to avoid
+          declaring a cadence that is in fact uniform.
+
+  StudyType:
+    description: >-
+      OME ``Experiment.Type`` vocabulary for the study-level experiment type / mode,
+      plus ``Other`` (which requires a free-text ``Study.study_type_other``).
+    permissible_values:
+      FP: {}
+      FRET: {}
+      TimeLapse: {}
+      FourDPlus: {}
+      Screen: {}
+      Immunocytochemistry: {}
+      Immunofluorescence: {}
+      FISH: {}
+      Electrophysiology: {}
+      IonImaging: {}
+      Colocalization: {}
+      PGIDocumentation: {}
+      FluorescenceLifetime: {}
+      SpectralImaging: {}
+      Photobleaching: {}
+      SPIM: {}
+      Other: {}
+
+# ===========================================================================
+# ACQUISITION metadata — minimal Bio-Formats / OME-aligned instrument set.
+# Curated with inline provenance fields, like every other block.
+# ===========================================================================
+classes:
+  ExperimentalMetadata:
+    description: >-
+      Root container for one image group's experimental metadata (a flattened REMBI
+      Study + Study Component): the study, the ``study_component`` (assay class +
+      imaging method), the sample (``biosample`` + ``specimen``), acquisition, and
+      image-data context, the ``perturbation`` assignment, plus the per-value
+      ``provenance`` map. This is the object curated into a Parquet
+      row (one per ``Biosample.group_id``) and mirrored into the ``zarr.json`` ``dca``
+      block. Arrayed HCS screens ALSO index the same assignment per well as
+      :class:`WellPerturbation` (well-level), which is derived from this block.
+    tree_root: true
+    attributes:
+      study:
+        range: Study
+        inlined: true
+        required: true
+      biosample:
+        range: Biosample
+        inlined: true
+        required: true
+      specimen:
+        range: Specimen
+        inlined: true
+        required: true
+      perturbation:
+        description: >-
+          The perturbation applied to this image group's material — dosing / control
+          class / timing plus the :class:`Perturbation` it references (its
+          ``definition`` slot).
+          CONDITIONALLY REQUIRED: present for every image group of a dataset that has
+          perturbations, absent for a dataset that has none. Mirrored into the
+          ``zarr.json`` ``dca`` block like the other required blocks, so a
+          perturbation is readable from the image group a consumer already has open,
+          without resolving a plate / well key — and so it is expressible for a
+          plateless ``image_collection`` store. This is the AUTHORITATIVE placement:
+          an arrayed HCS screen may additionally index the same assignment per well as
+          a :class:`WellPerturbation`, which is derived from this block.
+        range: PerturbationAssignment
+        inlined: true
+      acquisition:
+        range: AcquisitionMetadata
+        inlined: true
+      image_data:
+        range: ImageData
+        inlined: true
+      study_component:
+        range: StudyComponent
+        inlined: true
+        required: true
+      provenance:
+        description: >-
+          Per-value provenance, as a map keyed by each value's dotted ``field_path``
+          (e.g. ``biosample.organism``). A parallel provenance layer, carried in the
+          Parquet and the ``zarr.json`` mirror alike. REQUIRED for
+          ``agent``-curated values, optional for
+          ``human`` / ``original_data`` (see :class:`FieldProvenance` /
+          :class:`Provenance`).
+        range: FieldProvenance
+        multivalued: true
+        inlined: true
+        required: true
+
+  StudyComponent:
+    description: >-
+      REMBI Study Component: the experiment-class descriptors that organise this image
+      group, namely the assay / experiment class (EFO) and the acquisition modality
+      (FBbi). Distinct from the instrument attributes in :class:`AcquisitionMetadata`
+      and from the project-level :class:`Study`.
+    attributes:
+      imaging_method:
+        description: >-
+          Acquisition **modality** as an ``ontology_term_id`` + ``label`` pair, where
+          the id is a Biological Imaging Methods Ontology (FBbi) term — e.g.
+          ``FBbi:00000251`` (confocal microscopy), ``FBbi:00000369`` (light-sheet /
+          selective plane illumination), ``FBbi:00000246`` (fluorescence microscopy).
+          **FBbi only.** The technique used to acquire the image data, distinct from the
+          EFO assay-class in ``assay`` (EFO gives the experiment class, this gives how it
+          was imaged) and from the instrument attributes in :class:`AcquisitionMetadata`.
+          REQUIRED for every imaging dataset; use the ``unavailable`` sentinel with a
+          free-text ``label`` **only** when no FBbi term fits the modality. ``unknown`` and
+          ``na`` are not permitted: the acquiring lab always knows the modality and it
+          always applies, so a real FBbi term or ``unavailable`` is always determinable.
+        range: ImagingMethodTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      assay:
+        description: >-
+          The **assay / experiment class** as an ``ontology_term_id`` + ``label`` pair,
+          where the id is any EFO assay term, not limited to these examples:
+          ``EFO:0009918`` (smFISH), ``EFO:0022955`` (imaging-based spatial
+          transcriptomics), or ``EFO:0002909`` (microscopy assay) as the coarse
+          fallback. **EFO only** (cross-modality / CELLxGENE-aligned). "What kind of
+          experiment". The specific acquisition **modality** (confocal, light-sheet, …)
+          is *not* recorded here — it lives in ``imaging_method`` (FBbi). One ontology
+          per field: EFO answers "what kind of experiment", FBbi "how was it imaged".
+        range: AssayTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+
+  AcquisitionMetadata:
+    description: >-
+      Image-acquisition metadata (REMBI Image Acquisition): instrument attributes
+      (microscope / objective / detector / imaging environment) and acquisition
+      parameters (acquisition date, time increment, …), all OME-aligned. Optional apart
+      from ``time_increment_s``, which is required for time-lapse data. The acquisition
+      **modality** (FBbi ``imaging_method``) is not here: REMBI scopes it to the Study
+      Component, so it lives on :class:`ExperimentalMetadata`. Populate what the source
+      supports; omit the rest rather than guessing.
+    attributes:
+      provenance:
+        description: Per-value provenance (see Provenance).
+        range: Provenance
+        inlined: true
+      acquisition_date:
+        description: Acquisition timestamp (ISO 8601).
+        range: datetime
+        exact_mappings:
+          - bioformats:Image.AcquisitionDate
+      time_increment_s:
+        description: >-
+          Time between successive timepoints, in seconds. Required for time-lapse
+          data; the validator derives the time-lapse condition from the ``zarr.json``
+          array shape (time dimension T > 1) rather than from a metadata flag, so this
+          is enforced by the validator, not a LinkML ``if/then`` rule. The **nominal**
+          cadence: when ``time_sampling`` is ``variable`` this is the spacing the
+          acquisition targeted, and ``timestamps`` is what the frames actually are.
+        range: float
+        unit:
+          ucum_code: s
+        exact_mappings:
+          - bioformats:Image.TimeIncrement
+      time_sampling:
+        description: >-
+          Whether the timepoints are evenly spaced. ``uniform`` (the default when
+          absent) means the OME ``t``-axis scale describes the spacing. ``variable``
+          means it does not, and the per-frame ``timestamps`` are authoritative:
+          acquisitions interrupted mid-run (a scope fault, a media change) or
+          deliberately re-paced by experimental phase cannot be expressed by a single
+          scale. Declaring ``variable`` relaxes the temporal-axis unit MUST
+          (ome-zarr-metadata.rst § Units) and REQUIRES ``timestamps``, so the claim is
+          checkable rather than an escape hatch.
+        range: TimeSampling
+      timestamps:
+        description: >-
+          Per-frame acquisition times, one per timepoint of the level-0 array, as
+          **seconds since the Unix epoch (UTC)**. One encoding rather than several,
+          so a consumer can read the values without a companion unit field; an
+          explicit unit / epoch is part of the general time-coordinate design and
+          not in this version. REQUIRED when ``time_sampling`` is ``variable`` and
+          OPTIONAL otherwise. Length MUST equal the array's ``T`` and the values MUST
+          be non-decreasing, whichever mode is declared. This is the time coordinate
+          the ``t`` axis cannot carry; treat the shape here as provisional.
+        range: float
+        multivalued: true
+        unit:
+          ucum_code: s
+      timepoint_acquisition:
+        description: Acquisition timepoint (elapsed acquisition time).
+        exact_mappings: [cpg:Timepoint_Acquisition]
+      plate_type:
+        description: >-
+          Plate or imaging vessel used. SHOULD include well count, substrate,
+          and catalog identifier (e.g. ``"96-well glass-bottom (Cellvis P96-1.5H-N)"``).
+          Maps to OPS ``cellular.plate_type``.
+        exact_mappings: [ops:cellular.plate_type]
+      microscope:
+        range: Microscope
+        inlined: true
+      objective:
+        range: Objective
+        inlined: true
+      detector:
+        range: Detector
+        inlined: true
+      imaging_environment:
+        range: ImagingEnvironment
+        inlined: true
+
+  Microscope:
+    description: Imaging system make/model. Maps to OME Microscope.
+    class_uri: OME:Microscope
+    attributes:
+      manufacturer:
+        exact_mappings: [bioformats:Microscope.Manufacturer]
+      model:
+        exact_mappings: [bioformats:Microscope.Model, cpg:Microscope_Name]
+      type:
+        range: MicroscopeType
+        exact_mappings: [bioformats:Microscope.Type]
+      modality:
+        description: Imaging modality (e.g. fluorescence, brightfield).
+        exact_mappings: [cpg:Microscope_Modality]
+      binning:
+        description: Detector binning (e.g. "2x2").
+        exact_mappings: [cpg:Microscope_Binning]
+
+  Objective:
+    description: Objective lens. Maps to OME Objective.
+    class_uri: OME:Objective
+    attributes:
+      nominal_magnification:
+        description: Nominal (engraved) magnification, e.g. 63 for a 63x lens.
+        range: float
+        exact_mappings: [bioformats:Objective.NominalMagnification, cpg:Microscope_Objective_Magnification]
+      lens_na:
+        description: Numerical aperture of the objective.
+        range: float
+        exact_mappings: [bioformats:Objective.LensNA, cpg:Microscope_Objective_NA]
+      immersion:
+        range: ObjectiveImmersion
+        exact_mappings: [bioformats:Objective.Immersion]
+      correction:
+        range: ObjectiveCorrection
+        exact_mappings: [bioformats:Objective.Correction]
+      working_distance_mm:
+        description: Working distance in millimeters.
+        range: float
+        unit:
+          ucum_code: mm
+        exact_mappings: [bioformats:Objective.WorkingDistance]
+
+  Detector:
+    description: Detector / camera. Maps to OME Detector.
+    class_uri: OME:Detector
+    attributes:
+      type:
+        range: DetectorType
+        exact_mappings: [bioformats:Detector.Type]
+      model:
+        exact_mappings: [bioformats:Detector.Model]
+      manufacturer:
+        exact_mappings: [bioformats:Detector.Manufacturer]
+
+  ImagingEnvironment:
+    description: >-
+      Environmental conditions during acquisition. Maps to OME ImagingEnvironment.
+      RECOMMENDED for live-cell datasets.
+    class_uri: OME:ImagingEnvironment
+    attributes:
+      temperature_c:
+        description: Temperature in degrees Celsius.
+        range: float
+        unit:
+          ucum_code: Cel
+        exact_mappings: [bioformats:ImagingEnvironment.Temperature]
+      co2_percent:
+        description: CO2 concentration, percent (0-100).
+        range: float
+        minimum_value: 0
+        maximum_value: 100
+        exact_mappings: [bioformats:ImagingEnvironment.CO2Percent]
+      humidity_percent:
+        description: Relative humidity, percent (0-100).
+        range: float
+        minimum_value: 0
+        maximum_value: 100
+        exact_mappings: [bioformats:ImagingEnvironment.Humidity]
+      air_pressure:
+        description: Air pressure in millibar.
+        range: float
+        exact_mappings: [bioformats:ImagingEnvironment.AirPressure]
+
+  # =========================================================================
+  # STUDY / SAMPLE metadata
+  #
+  # Anchored on Bio-Formats / OME (Experiment, Experimenter) and the Broad
+  # CellPainting Gallery fields (Source, DOI_to_Cite, Year_Imaged,
+  # Cell_Line_*). Concepts with no Bio-Formats / CPG equivalent are kept as
+  # DCA-native extensions (REMBI-derived) and labeled as such. Curated by an agent or
+  # a human, with inline provenance per value recording which.
+  # =========================================================================
+  Study:
+    description: >-
+      Study-level descriptors. Anchored on OME ``Experiment`` + the Broad
+      CellPainting Gallery study fields + schema.org.
+    class_uri: OME:Experiment
+    rules:
+      - description: >-
+          A JUMP-CP dataset (identified by its ``dataset_name``) MUST state the
+          CellProfiler version ``cp_version`` it was processed with. The condition is
+          keyed on ``dataset_name`` — a schema slot — so this is a true ``if/then``
+          rule rather than a validator-only check.
+        preconditions:
+          slot_conditions:
+            dataset_name:
+              pattern: ".*[Jj][Uu][Mm][Pp][ _-]?[Cc][Pp].*"
+        postconditions:
+          slot_conditions:
+            cp_version:
+              required: true
+    attributes:
+      accession_id:
+        description: >-
+          Repository accession, when the dataset was deposited in a public archive
+          (e.g. BioImage Archive ``S-BIAD####``, IDR ``idr####``). RECOMMENDED —
+          SHOULD be provided when the dataset is deposited; omitted for in-house data
+          with no repository accession (such datasets are addressed by their store
+          location instead).
+        recommended: true
+      source:
+        description: Data-generating center / source.
+        required: true
+        exact_mappings: [cpg:Source]
+      study_type:
+        description: >-
+          The overall **study type** (REMBI "Study type"; OME ``Experiment.Type``): the
+          experimental design / modes, from the OME ``Experiment.Type`` vocabulary
+          (:class:`StudyType`). Multivalued, so a multimodal study lists several (e.g.
+          ``FourDPlus`` + ``TimeLapse`` + ``SPIM`` + ``FP`` + ``Immunofluorescence``).
+          Study-level and may span the study's components, distinct from the per-component
+          acquisition **modality** (the FBbi
+          ``StudyComponent.imaging_method``) and **assay class** (the EFO
+          ``StudyComponent.assay``). Use ``Other`` and fill
+          ``study_type_other`` only when the vocabulary is insufficient.
+        range: StudyType
+        multivalued: true
+        required: true
+        exact_mappings: [bioformats:Experiment.Type]
+      study_type_other:
+        description: >-
+          Free-text study type, REQUIRED when ``study_type`` includes ``Other`` (the OME
+          ``Experiment.Type`` vocabulary did not adequately describe the study); omit
+          otherwise. The "required-when-``Other``" condition is enforced by the
+          :doc:`validator <validator>`, not a LinkML ``if/then`` rule, because
+          ``gen-json-schema`` cannot express an "array contains a value" precondition.
+      description:
+        required: true
+        exact_mappings: [bioformats:Experiment.Description]
+      year_imaged:
+        description: >-
+          Four-digit year the data were acquired. Required; use the ``unknown``
+          sentinel when the acquisition year cannot be determined. Stored as a
+          string so the ``unknown`` / ``na`` sentinel is expressible — mirroring the
+          cross-modality term-id fields, so a missing value is stated explicitly
+          rather than silently dropped or invented.
+        pattern: "^(\\d{4}|unknown|na)$"
+        required: true
+        exact_mappings: [cpg:Year_Imaged]
+      cp_version:
+        description: >-
+          CellProfiler version used to process the dataset. Conditional — required
+          for JUMP-CP datasets, enforced by a schema ``if/then`` rule keyed on
+          ``dataset_name`` (which names the JUMP-CP dataset); see the class rule above.
+        exact_mappings: [cpg:CP_Version]
+        close_mappings: [ops:pipeline.version]
+      protocol_url:
+        description: URL to the full experimental protocol (e.g. protocols.io).
+        range: uri
+      experimenter:
+        range: Experimenter
+        multivalued: true
+        required: true
+        inlined_as_list: true
+      dataset_name:
+        description: >-
+          The dataset's **own** human-readable name — the title of the *data*, not of
+          any paper (distinct from ``Publication.title``). Searchable; present even for
+          unpublished datasets. schema.org ``sc:name`` / catalog ``Dataset.name``.
+        required: true
+        exact_mappings: [sc:name, ops:experiment.title]
+        close_mappings: [sdc:name]
+      release_date:
+        range: date
+        description: schema.org (``sc:datePublished``).
+        required: true
+        exact_mappings: [sc:datePublished]
+      license:
+        description: License URL or SPDX identifier. schema.org (``sc:license``).
+        required: true
+        exact_mappings: [sc:license]
+        close_mappings: [sdc:governance.license]
+      related_publication:
+        range: Publication
+        multivalued: true
+        recommended: true
+        inlined_as_list: true
+        description: >-
+          The dataset's publication(s), each a self-contained citation
+          (``doi`` + title + authors + year). schema.org. **RECOMMENDED** — SHOULD be
+          provided whenever the dataset has an associated publication; omitted when there
+          is none.
+        exact_mappings: [sc:citation]
+      # --- Optional ---
+      additional_metadata:
+        description: >-
+          Extra study-provided values not yet defined in this spec. Optional;
+          promotable — once a field here stabilizes it can be elevated to a defined
+          (ultimately required) slot in a future version.
+        range: AdditionalMetadataField
+        multivalued: true
+        inlined_as_list: true
+
+  Experimenter:
+    description: A person associated with the study. Anchored on OME ``Experimenter``.
+    class_uri: OME:Experimenter
+    attributes:
+      first_name:
+        exact_mappings: [bioformats:Experimenter.FirstName]
+      last_name:
+        exact_mappings: [bioformats:Experimenter.LastName]
+      email:
+        exact_mappings: [bioformats:Experimenter.Email]
+      institution:
+        exact_mappings: [bioformats:Experimenter.Institution]
+      orcid:
+        description: ORCID iD. DCA-native (REMBI-derived).
+
+  Publication:
+    description: >-
+      A related publication (the paper), within ``Study.related_publication``. A
+      self-contained citation: ``doi`` (the machine-readable key) plus REMBI-derived
+      title / authors / year.
+    attributes:
+      doi:
+        description: >-
+          DOI of this publication — the citable identifier. Omit within an entry only
+          for a publication that genuinely has no DOI (e.g. a preprint without one).
+        pattern: "^10\\.\\d{4,9}/.+$"
+        exact_mappings: [cpg:DOI_to_Cite]
+        close_mappings: [sdc:doi]
+      title:
+        description: >-
+          Title of the related **publication** (the paper). Distinct from
+          ``Study.dataset_name``, which is the dataset's own name.
+      authors_name:
+      publication_year:
+        range: integer
+
+  Biosample:
+    description: >-
+      Sample-level descriptors. Sample context reuses the CZI cross-modality schema
+      v1.1.0 (CELLxGENE-aligned) as ``ontology_term_id`` + label pairs; cell-line
+      identity uses the CellPainting Gallery + Cellosaurus.
+    rules:
+      - description: >-
+          A cell-line sample must name the line. ``cell_line_name`` is required when
+          ``tissue_type`` is "cell line"; the Cellosaurus ``cell_line_id`` is
+          strongly recommended but may be absent for iPSC / primary lines with no
+          accession (record donor / clone ids in ``additional_metadata`` instead).
+        preconditions:
+          slot_conditions:
+            tissue_type:
+              equals_string: "cell line"
+        postconditions:
+          slot_conditions:
+            cell_line_name:
+              required: true
+    attributes:
+      group_id:
+        description: >-
+          Row key of the Parquet (``tables/obs``) table, and the key that
+          links this sample's metadata to the image arrays it describes. There is one
+          obs row per image group: a single-image store has one row; an HCS plate has
+          one row per well (the well ``WellPerturbation.plate`` / ``well`` also key
+          on). DCA-native — so sample metadata is not floating free of the data it
+          annotates. Reuses the identifier the ingestor already writes to the obs
+          table rather than minting a separate one.
+        identifier: true
+        required: true
+      # --- Sample context (CZI cross-modality v1.1.0) — REQUIRED ontology id + label pairs ---
+      organism:
+        description: >-
+          Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon
+          CURIE (e.g. "NCBITaxon:9606").
+        range: OrganismTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      tissue_type:
+        range: TissueType
+        required: true
+        exact_mappings: [cxmod:tissue_type, ops:experiment.tissue_type]
+        close_mappings: [sdc:sample.tissue.type]
+      tissue:
+        description: >-
+          Tissue as an ``ontology_term_id`` + ``label`` pair. The id is a UBERON term (or
+          a ZFA term for zebrafish anatomy); a CL term when ``tissue_type`` is "cell
+          culture"; a Cellosaurus ``CVCL:`` term
+          when ``tissue_type`` is "cell line" (cross-modality v1.1.0). Cross-modality
+          splits anatomy and cell type across two fields; DCA folds both into this one
+          slot and keys the distinction off ``tissue_type``. For zebrafish that means:
+          in the anatomy role (``tissue_type`` "tissue" or "organoid") use a descendant
+          of ``ZFA:0100000`` outside the ``ZFA:0009000`` ("cell") branch, and in the
+          cell-type role (``tissue_type`` "cell culture") use a CL term, or a descendant
+          of ``ZFA:0009000`` where CL has no equivalent. ``ZFA:0001093``
+          ("unspecified") is never valid — use the ``unknown`` sentinel. When
+          ``tissue_type`` is "organoid", use the UBERON term for the **tissue of origin**
+          from which the organoid was derived (e.g. ``UBERON:0002108`` for small
+          intestine organoids, ``UBERON:0000948`` for cardiac organoids). All ids are
+          colon CURIEs that expand to a resolvable URL via the ``prefixes`` block. This
+          is the **authoritative** slot for cell-line identity (cross-modality);
+          ``cell_line_id`` is a convenience mirror.
+        range: TissueTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      disease:
+        description: >-
+          Disease as an ``ontology_term_id`` + ``label`` pair; the id is a MONDO term,
+          or PATO:0000461 for normal/healthy.
+        range: DiseaseTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      development_stage:
+        description: >-
+          Development stage as an ``ontology_term_id`` + ``label`` pair. Use the stage
+          ontology for the organism — HsapDv (human), MmusDv (mouse), ZFS (zebrafish),
+          FBdv (fly), WBls (worm) — or a UBERON life-cycle term for organisms with no
+          dedicated stage ontology.
+        range: DevelopmentStageTerm
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      # --- Cell line (CellPainting Gallery / Broad) — when tissue_type = "cell line":
+      #     cell_line_name REQUIRED (enforced by the rule above), cell_line_id RECOMMENDED ---
+      cell_line_name:
+        description: Cell line name (CPG harmonized vocabulary). Required when
+          ``tissue_type`` is "cell line". Repeats ``tissue``'s ``label`` for a cell-line
+          sample; the duplication is deliberate, for CellPainting Gallery alignment.
+        exact_mappings: [cpg:Cell_Line_Name]
+        close_mappings: [cdp:cell_strain_name]
+      cell_line_id:
+        description: >-
+          Cellosaurus accession as a colon CURIE (e.g. "CVCL:0030"), resolvable via
+          the ``prefixes`` block. Convenience mirror of the **authoritative**
+          ``tissue`` term when ``tissue_type`` is "cell line", and SHOULD hold the same
+          CVCL accession; nothing checks the two agree, so ``tissue`` wins on conflict.
+          RECOMMENDED rather than required: iPSC and primary lines may have no
+          accession, and SHOULD then record hPSCreg / donor id in
+          ``additional_metadata``.
+        pattern: "^CVCL:\\w+$"
+        close_mappings: [CVCL:0000000, cdp:cell_strain_id]
+      cell_line_type:
+        exact_mappings: [cpg:Cell_Line_Type]
+      cell_line_modification:
+        description: Genetic / other modification (e.g. "Cas9 polyclonal overexpression").
+        exact_mappings: [cpg:Cell_Line_Modification]
+      parent_cell_line_id:
+        description: >-
+          Cellosaurus accession of the **parental** cell line from which the imaged
+          line was derived, as a colon CURIE (e.g. ``"CVCL:Y803"`` for WTC-11 hiPSC).
+          RECOMMENDED when ``tissue_type`` is "cell line" and the imaged line was
+          created by gene editing or reprogramming from a registered parental line.
+          ``cell_line_id`` identifies the engineered clone; ``parent_cell_line_id``
+          links it back to its origin. Use ``additional_metadata`` for donor /
+          hPSCreg identifiers that have no Cellosaurus accession.
+        pattern: "^CVCL:\\w+$"
+        close_mappings: [CVCL:0000000]
+      # --- DCA-native (optional) ---
+      additional_metadata:
+        description: >-
+          Extra study-provided values not yet defined in this spec. Optional;
+          promotable — once a field here stabilizes it can be elevated to a defined
+          (ultimately required) slot in a future version.
+        range: AdditionalMetadataField
+        multivalued: true
+        inlined_as_list: true
+
+  Specimen:
+    description: >-
+      How the biosample was prepared for imaging (REMBI Specimen module): the
+      preparation state, an optional FBbi sample-preparation method, and the growth
+      conditions. The imaging modality lives on :class:`AcquisitionMetadata`.
+    attributes:
+      specimen_state:
+        description: >-
+          Specimen state at imaging time — the coarse, mutually-exclusive live-vs-fixed
+          axis (``live`` / ``fixed`` / ``unknown``). REQUIRED. DCA controlled vocabulary
+          (REMBI-derived): no source ontology structures this state cleanly across
+          specimen types. Specific preparation methods go in ``preparation_method``.
+        range: SpecimenState
+        required: true
+      preparation_method:
+        description: >-
+          Sample-preparation method(s) as ``{ontology_term_id, label}`` FBbi terms —
+          descendants of ``FBbi:00000001`` ("sample preparation method"), e.g.
+          ``FBbi:00000026`` (sectioned tissue), ``FBbi:00000024`` (whole mounted tissue),
+          ``FBbi:00000025`` (living tissue), or a fixation term such as ``FBbi:00000010``
+          (formaldehyde fixed tissue). Multivalued: a store may stack methods (e.g.
+          fixation + permeabilization). Use ``unavailable`` with a free-text ``label`` when
+          no FBbi term fits (e.g. optical clearing, expansion microscopy); ``na`` when no
+          preparation applies (e.g. a live sample); ``unknown`` when the source does not
+          record it.
+        range: PreparationMethodTerm
+        multivalued: true
+        # cryoET's sample_preparation is free-text prose describing *how* the sample was
+        # prepared, so it lands here rather than on specimen_state (the coarse
+        # live-vs-fixed enum this spec deliberately split apart from prep method).
+        close_mappings: [cdp:sample_preparation]
+      growth_conditions:
+        description: >-
+          Free-text description of growth media, supplements, and culture
+          conditions. SHOULD include catalog numbers and concentrations for
+          all reagents. Maps to OPS ``cellular.growth_conditions``.
+        exact_mappings: [ops:cellular.growth_conditions]
+
+  ImageData:
+    description: >-
+      Image-level metadata (REMBI Image Data). For DCA this carries the processing
+      variant that produced the array, i.e. REMBI's "Type: primary / processed image"
+      plus the image processing method. The remaining REMBI Image Data fields (format,
+      dimensions, pixel and voxel size, channel information) live in the OME-Zarr arrays
+      and channel metadata, not here. The full derivation (parent dataset, algorithm,
+      parameters) is a Scientific Dataset Catalog ``transformed_from`` Lineage Edge.
+    attributes:
+      processing_variant:
+        description: >-
+          Computational processing variant applied to produce this image array.
+          DCA-native. Present when a single acquisition yields multiple
+          differently-processed stores (e.g. ``"raw"``, ``"denoised"``,
+          ``"deconvolved"``). This is the zarr-local mirror of the Scientific
+          Dataset Catalog ``dataset_type`` field (``raw`` / ``processed``); the
+          full derivation relationship — parent dataset id, algorithm, pipeline
+          version, and transformation parameters — is tracked as a catalog
+          ``Lineage Edge`` of type ``transformed_from`` and SHOULD NOT be
+          duplicated here. Bio-Formats / OME has no dedicated field for this
+          concept; it would conventionally appear in ``Image.Name`` or
+          ``Image.Description``.
+        examples:
+          - value: raw
+          - value: denoised
+          - value: deconvolved
+        close_mappings:
+          - bioformats:Image.Description
+          - sdc:dataset_type
+
+  # =========================================================================
+  # Provenance — inline fields carried with every value (citation, grounded,
+  # source_kind), blank when not applicable, in Parquet and zarr.json.
+  # Shape: {citation{source_url, quote, char_start, char_end, match_status}, grounded,
+  # source_kind}.
+  # =========================================================================
+  AdditionalMetadataField:
+    description: >-
+      A single agent-minted or non-standard metadata value (``name`` + ``value``), used
+      wherever a typed slot does not exist. Its provenance lives in the root
+      ``ExperimentalMetadata.provenance`` map, keyed by
+      ``<block>.additional_metadata.<name>`` (not inline), so all provenance has one home.
+    attributes:
+      name:
+        description: Field name (SHOULD be namespaced if targeting a specific spec).
+        required: true
+      value:
+        required: true
+
+  # =========================================================================
+  # Ontology annotations — every ontology-grounded concept is an
+  # ``ontology_term_id`` (CURIE) + ``label`` pair, carried together as one
+  # object so the id and its human-readable label cannot drift apart. The
+  # per-ontology CURIE shape is enforced on each subclass's ``ontology_term_id``
+  # via ``slot_usage``.
+  # =========================================================================
+  OntologyTerm:
+    description: >-
+      An ontology annotation as an ``ontology_term_id`` (CURIE) + human-readable
+      ``label`` pair. The label is derivable from the term id but carried explicitly
+      so a stored record is human-readable without an ontology lookup. Subclasses
+      constrain ``ontology_term_id`` to a specific ontology. Three sentinels stand in for
+      a CURIE, each permitted only where a subclass allows it: ``unknown`` means the value
+      is not available to the curator (absent from the source data); ``na`` means the field
+      does not apply to this experiment or use case; ``unavailable`` means the value is
+      known but no ontology term exists for it. When ``ontology_term_id`` is ``unknown`` or
+      ``na`` the ``label`` repeats the same sentinel; when it is ``unavailable`` the
+      ``label`` carries the free-text value; for a real CURIE the ``label`` is the ontology
+      label.
+    abstract: true
+    attributes:
+      ontology_term_id:
+        description: CURIE for the ontology term (e.g. "NCBITaxon:9606"), or one of the
+          sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.
+        required: true
+      label:
+        description: Human-readable label. For a real term it is the ontology label. When
+          ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is
+          ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.
+        required: true
+        pattern: "^.+$"
+
+  OrganismTerm:
+    description: Organism ontology annotation (NCBITaxon).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(NCBITaxon:\\d+|unknown|na|unavailable)$"
+        exact_mappings: [cxmod:organism_ontology_term_id, ops:experiment.organism_ontology_term_id]
+        close_mappings: [NCBITaxon:0000000, sdc:sample.organism, cdp:organism_taxid]
+      label:
+        exact_mappings: [cxmod:organism, cpg:Cell_Line_Organism, ops:experiment.organism]
+        close_mappings: [cdp:organism_name]
+
+  TissueTerm:
+    description: Tissue ontology annotation (UBERON / CL / ZFA / Cellosaurus CVCL).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        # ZFA:0001093 ("unspecified") is excluded for the same reason as ZFS:0000000 on
+        # DevelopmentStageTerm: it is a fourth way to say "no value" alongside the
+        # unknown / na / unavailable sentinels. Cross-modality also excludes ZFA:0009000
+        # ("cell") and its descendants from the anatomy role — a subtree restriction a
+        # regex cannot express, so it is stated in the `tissue` slot description instead.
+        pattern: "^(UBERON:\\d+|CL:\\d+|CVCL:\\w+|ZFA:(?!0001093$)\\d+|unknown|na|unavailable)$"
+        exact_mappings: [cxmod:tissue_ontology_term_id, ops:experiment.tissue_ontology_term_id]
+        close_mappings: [CVCL:0000000, sdc:sample.tissue, cdp:tissue_id, cdp:cell_type_id]
+      label:
+        exact_mappings: [cxmod:tissue, ops:experiment.tissue]
+        close_mappings: [cdp:tissue_name, cdp:cell_name]
+
+  DiseaseTerm:
+    description: Disease ontology annotation (MONDO, or PATO:0000461 for normal/healthy).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(MONDO:\\d+|PATO:0000461|unknown|na|unavailable)$"
+        exact_mappings: [cxmod:disease_ontology_term_id, ops:experiment.disease_ontology_term_id]
+        close_mappings: [sdc:sample.disease]
+      label:
+        exact_mappings: [cxmod:disease, ops:experiment.disease]
+
+  DevelopmentStageTerm:
+    description: >-
+      Development-stage ontology annotation. Uses the organism-specific stage ontology
+      the CZI cross-modality schema names for that organism — HsapDv (human), MmusDv
+      (mouse), ZFS (zebrafish), FBdv (fly), WBls (worm) — and a UBERON life-cycle term
+      for organisms with no dedicated stage ontology.
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        # The two ontology roots cross-modality explicitly excludes are excluded here
+        # too, so there is only one spelling of "unknown": ZFS:0000000 (Unknown) and
+        # FBdv:00007012 (life stage). Use the `unknown` sentinel instead. The rest of
+        # cross-modality's per-organism rules are subtree restrictions ("most accurate
+        # descendant of ...") that a regex cannot express; see § Validation.
+        pattern: "^(HsapDv:\\d+|MmusDv:\\d+|ZFS:(?!0000000$)\\d+|FBdv:(?!00007012$)\\d+|WBls:\\d+|UBERON:\\d+|unknown|na|unavailable)$"
+        exact_mappings: [cxmod:development_stage_ontology_term_id, ops:experiment.development_stage_ontology_term_id]
+        close_mappings: [sdc:sample.development_stage, cdp:development_stage_id]
+      label:
+        exact_mappings: [cxmod:development_stage, ops:experiment.development_stage]
+        close_mappings: [cdp:development_stage_name]
+
+  AssayTerm:
+    description: Assay / experiment-class ontology annotation (EFO only).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(EFO:\\d+|unavailable)$"
+        exact_mappings: [cxmod:assay_ontology_term_id]
+        close_mappings: [ops:experiment.assay_ontology_term_id, sdc:experiment.assay]
+      label:
+        exact_mappings: [cxmod:assay, ops:experiment.assay]
+
+  ImagingMethodTerm:
+    description: Acquisition-modality ontology annotation (FBbi only).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(FBbi:\\d+|unavailable)$"
+        close_mappings: [FBbi:0000000]
+
+  PreparationMethodTerm:
+    description: Sample-preparation method ontology annotation (FBbi only).
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(FBbi:\\d+|unknown|na|unavailable)$"
+        close_mappings: [FBbi:0000000]
+
+  Provenance:
+    description: >-
+      Per-value provenance kept as a parallel layer (keyed by field path) alongside the
+      pure metadata; a deterministic post-ingest step folds it onto the corresponding
+      values in ``zarr.json`` / the Parquet. Lets a downstream consumer decide
+      how much to trust a field without re-reading the source. Blank for manually
+      entered values (``source_kind: human``).
+    rules:
+      # NB: there is intentionally no ``grounded: true ⇒ citation`` rule. A boolean
+      # ``equals`` precondition is not expressible in the generated JSON Schema
+      # (``gen-json-schema`` drops ``equals_expression``, degrading it to a mere
+      # "grounded is present" check that wrongly fires for ``grounded: false`` too).
+      # It is also redundant: ``grounded`` is only set on agent-curated values, which
+      # the ``source_kind: agent ⇒ citation`` rule below already requires a citation
+      # for. Any residual "grounded must cite" check belongs in the validator layer.
+      - description: >-
+          An ``agent``-extracted value MUST carry its citation (source_url + quote);
+          provenance is required for agent-curated values, optional for ``human`` /
+          ``original_data``.
+        preconditions:
+          slot_conditions:
+            source_kind:
+              equals_string: "agent"
+        postconditions:
+          slot_conditions:
+            citation:
+              required: true
+    attributes:
+      citation:
+        range: Citation
+        inlined: true
+      grounded:
+        description: >-
+          Output of an agent's deterministic grounding gate: ``true`` when the
+          cited ``quote`` was located (exact or fuzzy) in the fetched source text, so
+          the cited evidence is real and not fabricated. Computed, not self-reported
+          — a fabricated quote that is absent from the source grounds to ``false``.
+          Boolean rollup of ``citation.match_status``.
+        range: boolean
+      source_kind:
+        description: >-
+          How the value was obtained. REQUIRED on every provenance entry — it is the
+          discriminator that distinguishes an ``agent``-extracted value from a
+          hand-entered (``human``) one from a value taken directly from the source's own
+          metadata (``original_data``). The citation / grounding is what is optional
+          (for ``human`` / ``original_data``); ``source_kind`` itself is always stated.
+        range: ProvenanceSourceKind
+        required: true
+
+  Citation:
+    description: >-
+      The supporting quote, the source page it was copied from, and the result of the
+      agent's grounding gate that located it. When a citation is
+      present, ``source_url`` and ``quote`` are both required — a half-empty citation
+      is not allowed.
+    attributes:
+      source_url:
+        range: uri
+        required: true
+      quote:
+        description: Verbatim excerpt from the source supporting the value.
+        required: true
+      match_status:
+        description: >-
+          Outcome of the deterministic grounding gate for this quote (see
+          MatchStatus). ``none`` means the quote did not ground in the cited page.
+        range: MatchStatus
+      char_start:
+        description: >-
+          Start offset (inclusive) of the located quote within the cited source
+          page's raw text. Blank when ``match_status`` is ``none``.
+        range: integer
+      char_end:
+        description: >-
+          End offset (exclusive) of the located quote within the cited source page's
+          raw text. Blank when ``match_status`` is ``none``.
+        range: integer
+
+  FieldProvenance:
+    description: >-
+      One entry in the per-value provenance map (``ExperimentalMetadata.provenance``):
+      the provenance of a single field, keyed by its dotted ``field_path``. Same shape
+      as :class:`Provenance` (``source_kind`` / ``grounded`` / ``citation`` and its
+      grounding rules) plus the path it applies to, so provenance can travel as a
+      parallel layer keyed by field path rather than nested inside each value.
+    is_a: Provenance
+    attributes:
+      field_path:
+        description: >-
+          Dotted path of the field this provenance applies to, relative to the
+          experimental-metadata root (e.g. ``study.year_imaged``,
+          ``biosample.tissue``). Keys this entry within the map.
+        key: true
+
+  # =========================================================================
+  # PERTURBATION (group 2)
+  #
+  # Modality-agnostic Perturbation *definition* — DCA-facing name; anchored on the
+  # OME ``Reagent`` entity (its ``class_uri`` mapping) — specialized by a
+  # ``modality`` discriminator into a chemical OR genetic block. Generalizes beyond
+  # chemical perturbation to CRISPR / gene knockout / ORF and physical / biological.
+  # Maps across three sources: OME Bio-Formats ``Reagent``, CellPainting Gallery
+  # ``Treatment_*`` / ``Cell_Line_*``, and the JUMP compound / orf / crispr tables.
+  #
+  # GRAIN: the Perturbation *definition* (codebook) is per-construct. Its
+  # *assignment* (``PerturbationAssignment``) is per image group, carried as the
+  # ``perturbation`` block of ``ExperimentalMetadata``; an ARRAYED HCS screen also
+  # indexes that assignment per well as ``WellPerturbation``.
+  # Pooled / optical-pooled screens (OPS) assign perturbation PER CELL via barcode
+  # decode — that per-cell table (keyed by segmentation ``label_id`` in ``tables/``)
+  # is DEFERRED (see experimental-metadata.rst "Deferred: pooled / OPS screens").
+  # =========================================================================
+  Perturbation:
+    description: >-
+      A perturbation definition (the "codebook" entry), reusable across wells.
+      Modality-agnostic core (mapped to the OME ``Reagent`` entity) plus an optional
+      chemical or genetic block selected by ``modality``.
+    class_uri: OME:Reagent
+    rules:
+      - description: A compound perturbation must carry the chemical identifier block.
+        preconditions:
+          slot_conditions:
+            modality:
+              equals_string: compound
+        postconditions:
+          slot_conditions:
+            chemical:
+              required: true
+      - description: >-
+          A genetic perturbation (crispr / orf / shrna / mirna / sirna) must carry
+          the genetic-target block.
+        preconditions:
+          slot_conditions:
+            modality:
+              any_of:
+                - equals_string: crispr
+                - equals_string: orf
+                - equals_string: shrna
+                - equals_string: mirna
+                - equals_string: sirna
+        postconditions:
+          slot_conditions:
+            genetic:
+              required: true
+    attributes:
+      perturbation_id:
+        description: Stable identifier for this perturbation within the dataset.
+        identifier: true
+        required: true
+        exact_mappings: [bioformats:Reagent.ID]
+      name:
+        description: Human-readable treatment / perturbation name.
+        exact_mappings: [bioformats:Reagent.Name, cpg:Treatment_Primary_Treatment]
+      description:
+        exact_mappings: [bioformats:Reagent.Description]
+      perturbation_identifier:
+        description: >-
+          External catalog identifier for the construct. Because the source varies
+          (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the
+          value names its database — e.g. ``JCP2022:JCP2022_012345`` or
+          ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the
+          typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``);
+          this generic slot records the source's own catalog id.
+        exact_mappings:
+          - bioformats:Reagent.ReagentIdentifier
+          - cpg:Treatment_Broad_Sample
+      modality:
+        range: PerturbationModality
+        required: true
+        exact_mappings:
+          - cpg:Treatment_Category
+      mechanism:
+        description: Mechanism of action (free text).
+        exact_mappings: [cpg:Treatment_Mechanism]
+      chemical:
+        description: Chemical identifiers — present when ``modality = compound``.
+        range: ChemicalPerturbation
+        inlined: true
+      genetic:
+        description: >-
+          Genetic-target identifiers — present when ``modality`` is
+          crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation
+          extension (knockout, knockdown, or overexpression of a gene target).
+        range: GeneticPerturbation
+        inlined: true
+
+  ChemicalPerturbation:
+    description: Chemical (small-molecule) perturbation identifiers.
+    attributes:
+      inchikey:
+        exact_mappings: [cpg:Treatment_InChIKey]
+      inchi:
+        exact_mappings: [cpg:compound_inchi]
+      smiles:
+        exact_mappings: [cpg:Treatment_SMILES]
+      pubchem_cid:
+        description: >-
+          PubChem Compound ID as a colon CURIE (e.g. "PubChem:2244"), resolvable via
+          the ``prefixes`` block — the value names its own database.
+        pattern: "^PubChem:\\d+$"
+        exact_mappings: [cpg:Treatment_PubChem_CID]
+        close_mappings: [PubChem:0]
+      chembl_id:
+        description: >-
+          ChEMBL compound identifier (e.g. "CHEMBL25"). Self-identifying — ChEMBL
+          accessions carry the ``CHEMBL`` prefix in the value itself.
+
+  GeneticPerturbation:
+    description: >-
+      Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The
+      gene target is what CellPainting Gallery cannot express (it has only the
+      ``Treatment_Category`` enum); these fields come from the JUMP crispr / orf
+      tables.
+    attributes:
+      gene_symbol:
+        description: >-
+          HGNC gene symbol (e.g. "TP53") — the human-readable label. ``ncbi_gene_id``
+          is the canonical, resolvable key; this is the symbol that accompanies it.
+        exact_mappings: [cpg:crispr_symbol, cpg:orf_symbol]
+        close_mappings: [HGNC:0]
+      ncbi_gene_id:
+        description: >-
+          NCBI Gene ID as a colon CURIE (e.g. "NCBIGene:7157") — the canonical,
+          resolvable cross-table gene key in JUMP. The value names its own database
+          via the ``prefixes`` block.
+        pattern: "^NCBIGene:\\d+$"
+        exact_mappings: [cpg:crispr_ncbi_gene_id, cpg:orf_ncbi_gene_id]
+        close_mappings: [NCBIGene:0]
+      ensembl_gene_id:
+        description: >-
+          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510"); cross-map,
+          not JUMP-native. Resolvable via the ``prefixes`` block.
+        pattern: "^ensembl:ENSG\\d+$"
+        close_mappings: [ensembl:0]
+      transcript_refseq:
+        description: NCBI RefSeq transcript id (ORF).
+        exact_mappings: [cpg:orf_transcript]
+      vector:
+        description: Expression / delivery vector (ORF; sgRNA vector).
+        exact_mappings: [cpg:orf_vector]
+      insert_length:
+        description: ORF insert length (bp).
+        range: integer
+        exact_mappings: [cpg:orf_insert_length]
+      gene_description:
+        exact_mappings: [cpg:orf_gene_description]
+
+  Concentration:
+    description: >-
+      Perturbation concentration. Structured ``value`` + ``unit`` with a free-text
+      ``text`` fallback for CellPainting Gallery's string ``Treatment_Concentration``.
+    attributes:
+      value:
+        range: float
+      unit:
+      text:
+        description: Free-text concentration as recorded (CPG fallback).
+        exact_mappings: [cpg:Treatment_Concentration]
+
+  PerturbationAssignment:
+    description: >-
+      The ASSIGNMENT of a :class:`Perturbation` to imaged material — the dosing /
+      control / timing that turns a reusable codebook entry into "what was done to
+      this sample". The entry itself is the ``definition`` slot (plus an optional
+      ``cotreatment``); everything else here is the assignment.
+      Carries no plate / well key, so it is placement-agnostic: it is
+      the ``perturbation`` block of :class:`ExperimentalMetadata` (image level,
+      alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that
+      :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key.
+      Required-when-present: a dataset with perturbations MUST carry the required
+      fields below; a dataset with none simply has no ``perturbation`` block.
+      (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)
+    rules:
+      - description: >-
+          Treated and control material (treatment / negcon / poscon) must name a
+          perturbation; ``empty`` has none to record, so ``definition`` is
+          not required there.
+        preconditions:
+          slot_conditions:
+            control_class:
+              none_of:
+                - equals_string: empty
+        postconditions:
+          slot_conditions:
+            definition:
+              required: true
+    attributes:
+      definition:
+        range: Perturbation
+        inlined: true
+        description: >-
+          The :class:`Perturbation` definition this assignment applies — the reusable
+          codebook entry (what the perturbagen IS), as distinct from the dosing /
+          control / timing around it (what was DONE to this material), which are the
+          sibling slots here. Required for treated and control material
+          (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is
+          ``empty``, which has nothing to record (enforced by the class rule above).
+      control_class:
+        range: PerturbationControlClass
+        required: true
+        exact_mappings: [cpg:Treatment_Control_Class]
+      concentration:
+        range: Concentration
+        inlined: true
+      solvent:
+        exact_mappings: [cpg:Treatment_Solvent]
+      duration_h:
+        description: Perturbation duration in hours.
+        range: float
+      timepoint_primary_h:
+        description: Time of primary treatment (CPG Timepoint_Primary_Treatment).
+        range: float
+        exact_mappings: [cpg:Timepoint_Primary_Treatment]
+      timepoint_secondary_h:
+        description: Time of secondary treatment.
+        range: float
+        exact_mappings: [cpg:Timepoint_Secondary_Treatment]
+      cotreatment:
+        description: >-
+          Optional second :class:`Perturbation` definition applied alongside
+          ``definition`` (a cotreatment).
+        range: Perturbation
+        inlined: true
+        exact_mappings: [cpg:Treatment_Secondary_Treatment]
+      provenance:
+        range: Provenance
+        inlined: true
+
+  WellPerturbation:
+    is_a: PerturbationAssignment
+    description: >-
+      Per-well perturbation assignment for an ARRAYED HCS screen — one row per
+      ``(plate, well)``, written to ``zarr.json`` (well level). A
+      :class:`PerturbationAssignment` plus the ``(plate, well)`` key that resolves it
+      to a well group. This form is DERIVED: ``ExperimentalMetadata.perturbation`` on
+      the image group is authoritative, and this is a plate-shaped index over it that
+      exists so a plate's design can be enumerated without opening every field of
+      view. It is unavailable to a plateless ``image_collection`` store (see the
+      ``perturbation`` block for those). The two MUST agree; because the direction is
+      defined, a disagreement is repaired by re-deriving this row from the image
+      groups, never the other way round. The validator checks this row's own
+      contents when present (dispatched to ``validate_well_perturbation_v0_2``), and
+      separately cross-checks it against the consensus ``perturbation`` value of its
+      own well's field(s) of view, reporting a mismatch as an error (see
+      validator.rst).
+      The non-``empty`` ⇒ ``definition`` rule is inherited from the parent.
+    attributes:
+      plate:
+        description: >-
+          Plate identifier. Together with ``well`` this is the link to the image
+          arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in
+          ``zarr.json``) so a row resolves to a well group in the store.
+        required: true
+      well:
+        description: >-
+          Well identifier in row-letter + column-number form (e.g. "A03"), mapping to
+          the OME-NGFF HCS ``row``/``column`` well-group path (``A/3``) under the
+          plate. This is the key tying the assignment to the imaged well.
+        required: true
