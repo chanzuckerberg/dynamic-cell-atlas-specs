@@ -91,6 +91,21 @@ class TestComputeShardSizes:
         chunks_per_shard = compute_shard_sizes(shape, chunks)
         assert chunks_per_shard == (1, 1, 16, 16, 16)
 
+    def test_multichannel_shard_covers_all_channels(self):
+        """c_shard should span the full channel extent for multichannel arrays."""
+        shape = (10, 4, 48, 2048, 2048)
+        # z_chunk clamped to z_dim by compute_optimal_chunks
+        chunks = (1, 1, 48, 128, 128)
+        assert compute_shard_sizes(shape, chunks) == (10, 4, 1, 16, 16)
+
+    def test_multichannel_shard_spans_all_channels(self):
+        """C=4 dataset that previously failed the 1 GB shard floor now groups all channels."""
+        shape = (1, 4, 48, 2048, 2048)
+        # z_chunk clamped to z_dim by compute_optimal_chunks
+        chunks = (1, 1, 48, 128, 128)
+        _, c_shard, _, _, _ = compute_shard_sizes(shape, chunks)
+        assert c_shard == 4
+
 
 # ── compression_settings ───────────────────────────────────────────────────────
 

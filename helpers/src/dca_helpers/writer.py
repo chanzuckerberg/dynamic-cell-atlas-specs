@@ -132,7 +132,7 @@ def compute_shard_sizes(
     Compute shard sizes (in units of chunks) following the Dynamic Cell Atlas array standard.
 
     - Time shard size should be <= 16 (for efficient time slicing)
-    - Channel shard size = 1 (for independent access)
+    - Channel shard size = full channel extent (c_chunk=1 governs channel isolation, not c_shard)
     - Spatial shard size should equal array extent, but <= 2048 total pixels
 
     Args:
@@ -146,7 +146,7 @@ def compute_shard_sizes(
     t_dim, c_dim, z_dim, y_dim, x_dim = shape
 
     t_shard = min(math.ceil(t_dim / t_chunk), 16)
-    c_shard = 1
+    c_shard = math.ceil(c_dim / c_chunk)
     z_shard = min(math.ceil(z_dim / z_chunk), MAX_SHARD_DIMENSION_PIXELS // z_chunk)
     y_shard = min(math.ceil(y_dim / y_chunk), MAX_SHARD_DIMENSION_PIXELS // y_chunk)
     x_shard = min(math.ceil(x_dim / x_chunk), MAX_SHARD_DIMENSION_PIXELS // x_chunk)

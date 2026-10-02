@@ -49,6 +49,7 @@ import pydantic
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from dca_helpers.validation.versions.v0_1.models import (
+    AXES_ACCEPTED,
     AXES_REQUIRED,
     DOWNSAMPLING_FACTOR_RECOMMENDED,
     LABEL_DTYPE_RECOMMENDED,
@@ -124,6 +125,10 @@ TEMPORAL_UNIT_VOCABULARY = frozenset(
         "zettasecond",
     }
 )
+
+# schema.json TimeSampling / AcquisitionMetadata.time_sampling. An absent value reads
+# as "uniform", so an existing store keeps its current reading.
+TIME_SAMPLING_VALUES = frozenset({"uniform", "variable"})
 
 # channel-metadata.rst § Guidance on Channel Type / schema.json ChannelMetadata.channel_type
 # Vocabulary matches schema.json enum exactly.
@@ -202,13 +207,14 @@ class DCAScaleLevelSpecV0_2(DCAScaleLevelSpecV0_1):
                 "MUST be present and match axis names "
                 "(ome-zarr-metadata.rst § Dimensions)."
             )
-        normalized = list(v) if isinstance(v, (list, tuple)) else v
-        if normalized != AXES_REQUIRED:
+        raw = list(v) if isinstance(v, (list, tuple)) else v
+        if raw not in AXES_ACCEPTED:
             raise ValueError(
-                f"dimension_names {normalized} must match axes {AXES_REQUIRED} "
+                f"dimension_names {raw} must match axes {AXES_REQUIRED} "
+                "(all lowercase or all uppercase) "
                 "(ome-zarr-metadata.rst § Dimensions)."
             )
-        return normalized
+        return raw
 
 
 class DCALabelScaleLevelSpecV0_2(DCAScaleLevelSpecV0_2):
@@ -252,12 +258,13 @@ class DCAIntensityStatistics(BaseModel):
     p99: float
 
     # normalization-statistics.rst § Optional Fields — MAY
-    p95_p5: float | None = None
-    p99_p1: float | None = None
+    # schema.json IntensityStatistics: p95_p5, p99_p1, iqr have minimum: 0
+    p95_p5: float | None = Field(default=None, ge=0)
+    p99_p1: float | None = Field(default=None, ge=0)
     mean: float | None = None
     std: float | None = None
     median: float | None = None
-    iqr: float | None = None
+    iqr: float | None = Field(default=None, ge=0)
 
 
 class DCANormalizationMetadata(BaseModel):
@@ -268,7 +275,8 @@ class DCANormalizationMetadata(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    grid: int | None = None
+    # schema.json NormalizationMetadata: grid has minimum: 1
+    grid: int | None = Field(default=None, ge=1)
 
 
 class DCAChannelNormalization(BaseModel):
@@ -399,20 +407,13 @@ class DCAChannelMetadataV0_2(BaseModel):
 
     # channel-metadata.rst § Channel Fields / Required Fields — MUST
     name: str
-    index: int
+    # schema.json ChannelMetadata.index has minimum: 0
+    index: int = Field(ge=0)
     description: str
 
     # channel-metadata.rst § Channel Fields / Optional Fields
     channel_type: str | None = None
     biological_annotation: DCABiologicalAnnotation | None = None
-
-    # channel-metadata.rst § Channel Fields / Required Fields — index MUST be >= 0
-    @field_validator("index")
-    @classmethod
-    def index_non_negative(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError(f"Channel index must be >= 0; got {v}")
-        return v
 
     # channel-metadata.rst § Guidance on Channel Metadata Vocabulary /
     #                         Guidance on Channel Type — SHOULD
@@ -446,6 +447,30 @@ class DCAChannelMetadataV0_2(BaseModel):
         return self
 
 
+class DCAAcquisitionViewV0_2(BaseModel):
+    """
+    The two ``dca.acquisition`` fields the store-level time rules read.
+
+    A deliberately narrow *view*, not the generated ``AcquisitionMetadata``. The block
+    is already validated in full by ``validate_dca_experimental_metadata_v0_2``, which
+    pulls every experimental block out of ``dca`` and checks it against the generated
+    model. ``validator._run_dca_validation`` runs that alongside this store-structure
+    model and concatenates both sets of issues, so validating the block here as well
+    would report every acquisition defect twice and would couple these structural rules
+    to the full experimental model. This reads the two fields the time rules need and
+    leaves ownership of the block where it already sits.
+
+    ``time_sampling`` is typed ``str`` rather than the generated enum for a related
+    reason: an unknown value has to reach the time rules as a value they can report
+    against the array, not as a parse failure that aborts the surrounding checks.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    time_sampling: str | None = None
+    timestamps: list[float] | None = None
+
+
 class DCAGroupMetadataV0_2(BaseModel):
     """
     Validates the 'dca' object in the image group zarr.json.
@@ -458,9 +483,13 @@ class DCAGroupMetadataV0_2(BaseModel):
 
     # schema.json dca.required — MUST
     version: Literal["0.2"]
+    # schema.json dca.url — required (MUST be present); value is not validated
     url: str
     channels: list[DCAChannelMetadataV0_2]
     normalization_statistics: DCANormalizationStatistics
+
+    # Non-floor, and read only by the store-level time rules. Absent on most stores.
+    acquisition: DCAAcquisitionViewV0_2 | None = None
 
     # channel-metadata.rst § Channel Fields / Required Fields:
     # index is the zero-based channel index — duplicate indices are ambiguous — MUST
@@ -503,6 +532,11 @@ class DCAStoreSpecV0_2(BaseModel):
     # ome-zarr-metadata.rst § Units — populated by _build_node_dict()
     axis_units: dict[str, str | None] = Field(default_factory=dict)
 
+    # Level 0's scale per axis — populated by _build_node_dict(). Only read for the
+    # variable-time-sampling rules below; None means the scale could not be read,
+    # which is not the same as 1.0.
+    axis_scales: dict[str, float | None] = Field(default_factory=dict)
+
     # channel-metadata.rst § Location in Zarr store — validated as a nested model.
     # Pydantic coerces the raw dict to DCAGroupMetadataV0_2; None means key is absent.
     # validate_default=True ensures check_dca_present fires even when dca is absent
@@ -516,9 +550,10 @@ class DCAStoreSpecV0_2(BaseModel):
     @field_validator("axes")
     @classmethod
     def axes_must_be_tczyx(cls, v: list[str]) -> list[str]:
-        if v != AXES_REQUIRED:
+        if v not in AXES_ACCEPTED:
             raise ValueError(
-                f"Axes must be {AXES_REQUIRED}; got {v}. "
+                f"Axes must be {AXES_REQUIRED} (all lowercase or all uppercase); "
+                f"got {v}. "
                 "All datasets must be 5D with dimensions in t, c, z, y, x order."
             )
         return v
@@ -564,10 +599,12 @@ class DCAStoreSpecV0_2(BaseModel):
         for i in range(len(self.levels) - 1):
             fine = self.levels[i].shape
             coarse = self.levels[i + 1].shape
+            chunks = self.levels[i].chunk_shape
 
             for dim_idx, dim_name in enumerate(AXES_REQUIRED):
                 fine_dim = fine[dim_idx]
                 coarse_dim = coarse[dim_idx]
+                chunk_dim = chunks[dim_idx]
 
                 if coarse_dim == 0:
                     continue
@@ -583,9 +620,10 @@ class DCAStoreSpecV0_2(BaseModel):
                             f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
                         )
                 else:
-                    # array-standard.rst § Multiresolution — SHOULD:
-                    # spatial factor ≈ 2
-                    if not math.isclose(
+                    # array-standard.rst § Multiresolution — SHOULD: spatial factor ≈ 2.
+                    # Downsampling legitimately stops once an axis reaches its chunk
+                    # floor, so skip when fine_dim is already <= its chunk size.
+                    if fine_dim > chunk_dim and not math.isclose(
                         factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
                     ):
                         should_warnings.append(
@@ -608,9 +646,10 @@ class DCAStoreSpecV0_2(BaseModel):
 
     @model_validator(mode="after")
     def check_axis_units(self) -> "DCAStoreSpecV0_2":
+        units_lower = {k.lower(): v for k, v in self.axis_units.items()}
         errors: list[str] = []
         for ax in sorted(SPATIAL_AXES):
-            unit = self.axis_units.get(ax)
+            unit = units_lower.get(ax)
             if unit is None:
                 errors.append(
                     f"Spatial axis '{ax}' has no unit. "
@@ -623,22 +662,118 @@ class DCAStoreSpecV0_2(BaseModel):
                     "spatial unit vocabulary "
                     "(ome-zarr-metadata.rst § Units)."
                 )
-        unit = self.axis_units.get("t")
+        unit = units_lower.get("t")
         if unit is None:
-            errors.append(
-                "Temporal axis 't' has no unit. "
-                "MUST use a unit from the OME-NGFF v0.5 temporal vocabulary "
-                "(ome-zarr-metadata.rst § Units)."
-            )
+            # Relaxed to SHOULD for a declared variable-rate acquisition: OME-NGFF
+            # v0.5 has no 'frame' unit, so a store whose frames are unevenly spaced
+            # cannot name one honestly. The declaration is not free — it pulls in the
+            # timestamps MUSTs in check_variable_time_sampling below.
+            if self._declares_variable_sampling():
+                errors.append(
+                    "[SHOULD] Temporal axis 't' has no unit, which "
+                    "'acquisition.time_sampling = \"variable\"' permits. OME-NGFF "
+                    "v0.5 has no 'frame' unit; the per-frame "
+                    "'acquisition.timestamps' are authoritative "
+                    "(ome-zarr-metadata.rst § Units)."
+                )
+            else:
+                errors.append(
+                    "Temporal axis 't' has no unit. "
+                    "MUST use a unit from the OME-NGFF v0.5 temporal vocabulary, or "
+                    "declare 'acquisition.time_sampling = \"variable\"' with "
+                    "'acquisition.timestamps' "
+                    "(ome-zarr-metadata.rst § Units)."
+                )
         elif unit not in TEMPORAL_UNIT_VOCABULARY:
             errors.append(
                 f"Temporal axis 't' unit '{unit}' is not in the OME-NGFF v0.5 "
                 "temporal unit vocabulary "
                 "(ome-zarr-metadata.rst § Units)."
             )
+        # Folded into this validator rather than added as a second one: pydantic
+        # aborts the remaining mode="after" validators at the first raise, so a
+        # variable-sampling store would emit the SHOULD above and never reach the
+        # timestamps MUSTs — losing exactly the checks that make the relaxation
+        # verifiable. One accumulating validator reports both.
+        errors.extend(self._variable_time_sampling_errors())
         if errors:
             raise ValueError("\n".join(errors))
         return self
+
+    def _acquisition(self) -> DCAAcquisitionViewV0_2 | None:
+        """This group's ``dca.acquisition`` view, when it carries one."""
+        return getattr(self.dca, "acquisition", None) if self.dca else None
+
+    def _declares_variable_sampling(self) -> bool:
+        """Whether this group declares ``acquisition.time_sampling = "variable"``."""
+        return getattr(self._acquisition(), "time_sampling", None) == "variable"
+
+    # ------------------------------------------------------------------
+    # ome-zarr-metadata.rst § Units / experimental-metadata.rst § Acquisition
+    # Declaring variable sampling is an assertion about the data, so it carries
+    # its own MUSTs. Everything here is inside the 'variable' branch: a store
+    # that does not declare it is unaffected.
+    # ------------------------------------------------------------------
+
+    def _timestamps_errors(self, timestamps: list[float]) -> list[str]:
+        """Shape rules for a present ``timestamps`` array, whatever the mode.
+
+        Applied whenever the array is there, not only under ``variable``: a
+        ``uniform`` group may carry per-frame times too, and a mis-sized or
+        out-of-order array is as wrong there as anywhere.
+        """
+        errors: list[str] = []
+        # Level 0's T. levels[0].shape is [t, c, z, y, x] per the axes MUST above,
+        # and is the same shape source the multiresolution rules read.
+        expected = self.levels[0].shape[0] if self.levels else None
+        if expected is not None and len(timestamps) != expected:
+            errors.append(
+                f"'acquisition.timestamps' has {len(timestamps)} entries but the "
+                f"level-0 array has T={expected}. Lengths MUST match: one "
+                "timestamp per timepoint."
+            )
+        if any(b < a for a, b in zip(timestamps, timestamps[1:])):
+            errors.append(
+                "'acquisition.timestamps' MUST be non-decreasing; frames are "
+                "recorded in acquisition order."
+            )
+        return errors
+
+    def _variable_time_sampling_errors(self) -> list[str]:
+        acquisition = self._acquisition()
+        declared = getattr(acquisition, "time_sampling", None)
+        timestamps = getattr(acquisition, "timestamps", None)
+
+        if declared is None:
+            return self._timestamps_errors(timestamps) if timestamps else []
+        if declared not in TIME_SAMPLING_VALUES:
+            return [
+                f"'acquisition.time_sampling' is '{declared}', which is not one of "
+                f"{sorted(TIME_SAMPLING_VALUES)}."
+            ]
+        if declared != "variable":
+            return self._timestamps_errors(timestamps) if timestamps else []
+
+        errors: list[str] = []
+        if not timestamps:
+            errors.append(
+                "'acquisition.time_sampling' is 'variable' but "
+                "'acquisition.timestamps' is absent. Declaring variable sampling MUST "
+                "carry the per-frame timestamps it points at, otherwise the claim "
+                "cannot be checked."
+            )
+        else:
+            errors.extend(self._timestamps_errors(timestamps))
+
+        scales_lower = {k.lower(): v for k, v in self.axis_scales.items()}
+        t_scale = scales_lower.get("t")
+        if t_scale is not None and t_scale != 1.0:
+            errors.append(
+                f"'acquisition.time_sampling' is 'variable' but the level-0 't' scale "
+                f"is {t_scale}. It MUST be 1, so the axis carries frame indices "
+                "rather than a uniform duration the data does not have."
+            )
+        return errors
 
     # ------------------------------------------------------------------
     # channel-metadata.rst § Location in Zarr store — MUST
@@ -716,9 +851,10 @@ class DCALabelStoreSpecV0_2(BaseModel):
     @field_validator("axes")
     @classmethod
     def axes_must_be_tczyx(cls, v: list[str]) -> list[str]:
-        if v != AXES_REQUIRED:
+        if v not in AXES_ACCEPTED:
             raise ValueError(
-                f"Axes must be {AXES_REQUIRED}; got {v}. "
+                f"Axes must be {AXES_REQUIRED} (all lowercase or all uppercase); "
+                f"got {v}. "
                 "All datasets must be 5D with dimensions in t, c, z, y, x order."
             )
         return v
@@ -762,10 +898,12 @@ class DCALabelStoreSpecV0_2(BaseModel):
         for i in range(len(self.levels) - 1):
             fine = self.levels[i].shape
             coarse = self.levels[i + 1].shape
+            chunks = self.levels[i].chunk_shape
 
             for dim_idx, dim_name in enumerate(AXES_REQUIRED):
                 fine_dim = fine[dim_idx]
                 coarse_dim = coarse[dim_idx]
+                chunk_dim = chunks[dim_idx]
 
                 if coarse_dim == 0:
                     continue
@@ -779,7 +917,9 @@ class DCALabelStoreSpecV0_2(BaseModel):
                             f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
                         )
                 else:
-                    if not math.isclose(
+                    # Downsampling legitimately stops once an axis reaches its chunk
+                    # floor, so skip when fine_dim is already <= its chunk size.
+                    if fine_dim > chunk_dim and not math.isclose(
                         factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
                     ):
                         should_warnings.append(

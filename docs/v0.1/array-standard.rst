@@ -49,6 +49,10 @@ All datasets **MUST** be in 5 dimensions (with placeholder values) in the follow
 * ``z`` corresponds to the 3rd spatial dimension
 * ``y``, ``x`` correspond to the imaging plane
 
+.. note::
+
+   Axis names MUST be all lowercase (``t``, ``c``, ``z``, ``y``, ``x``) or all uppercase (``T``, ``C``, ``Z``, ``Y``, ``X``). Mixed casing such as ``T``, ``C``, ``Z``, ``y``, ``x`` is rejected. The original casing is preserved.
+
 Data Types
 -----------
 

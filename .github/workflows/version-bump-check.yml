@@ -1,0 +1,215 @@
+name: Version Bump Check
+
+# Advisory check: flags spec/validator-affecting changes that have landed on
+# main since the last v* release tag without CURRENT_VERSION moving. Never
+# blocks merges — it only maintains a single standing issue.
+#
+# Compares against the last release TAG, not the PR base, because bumps are
+# batched in practice: several substantive PRs commonly land before a later
+# PR closes them out with a bump. A per-PR gate would fight that pattern
+# constantly.
+#
+# A PR can opt a matched-path change out of consideration by carrying the
+# "no-version-bump-needed" label (e.g. a prose-only docs fix) — a path-based
+# diff can't tell a normative change from a typo fix, so this is left to a
+# human judgment call at review/merge time.
+#
+# Delivery is a standing issue labeled "version-bump-needed", not a PR comment.
+# A PR comment would land on whichever PR is earliest to still owe a bump —
+# by construction already merged and closed, so nobody has it in an active
+# queue. An open issue stays visible in the repo's Issues tab, can be
+# assigned/triaged, and is closed automatically (with a reason) the next run
+# that finds nothing outstanding — whether because CURRENT_VERSION moved, or
+# because every remaining contributor got labeled after the fact. A closed
+# issue is never reopened; a fresh one is opened for the next debt episode
+# instead, keeping each episode's history distinct.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  check:
+    name: Check for missing version bump
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check for unbumped spec-affecting changes
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+
+        # Matches every v0.* directory, not just the current minor version --
+        # so, e.g., a typo fix in a frozen prior version's docs still shows
+        # up here too. Narrowing to "only the current minor" would mean
+        # parsing CURRENT_VERSION and keeping that parsing in sync with the
+        # directory layout, a second thing to drift instead of one; the
+        # no-version-bump-needed label is the intended way to dismiss a
+        # false positive from an old, frozen version.
+        MATCHED_PATHS=(
+          ':(glob)schema/v0.*/**/*.yaml'
+          ':(glob)schema/v0.*/generated/**/*.schema.json'
+          ':(glob)helpers/src/dca_helpers/validation/versions/v0_*/**/*.py'
+          ':(glob)helpers/src/dca_helpers/validation/*.py'
+          ':(glob)docs/v0.*/**/*.rst'
+        )
+        LABEL="no-version-bump-needed"
+        ISSUE_LABEL="version-bump-needed"
+
+        # Provisioned unconditionally, before any exit path below -- not only
+        # when opening a new issue. While an issue from a prior run is still
+        # open, every invocation takes the edit branch and would otherwise
+        # never reach a label-create call, leaving no-version-bump-needed
+        # missing from the repo for as long as that issue (and so its own
+        # escape hatch) stays open, which is exactly when someone would need
+        # to use it. --force is idempotent, so this costs two API calls on
+        # every run rather than only the rare one that opens a new issue.
+        gh label create "$ISSUE_LABEL" --repo "$REPO" --force \
+          --color FBCA04 --description "A version bump is needed for spec/validator changes since the last release tag."
+        gh label create "$LABEL" --repo "$REPO" --force \
+          --color 0E8A16 --description "Exempts this PR's matched-path changes from the version bump check."
+
+        find_open_issue() {
+          gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open --json number \
+            | jq -r '.[0].number // empty'
+        }
+
+        find_open_issues() {
+          gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open --limit 1000 --json number \
+            | jq -r '.[].number'
+        }
+
+        # Closes every open issue with this label, not just one. Normally
+        # there is at most one, but two close-together pushes could each see
+        # "no open issue" and both create one -- closing all of them here
+        # makes that self-heal instead of leaving a stale duplicate around
+        # forever (the edit path below only ever needs the first, since it
+        # keeps one issue alive while a bump is still needed).
+        close_if_open() {
+          local reason="$1" issue_number issues
+          # issues is assigned on its own line, not combined with the local
+          # declaration above: `local x=$(cmd)` masks a failing cmd behind
+          # local's own exit status, and feeding a process substitution
+          # (`< <(cmd)`) into the loop instead of this variable would drop
+          # the failure entirely -- nothing checks a process substitution's
+          # exit status. Either way, a transient find_open_issues failure
+          # would silently no-op instead of tripping set -e, leaving a
+          # resolved issue open with a stale "bump is owed" body and a green
+          # check run -- the same silent-wrong outcome this file deliberately
+          # avoids for an unresolvable commit a few lines down.
+          issues="$(find_open_issues)"
+          while IFS= read -r issue_number; do
+            [ -n "$issue_number" ] || continue
+            echo "Closing #${issue_number}: ${reason}"
+            gh issue close "$issue_number" --repo "$REPO" --comment "$reason"
+          done <<<"$issues"
+        }
+
+        if ! tag="$(git describe --tags --abbrev=0 --match 'v*' HEAD 2>/dev/null)"; then
+          echo "No v* release tag found; nothing to compare against."
+          exit 0
+        fi
+        echo "Last release tag: $tag"
+
+        if ! git diff --quiet "$tag"..HEAD -- CURRENT_VERSION; then
+          echo "CURRENT_VERSION changed since $tag; this push is the bump."
+          close_if_open "Resolved — \`CURRENT_VERSION\` was bumped in this push."
+          exit 0
+        fi
+
+        mapfile -t commits < <(git log --format=%H --reverse "$tag"..HEAD -- "${MATCHED_PATHS[@]}")
+
+        if [ "${#commits[@]}" -eq 0 ]; then
+          echo "No spec-affecting changes since $tag."
+          close_if_open "Resolved — no spec-affecting changes remain outstanding since \`$tag\`."
+          exit 0
+        fi
+
+        surviving_lines=()
+        excluded_lines=()
+        any_surviving=false
+
+        for sha in "${commits[@]}"; do
+          pr_json="$(gh api "repos/${REPO}/commits/${sha}/pulls" --jq '.[0] // empty')"
+          files="$(git diff-tree --no-commit-id --name-only -r "$sha" -- "${MATCHED_PATHS[@]}")"
+
+          if [ -z "$pr_json" ]; then
+            # Treated as outstanding, not skipped: if every commit since the
+            # tag fails to resolve to a PR (e.g. the Pulls API is down), the
+            # alternative is any_surviving staying false and the workflow
+            # closing its own issue claiming everything was excluded, when
+            # really nothing was ever checked.
+            echo "::warning::No PR found for commit $sha; treating as outstanding."
+            any_surviving=true
+            while IFS= read -r f; do
+              [ -n "$f" ] && surviving_lines+=("- \`$f\` — from \`${sha:0:8}\` (no PR found)")
+            done <<<"$files"
+            continue
+          fi
+
+          pr_number="$(jq -r '.number' <<<"$pr_json")"
+          is_excluded="$(jq -r --arg label "$LABEL" '[.labels[].name] | any(. == $label)' <<<"$pr_json")"
+
+          if [ "$is_excluded" = "true" ]; then
+            while IFS= read -r f; do
+              [ -n "$f" ] && excluded_lines+=("- ~~\`$f\`~~ — excluded via \`${LABEL}\` on #${pr_number}")
+            done <<<"$files"
+            continue
+          fi
+
+          any_surviving=true
+          while IFS= read -r f; do
+            [ -n "$f" ] && surviving_lines+=("- \`$f\` — from #${pr_number}")
+          done <<<"$files"
+        done
+
+        if [ "$any_surviving" = false ]; then
+          echo "All spec-affecting changes since $tag were excluded via the '${LABEL}' label."
+          close_if_open "Resolved — every remaining spec-affecting change since \`$tag\` is now excluded via the \`${LABEL}\` label."
+          exit 0
+        fi
+
+        current_version="$(tr -d '[:space:]' < CURRENT_VERSION)"
+        issue_body="$(mktemp)"
+
+        {
+          echo "**Spec-affecting changes without a version bump**"
+          echo
+          echo "\`CURRENT_VERSION\` is still \`${current_version}\` — unchanged since [\`${tag}\`](https://github.com/${REPO}/releases/tag/${tag})."
+          echo
+          printf '%s\n' "${surviving_lines[@]}"
+          if [ "${#excluded_lines[@]}" -gt 0 ]; then
+            printf '%s\n' "${excluded_lines[@]}"
+          fi
+          echo
+          echo "If this only **widens** acceptance (new enum value, relaxed rule), a patch bump covers it. If it **narrows** what previously validated, it needs a new minor version. See [\`docs/validation.md#backwards-compatibility\`](https://github.com/${REPO}/blob/main/docs/validation.md#backwards-compatibility) for the tier rules — this check can't tell which one applies."
+          echo
+          echo "_This issue closes automatically once \`CURRENT_VERSION\` moves. Label a contributing PR \`${LABEL}\` if a listed change isn't actually normative._"
+        } > "$issue_body"
+
+        # Takes the first match, same as find_open_issue elsewhere: a
+        # duplicate stays on a stale body until debt clears and close_if_open
+        # (which handles every match) closes all of them together. Fine
+        # while duplicates need two pushes racing within seconds of each
+        # other, per the timing already worked out for the close-all fix.
+        existing_issue="$(find_open_issue)"
+
+        if [ -n "$existing_issue" ]; then
+          echo "Updating existing issue #${existing_issue}"
+          gh issue edit "$existing_issue" --repo "$REPO" --body-file "$issue_body"
+        else
+          echo "Opening new issue"
+          gh issue create --repo "$REPO" --title "Version bump needed since ${tag}" \
+            --label "$ISSUE_LABEL" --body-file "$issue_body"
+        fi

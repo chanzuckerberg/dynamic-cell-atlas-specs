@@ -1,5 +1,6 @@
 from dca_helpers.validation.result import (
     Issue,
+    PlateSubsetInfo,
     Severity,
     ValidationRun,
     ValidationSummary,
@@ -16,4 +17,5 @@ __all__ = [
     "ValidationRun",
     "Issue",
     "Severity",
+    "PlateSubsetInfo",
 ]

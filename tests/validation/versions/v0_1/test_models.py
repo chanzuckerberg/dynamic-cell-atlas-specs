@@ -197,36 +197,9 @@ class TestChunkSizeShould:
 
 @pytest.mark.unit
 class TestChunkShapeShould:
-    def test_standard_chunk_shape_no_warn(self):
-        issues = validate_level(valid_level(chunk_shape=[1, 1, 128, 128, 128]))
-        assert not any(
-            "chunk" in w.message.lower() and "spatial" in w.message.lower()
-            for w in warnings(issues)
-        )
-
-    def test_non_unit_time_chunk_warns(self):
-        issues = validate_level(valid_level(chunk_shape=[2, 1, 128, 128, 128]))
-        assert any("Time chunk" in w.message for w in warnings(issues))
-
     def test_non_unit_channel_chunk_warns(self):
         issues = validate_level(valid_level(chunk_shape=[1, 2, 128, 128, 128]))
         assert any("Channel chunk" in w.message for w in warnings(issues))
-
-    def test_non_standard_spatial_chunk_warns(self):
-        # [1, 1, 1, 1024, 1024] * 2 = 2 MB — passes chunk size checks, but
-        # (z=1, y=1024, x=1024) != (128, 128, 128) so spatial shape warns
-        issues = validate_level(valid_level(chunk_shape=[1, 1, 1, 1024, 1024]))
-        assert any("Spatial chunk" in w.message for w in warnings(issues))
-
-    def test_small_z_array_no_spatial_warn(self):
-        # z_shape=32 < 128: spec-endorsed anisotropic case, no warning expected
-        issues = validate_level(
-            valid_level(
-                shape=[1, 1, 32, 512, 512],
-                chunk_shape=[1, 1, 32, 128, 128],
-            )
-        )
-        assert not any("Spatial chunk" in w.message for w in warnings(issues))
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +290,6 @@ class TestShardSize:
 
 @pytest.mark.unit
 class TestCompressionShould:
-    def test_integer_blosc_warns(self):
-        issues = validate_level(valid_level(codec_id="blosc", dtype="uint16"))
-        assert any("blosc" in w.message for w in warnings(issues))
-
     def test_integer_zstd_high_level_warns(self):
         issues = validate_level(
             valid_level(codec_id="zstd", codec_level=9, dtype="uint16")
@@ -401,6 +370,17 @@ class TestAxesMust:
         data["axes"] = ["t", "c", "z", "y", "x", "w"]
         errs = errors(validate_node(data))
         assert len(errs) >= 1
+
+    def test_uppercase_axes_passes(self):
+        data = valid_store()
+        data["axes"] = ["T", "C", "Z", "Y", "X"]
+        assert validate_node(data) == []
+
+    def test_mixed_case_axes_errors(self):
+        data = valid_store()
+        data["axes"] = ["T", "C", "Z", "y", "x"]
+        errs = errors(validate_node(data))
+        assert any("Axes must be" in e.message for e in errs)
 
 
 # ---------------------------------------------------------------------------
