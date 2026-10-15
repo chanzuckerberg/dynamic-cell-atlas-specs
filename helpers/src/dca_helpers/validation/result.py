@@ -1,11 +1,8 @@
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from dca_helpers.validation.zarr_node import ZarrNodeType
+from dca_helpers import CURRENT_SPEC_VERSION, __version__
+from dca_helpers.validation.zarr_node import ZarrNodeType
 
 
 class Severity(str, Enum):
@@ -20,6 +17,24 @@ class Issue:
     loc: tuple[int | str, ...]  # mirrors Pydantic's error location tuple
     message: str
     severity: Severity
+
+
+@dataclass
+class PlateSubsetInfo:
+    """Well/field subset coverage for one HCS plate validation run.
+
+    Attached only to the plate-root ZarrNodeValidationResult (the one with
+    parent_path is None) whenever --wells/--field-offset/--field-limit
+    narrowed what was opened or deep-validated, so a partial run is never
+    mistaken for full coverage.
+    """
+
+    wells_total: int  # wells declared in plate.wells
+    wells_selected: int  # wells actually opened — can be < wells_total even
+    # with --wells unset, if a well failed to open (reported separately as
+    # an ERROR; this field doesn't imply the shortfall was deliberate)
+    fields_total: int  # fields declared+on-disk across every opened well
+    fields_selected: int  # fields actually deep-validated (post offset/limit slice)
 
 
 @dataclass
@@ -41,6 +56,8 @@ class ZarrNodeValidationResult:
     issues: list[Issue] = field(default_factory=list)
     node_type: ZarrNodeType | None = None
     skipped: bool = False  # store was intentionally not validated (e.g., GEFF)
+    subset_coverage: PlateSubsetInfo | None = None  # set on the plate-root result
+    # of a partial (well/field-subset) HCS plate run; None otherwise
 
     # For HCS plates, one result is produced per field image (parent_path = plate root).
     # For standalone images, parent_path is None.
@@ -72,9 +89,15 @@ class ValidationSummary:
     stores_skipped: int  # stores intentionally not validated (e.g., GEFF)
     stores_discovered: int  # number of distinct store paths found before validation
     duration_seconds: float  # wall-clock seconds for the validate() call
+    start_timestamp: str  # ISO 8601 UTC wall-clock timestamp when validate() began
     nodes_by_type: dict[
         ZarrNodeType, int
     ]  # count of results grouped by node_type (excludes None; includes skipped types)
+    is_partial: bool = False  # True when any result carries a PlateSubsetInfo
+    wells_total: int = 0  # summed PlateSubsetInfo.wells_total; 0 when not partial
+    wells_selected: int = 0
+    fields_total: int = 0
+    fields_selected: int = 0
 
     @classmethod
     def from_results(
@@ -82,12 +105,14 @@ class ValidationSummary:
         results: list[ZarrNodeValidationResult],
         duration_seconds: float = 0.0,
         stores_discovered: int = 0,
+        start_timestamp: str = "",
     ) -> "ValidationSummary":
         nodes_by_type: dict[ZarrNodeType, int] = {}
         for r in results:
             if r.node_type is not None:
                 nodes_by_type[r.node_type] = nodes_by_type.get(r.node_type, 0) + 1
         non_skipped = [r for r in results if not r.skipped]
+        subsets = [r.subset_coverage for r in results if r.subset_coverage is not None]
         return cls(
             stores_validated=len(non_skipped),
             level_zarr_jsons_validated=sum(
@@ -98,7 +123,13 @@ class ValidationSummary:
             stores_skipped=sum(1 for r in results if r.skipped),
             stores_discovered=stores_discovered,
             duration_seconds=duration_seconds,
+            start_timestamp=start_timestamp,
             nodes_by_type=nodes_by_type,
+            is_partial=bool(subsets),
+            wells_total=sum(s.wells_total for s in subsets),
+            wells_selected=sum(s.wells_selected for s in subsets),
+            fields_total=sum(s.fields_total for s in subsets),
+            fields_selected=sum(s.fields_selected for s in subsets),
         )
 
 
@@ -109,6 +140,12 @@ class ValidationRun:
     path: str
     results: list[ZarrNodeValidationResult]
     summary: ValidationSummary
+    # Defaults to the currently-supported DCA spec version so direct
+    # construction (tests, ad hoc scripts) doesn't need to care.
+    spec_version: str = field(default_factory=lambda: CURRENT_SPEC_VERSION)
+    # Defaults to the running package's own version so direct construction
+    # (tests, ad hoc scripts) doesn't need to care.
+    validator_version: str = field(default_factory=lambda: __version__)
 
     def __iter__(self):
         return iter(self.results)

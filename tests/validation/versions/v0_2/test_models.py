@@ -67,11 +67,18 @@ from dca_helpers.validation.versions.v0_2.models import (
     TEMPORAL_UNIT_VOCABULARY,
     DCABiologicalAnnotation,
     DCAChannelMetadataV0_2,
+    DCAIntensityStatistics,
     DCALabelScaleLevelSpecV0_2,
     DCALabelStoreSpecV0_2,
+    DCANormalizationMetadata,
     DCANormalizationStatistics,
     DCAScaleLevelSpecV0_2,
     DCAStoreSpecV0_2,
+)
+
+_SPEC_URL = (
+    "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs"
+    "/tree/main/docs/v0.2/schema.json"
 )
 
 # ---------------------------------------------------------------------------
@@ -215,7 +222,7 @@ def valid_dca(n_channels=1):
     """Minimal valid dca object with n_channels channel entries."""
     return {
         "version": "0.2",
-        "url": "https://example.com/spec",
+        "url": _SPEC_URL,
         "channels": [
             {"name": f"ch{i}", "index": i, "description": f"channel {i}"}
             for i in range(n_channels)
@@ -326,10 +333,6 @@ class TestDCAScaleLevelSpecV0_2:
             )
         )
         assert any("1 GB" in e.message for e in errs)
-
-    def test_blosc_on_integer_still_warns(self):
-        warns = warnings(validate_level(valid_level(codec_id="blosc", dtype="uint16")))
-        assert any("blosc" in w.message for w in warns)
 
     def test_unusual_dtype_still_warns(self):
         warns = warnings(validate_level(valid_level(dtype="float32", codec_id="zstd")))
@@ -508,6 +511,17 @@ class TestAxesV0_2:
         data["axes"] = ["t", "c", "z", "y", "x", "w"]
         assert len(errors(validate_store(data))) >= 1
 
+    def test_uppercase_axes_passes(self):
+        data = valid_store()
+        data["axes"] = ["T", "C", "Z", "Y", "X"]
+        assert validate_store(data) == []
+
+    def test_mixed_case_axes_errors(self):
+        data = valid_store()
+        data["axes"] = ["T", "C", "Z", "y", "x"]
+        errs = errors(validate_store(data))
+        assert any("Axes must be" in e.message for e in errs)
+
 
 # ---------------------------------------------------------------------------
 # channel-metadata.rst § Location in Zarr store — dca key MUST be present
@@ -609,7 +623,7 @@ class TestChannelIndexMust:
 
     def test_negative_index_errors(self):
         errs = errors(validate_channel({"name": "ch", "index": -1, "description": "d"}))
-        assert any(">= 0" in e.message for e in errs)
+        assert any("greater than or equal to 0" in e.message for e in errs)
 
 
 # ---------------------------------------------------------------------------
@@ -622,7 +636,7 @@ class TestChannelIndicesUniqueMust:
     def test_unique_indices_pass(self):
         dca = {
             "version": "0.2",
-            "url": "x",
+            "url": _SPEC_URL,
             "channels": [
                 {"name": "a", "index": 0, "description": "d"},
                 {"name": "b", "index": 1, "description": "d"},
@@ -635,7 +649,7 @@ class TestChannelIndicesUniqueMust:
     def test_duplicate_indices_error(self):
         dca = {
             "version": "0.2",
-            "url": "x",
+            "url": _SPEC_URL,
             "channels": [
                 {"name": "a", "index": 0, "description": "d"},
                 {"name": "b", "index": 0, "description": "d"},
@@ -650,7 +664,7 @@ class TestChannelIndicesUniqueMust:
         # The spec example shows index 0 and 2 with no index 1 — this is valid
         dca = {
             "version": "0.2",
-            "url": "x",
+            "url": _SPEC_URL,
             "channels": [
                 {"name": "Phase", "index": 0, "description": "label-free"},
                 {"name": "H2B-GFP", "index": 2, "description": "nucleus"},
@@ -687,7 +701,7 @@ class TestChannelCountShould:
         data = valid_store(c=2)
         data["dca"] = {
             "version": "0.2",
-            "url": "x",
+            "url": _SPEC_URL,
             "channels": [],
             "normalization_statistics": {},
         }
@@ -703,7 +717,7 @@ class TestChannelCountShould:
             "levels": [level],
             "dca": {
                 "version": "0.2",
-                "url": "x",
+                "url": _SPEC_URL,
                 "channels": [],
                 "normalization_statistics": {},
             },
@@ -987,6 +1001,85 @@ class TestNormalizationStatisticsMust:
 
 
 # ---------------------------------------------------------------------------
+# schema.json IntensityStatistics minimum: 0 — p95_p5, p99_p1, iqr
+# ---------------------------------------------------------------------------
+
+
+def validate_intensity_statistics(data: dict) -> list:
+    """Return Issues from validating an IntensityStatistics dict."""
+    try:
+        DCAIntensityStatistics.model_validate(data)
+        return []
+    except pydantic.ValidationError as exc:
+        return _convert_errors(exc)
+
+
+_REQUIRED_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
+
+
+@pytest.mark.unit
+class TestNonNegativeStats:
+    def test_zero_p95_p5_passes(self):
+        assert validate_intensity_statistics({**_REQUIRED_STATS, "p95_p5": 0.0}) == []
+
+    def test_positive_p95_p5_passes(self):
+        assert validate_intensity_statistics({**_REQUIRED_STATS, "p95_p5": 5.0}) == []
+
+    def test_negative_p95_p5_errors(self):
+        errs = errors(
+            validate_intensity_statistics({**_REQUIRED_STATS, "p95_p5": -0.1})
+        )
+        assert len(errs) >= 1
+
+    def test_negative_p99_p1_errors(self):
+        errs = errors(
+            validate_intensity_statistics({**_REQUIRED_STATS, "p99_p1": -1.0})
+        )
+        assert len(errs) >= 1
+
+    def test_negative_iqr_errors(self):
+        errs = errors(validate_intensity_statistics({**_REQUIRED_STATS, "iqr": -5.0}))
+        assert len(errs) >= 1
+
+    def test_none_optional_stats_passes(self):
+        assert validate_intensity_statistics({**_REQUIRED_STATS}) == []
+
+
+# ---------------------------------------------------------------------------
+# schema.json NormalizationMetadata minimum: 1 — grid
+# ---------------------------------------------------------------------------
+
+
+def validate_normalization_metadata(data: dict) -> list:
+    """Return Issues from validating a NormalizationMetadata dict."""
+    try:
+        DCANormalizationMetadata.model_validate(data)
+        return []
+    except pydantic.ValidationError as exc:
+        return _convert_errors(exc)
+
+
+@pytest.mark.unit
+class TestGridPositive:
+    def test_grid_one_passes(self):
+        assert validate_normalization_metadata({"grid": 1}) == []
+
+    def test_grid_large_passes(self):
+        assert validate_normalization_metadata({"grid": 16}) == []
+
+    def test_grid_zero_errors(self):
+        errs = errors(validate_normalization_metadata({"grid": 0}))
+        assert len(errs) >= 1
+
+    def test_grid_negative_errors(self):
+        errs = errors(validate_normalization_metadata({"grid": -1}))
+        assert len(errs) >= 1
+
+    def test_grid_none_passes(self):
+        assert validate_normalization_metadata({"grid": None}) == []
+
+
+# ---------------------------------------------------------------------------
 # Regression: dca MUST check must fire even when levels has [SHOULD] warnings
 # ---------------------------------------------------------------------------
 
@@ -1003,10 +1096,10 @@ class TestDcaMissingWithLevelWarnings:
     """
 
     def test_dca_error_fires_alongside_chunk_size_warning(self):
-        # chunk [1,1,1,600,600] uint16 = 703 KB → between 512 KB and 1 MB → [SHOULD]
+        # chunk channel dim 2 (!= recommended 1) → [SHOULD] channel-chunk warning
         level = valid_level(
-            shape=[1, 1, 1, 600, 600],
-            chunk_shape=[1, 1, 1, 600, 600],
+            shape=[1, 2, 128, 128, 128],
+            chunk_shape=[1, 2, 128, 128, 128],
             dtype="uint16",
         )
         data = {
@@ -1058,7 +1151,7 @@ class TestLabelStoreSpecV0_2:
             **valid_label_store(),
             "dca": {
                 "version": "0.2",
-                "url": "x",
+                "url": _SPEC_URL,
                 "channels": [],
                 "normalization_statistics": {},
             },
@@ -1069,6 +1162,17 @@ class TestLabelStoreSpecV0_2:
         data = valid_label_store()
         data["axes"] = ["z", "y", "x", "t", "c"]
         assert len(errors(validate_label_store(data))) >= 1
+
+    def test_uppercase_axes_passes(self):
+        data = valid_label_store()
+        data["axes"] = ["T", "C", "Z", "Y", "X"]
+        assert validate_label_store(data) == []
+
+    def test_mixed_case_axes_errors(self):
+        data = valid_label_store()
+        data["axes"] = ["T", "C", "Z", "y", "x"]
+        errs = errors(validate_label_store(data))
+        assert any("Axes must be" in e.message for e in errs)
 
     def test_all_levels_above_2048_fails(self):
         levels = [
@@ -1171,7 +1275,21 @@ class TestDimensionNamesMust:
 
     def test_wrong_names_errors(self):
         errs = errors(
-            validate_level(valid_level(dimension_names=["T", "C", "Z", "Y", "X"]))
+            validate_level(
+                valid_level(dimension_names=["time", "channel", "z", "y", "x"])
+            )
+        )
+        assert len(errs) == 1
+        assert "dimension_names" in errs[0].message
+
+    def test_uppercase_dimension_names_passes(self):
+        assert (
+            validate_level(valid_level(dimension_names=["T", "C", "Z", "Y", "X"])) == []
+        )
+
+    def test_mixed_case_dimension_names_errors(self):
+        errs = errors(
+            validate_level(valid_level(dimension_names=["T", "C", "Z", "y", "x"]))
         )
         assert len(errs) == 1
         assert "dimension_names" in errs[0].message
@@ -1267,8 +1385,164 @@ class TestAxisUnitsMust:
         units = {**VALID_AXIS_UNITS, "t": unit}
         assert errors(validate_store(valid_store(axis_units=units))) == []
 
+    def test_uppercase_axis_units_keys_passes(self):
+        units = {k.upper(): v for k, v in VALID_AXIS_UNITS.items()}
+        assert errors(validate_store(valid_store(axis_units=units))) == []
+
     def test_label_store_has_no_axis_units_check(self):
         # DCALabelStoreSpecV0_2 does not validate axis_units — no errors expected
         data = valid_label_store()
         assert "axis_units" not in data
         assert errors(validate_label_store(data)) == []
+
+
+# ---------------------------------------------------------------------------
+# Variable time sampling
+# ---------------------------------------------------------------------------
+
+
+NO_T_UNIT = {**VALID_AXIS_UNITS, "t": None}
+
+
+def variable_store(
+    timestamps=(0.0, 7200.0, 14400.0),
+    t=3,
+    time_sampling="variable",
+    t_scale=1.0,
+    extra_acquisition=None,
+):
+    """A store declaring variable sampling, with T timepoints and no 't' unit."""
+    store = valid_store(axis_units=NO_T_UNIT)
+    for level in store["levels"]:
+        level["shape"] = [t, *level["shape"][1:]]
+    acquisition = {}
+    if time_sampling is not None:
+        acquisition["time_sampling"] = time_sampling
+    if timestamps is not None:
+        acquisition["timestamps"] = list(timestamps)
+    if extra_acquisition:
+        acquisition.update(extra_acquisition)
+    store["dca"]["acquisition"] = acquisition
+    store["axis_scales"] = {
+        "t": t_scale,
+        "c": 1.0,
+        "z": 1.0,
+        "y": 1.0,
+        "x": 1.0,
+    }
+    return store
+
+
+@pytest.mark.unit
+class TestVariableTimeSampling:
+    """
+    Declaring acquisition.time_sampling = "variable" relaxes the temporal-unit MUST
+    to a SHOULD and, in exchange, requires per-frame timestamps that match the array.
+    Every rule here is inside the "variable" branch: a store that does not declare it
+    is untouched.
+    """
+
+    def test_declaration_demotes_missing_t_unit_to_warning(self):
+        issues = validate_store(variable_store())
+        assert errors(issues) == []
+        assert any("has no unit" in w.message for w in warnings(issues))
+
+    def test_missing_t_unit_without_declaration_stays_an_error(self):
+        errs = errors(validate_store(valid_store(axis_units=NO_T_UNIT)))
+        assert any("Temporal axis 't' has no unit" in e.message for e in errs)
+
+    def test_uniform_declaration_does_not_relax_the_unit_must(self):
+        store = variable_store(time_sampling="uniform", timestamps=None)
+        errs = errors(validate_store(store))
+        assert any("Temporal axis 't' has no unit" in e.message for e in errs)
+
+    def test_absent_acquisition_block_is_unaffected(self):
+        # The common case for an existing store: no declaration, a real 't' unit,
+        # so none of the rules in this class apply.
+        assert validate_store(valid_store()) == []
+
+    def test_variable_without_timestamps_is_an_error(self):
+        errs = errors(validate_store(variable_store(timestamps=None)))
+        assert any("'acquisition.timestamps' is absent" in e.message for e in errs)
+
+    def test_should_and_must_are_reported_together(self):
+        # Regression guard: the SHOULD and the timestamps MUSTs live in one
+        # validator, because a second mode="after" validator would never run.
+        issues = validate_store(variable_store(timestamps=None))
+        assert any("has no unit" in w.message for w in warnings(issues))
+        assert any("timestamps" in e.message for e in errors(issues))
+
+    def test_timestamps_length_must_match_t(self):
+        errs = errors(validate_store(variable_store(timestamps=(0.0, 1.0), t=3)))
+        assert any("has 2 entries" in e.message and "T=3" in e.message for e in errs)
+
+    def test_timestamps_must_be_non_decreasing(self):
+        store = variable_store(timestamps=(0.0, 14400.0, 7200.0))
+        errs = errors(validate_store(store))
+        assert any("non-decreasing" in e.message for e in errs)
+
+    def test_equal_timestamps_are_allowed(self):
+        store = variable_store(timestamps=(0.0, 0.0, 7200.0))
+        assert errors(validate_store(store)) == []
+
+    def test_variable_requires_a_t_scale_of_one(self):
+        errs = errors(validate_store(variable_store(t_scale=7200.0)))
+        assert any("MUST be 1" in e.message for e in errs)
+
+    def test_uppercase_t_axis_scale_is_still_checked(self):
+        store = variable_store(t_scale=7200.0)
+        store["axes"] = ["T", "C", "Z", "Y", "X"]
+        store["axis_units"] = {k.upper(): v for k, v in store["axis_units"].items()}
+        store["axis_scales"] = {k.upper(): v for k, v in store["axis_scales"].items()}
+        errs = errors(validate_store(store))
+        assert any("MUST be 1" in e.message for e in errs)
+
+    def test_unreadable_t_scale_is_not_treated_as_a_violation(self):
+        assert errors(validate_store(variable_store(t_scale=None))) == []
+
+    def test_unknown_time_sampling_value_is_an_error(self):
+        errs = errors(validate_store(variable_store(time_sampling="sometimes")))
+        assert any("is not one of" in e.message for e in errs)
+
+    def test_timestamps_are_checked_without_a_declaration(self):
+        # A uniform or undeclared group may still carry per-frame times; a
+        # mis-sized array is as wrong there as under `variable`.
+        store = variable_store(timestamps=(0.0, 1.0), t=3, time_sampling=None)
+        errs = errors(validate_store(store))
+        assert any("has 2 entries" in e.message and "T=3" in e.message for e in errs)
+
+    def test_timestamps_order_is_checked_under_uniform(self):
+        store = variable_store(
+            timestamps=(0.0, 14400.0, 7200.0), time_sampling="uniform"
+        )
+        assert any("non-decreasing" in e.message for e in errors(validate_store(store)))
+
+    def test_well_formed_timestamps_under_uniform_pass(self):
+        store = variable_store(
+            timestamps=(0.0, 7200.0, 14400.0), time_sampling="uniform"
+        )
+        errs = errors(validate_store(store))
+        # The only complaint is the absent 't' unit, which uniform does not excuse.
+        # Nothing is reported against the array itself. (The unit error names
+        # 'acquisition.timestamps' in its remedy text, so match on the array rules.)
+        assert any("has no unit" in e.message for e in errs)
+        assert not any(
+            "entries but the" in e.message or "non-decreasing" in e.message
+            for e in errs
+        )
+
+    def test_store_rules_do_not_re_validate_the_acquisition_block(self):
+        # The store-structure model reads two fields and reports nothing else about
+        # acquisition. Block-level validation belongs to
+        # validate_dca_experimental_metadata_v0_2, which _run_dca_validation runs
+        # alongside this model and whose issues are concatenated with these — so
+        # validating the block here too would report each defect twice.
+        # 'some_future_key' is an ERROR there (the generated model is extra="forbid");
+        # what this asserts is only that it is not *also* an error from here.
+        store = variable_store(
+            extra_acquisition={
+                "microscope": {"model": "ExampleScope 1"},
+                "some_future_key": 1,
+            }
+        )
+        assert errors(validate_store(store)) == []

@@ -29,6 +29,11 @@ def _is_s3(path: str) -> bool:
     return path.startswith("s3://")
 
 
+def well_of_field(field_path: str) -> str:
+    """Return the parent well path of a "<row>/<col>/<field>" field path."""
+    return field_path.rsplit("/", 1)[0]
+
+
 def _parse_s3_url(url: str) -> tuple[str, str]:
     """Return (bucket, key_prefix) from an s3://bucket/prefix URL."""
     stripped = url.rstrip("/").removeprefix("s3://")
@@ -80,7 +85,7 @@ async def _list_dir_skip_markers(
     returned key unconditionally and raises ``ValueError`` on such an entry,
     which makes ``Group.keys()`` blow up on any store that carries these markers.
     Plate validation enumerates well children via ``keys()``, so the crash
-    surfaced as a false "field has no group on disk". See issue #107.
+    surfaced as a false "field has no group on disk".
 
     This mirrors zarr's ``_transform_list_dir`` but drops any entry equal to the
     prefix before relativizing.
@@ -100,15 +105,15 @@ class _MarkerTolerantObjectStore(_ZarrObjectStore):
     """zarr ``ObjectStore`` that tolerates S3 directory-marker objects.
 
     Overrides ``list_dir`` so a directory-marker object (a key equal to the
-    listed prefix) is skipped instead of crashing relativization. See issue #107
-    and :func:`_list_dir_skip_markers`.
+    listed prefix) is skipped instead of crashing relativization. See
+    :func:`_list_dir_skip_markers`.
     """
 
     def list_dir(self, prefix: str) -> AsyncGenerator[str, None]:
         return _list_dir_skip_markers(self.store, prefix)
 
 
-def _open_zarr_group(path: str) -> zarr.Group:
+def open_zarr_group(path: str) -> zarr.Group:
     """Open a Zarr group at `path`, using obstore for s3:// URLs."""
     if _is_s3(path):
         bucket, prefix = _parse_s3_url(path)

@@ -14,8 +14,9 @@ store from an example live 3D time-lapse dataset (cultured human iPSCs, live con
 fluorescence). It carries the **required experimental floor** mirrored alongside
 the channel and normalization-statistics metadata the block already holds. Because this
 is a time-lapse dataset, the conditionally-required ``acquisition.time_increment_s`` is
-included. The complete curated record, including the optional and recommended fields not
-shown here, lives in the sibling Parquet and is :ref:`described below <example-parquet>`.
+included. The optional and recommended fields are carried in the same block but are
+trimmed from this listing for length; they are
+:ref:`described below <example-parquet>`.
 
 The experimental blocks sit **directly** in ``dca`` (no wrapper key), next to
 ``version`` / ``url`` / ``channels`` / ``normalization_statistics``. Per-value provenance
@@ -99,12 +100,12 @@ are illustrative.
 
 .. _example-parquet:
 
-Additional metadata in the Parquet
-----------------------------------
+The recommended and optional fields
+-----------------------------------
 
-The ``dca`` block above carries only the required floor. The sibling Parquet is the
-source of truth: it holds the **complete** record, including the recommended and optional
-fields below. Each also carries its provenance,
+The listing above shows the required floor. These fields are written beside it, in both
+the ``dca`` block and the sibling Parquet that is the source of truth, and together they
+make up the **complete** record. Each also carries its provenance,
 keyed the same way by ``field_path``; free-text ``additional_metadata`` values use
 ``<block>.additional_metadata.<name>``, so all provenance has one home.
 

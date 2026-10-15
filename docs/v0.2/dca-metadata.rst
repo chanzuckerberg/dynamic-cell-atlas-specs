@@ -12,6 +12,24 @@ The ``dca`` object **MUST** contain:
 * ``channels`` — an array of channel metadata objects (see :doc:`channel-metadata`)
 * ``normalization_statistics`` — per-channel normalization statistics keyed by channel index (see :doc:`normalization-statistics`)
 
+For image groups it **MUST** additionally carry the experimental-metadata
+**required floor** — the ``study``, ``biosample``, ``specimen``,
+``study_component``, and ``provenance`` blocks — mirrored from the curated Parquet
+(see :ref:`experimental-metadata-storage` below and :doc:`experimental-metadata`).
+
+One further key is **conditionally required** (or required when present). Datasets
+without perturbations applied will not have this and omitting it is correct for them:
+
+* ``perturbation`` — the ``PerturbationAssignment`` applied to this image group's
+  material: the ``Perturbation`` it references (its ``definition`` slot), plus dosing
+  / control class / timing (see
+  :ref:`Where it is written <experimental-perturbation-placement>`). A dataset **with**
+  perturbations MUST carry it on every image group; a dataset with **none** simply
+  omits the key, and omitting it is not an error. Whether a dataset "has
+  perturbations" is a judgement about the experiment, not a machine-checkable property
+  of the store, so the validator checks the block's *contents* when present and never
+  requires its presence.
+
 .. code-block:: json
 
    {
@@ -22,15 +40,43 @@ The ``dca`` object **MUST** contain:
        "version": "...",
        "url": "...",
        "channels": [ "..." ],
-       "normalization_statistics": { "..." }
+       "normalization_statistics": { "..." },
+       "study": { "..." },
+       "biosample": { "..." },
+       "specimen": { "..." },
+       "study_component": { "..." },
+       "provenance": { "..." }
      }
    }
 
-See the :download:`JSON Schema <schema.json>` for the authoritative definition.
+The :download:`JSON Schema <schema.json>` is the authoritative definition of the
+``version``, ``url``, ``channels``, and ``normalization_statistics`` fields; the
+required floor is defined by a separate schema
+(``schema/v0.2/dca_experimental_metadata.yaml``, see :doc:`experimental-metadata`).
 
-Experimental metadata (acquisition, study/sample, perturbation) is **not** stored
-in this ``dca`` block — it is agent-curated into a sibling Parquet (see
-:doc:`experimental-metadata`).
+.. _experimental-metadata-storage:
+
+Experimental metadata storage
+-----------------------------
+
+The **full** experimental-metadata record is curated and written to two places:
+this ``dca`` block, and a sibling Parquet that is the source of truth. Both carry the
+same record — the **required floor** (``study``, ``biosample``, ``specimen``,
+``study_component``, ``provenance``) together with the recommended and optional
+fields and the remaining blocks (e.g. ``acquisition``, ``image_data``) — and the
+``zarr.json`` copy is derived from the Parquet.
+
+What the floor names is not a location but a conformance class: those blocks **MUST**
+be present, which is what makes a store self-validating. Recommended and optional
+fields are written to the same block; a store is never failed for omitting one, but
+whatever is present is validated like the rest (see :doc:`experimental-metadata`). Label image groups are exempt from the ``dca``
+metadata requirements, including the required floor.
+
+An **arrayed HCS screen** may additionally write a ``WellPerturbation`` — the same
+assignment plus its ``(plate, well)`` key — to the **well group's** ``zarr.json``, so a
+plate's design can be enumerated without opening every field of view. That row is
+*derived*: the image-group ``perturbation`` block above is authoritative, and it is the
+placement every layout can carry, including a plateless ``image_collection``.
 
 .. toctree::
    :maxdepth: 2

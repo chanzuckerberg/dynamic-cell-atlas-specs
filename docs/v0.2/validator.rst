@@ -33,6 +33,19 @@ CLI
      --output [text|json]           Output format [default: text]
      --strict                       Exit 1 if any SHOULD warnings are present
      --strategy [glob|walk]         S3 discovery strategy [default: glob]
+     --check-ontology               Resolve every ontology_term_id against its
+                                    source registry and check its label. Makes
+                                    network requests; off by default.
+     --wells TEXT                    Comma-separated well paths to validate,
+                                    matching plate.wells[].path exactly (e.g.
+                                    'A/1,B/2'). Requires PATH to point directly
+                                    at a single HCS plate store.
+     --field-offset INTEGER RANGE   Skip this many fields (in declaration
+                                    order) within each selected well [default: 0]
+     --field-limit INTEGER RANGE    Validate at most this many fields (after
+                                    --field-offset) per selected well
+     --list-wells                   List PATH's wells and their declared field
+                                    counts, then exit without validating.
      --help                         Show this message and exit.
 
 Pass ``--spec-version 0.2`` to validate against the v0.2 rules.
@@ -58,6 +71,55 @@ Pass ``--spec-version 0.2`` to validate against the v0.2 rules.
 
    # Fail on SHOULD warnings as well as MUST errors
    dca-validate path/to/image.zarr --spec-version 0.2 --strict
+
+   # Additionally resolve every ontology term against its registry (network)
+   dca-validate path/to/image.zarr --spec-version 0.2 --check-ontology
+
+   # List a plate's wells and their field counts without validating
+   dca-validate s3://my-bucket/data/plate.ome.zarr --spec-version 0.2 --list-wells
+
+   # Validate only well A/1
+   dca-validate s3://my-bucket/data/plate.ome.zarr --spec-version 0.2 --wells A/1
+
+   # Chunk a huge well: validate fields 5000-9999 of well A/1
+   dca-validate s3://my-bucket/data/plate.ome.zarr --spec-version 0.2 \
+       --wells A/1 --field-offset 5000 --field-limit 5000
+
+**Well/field subsetting**
+
+For a single HCS plate whose per-well field count is too large to validate in
+one run (a single well can be far larger than a typical whole plate),
+``--wells``, ``--field-offset``, and ``--field-limit`` scope one invocation to
+a subset of the plate's work:
+
+* ``--wells`` restricts which wells are opened at all. Wells not named are
+  never opened — no checks run against them, and they are not treated as
+  failures.
+* ``--field-offset``/``--field-limit`` slice each *selected* well's own field
+  list independently (per well, not globally across wells), in the order
+  fields are declared in that well's metadata. This is what makes chunking
+  work *within* one oversized well, not just across wells.
+* ``--list-wells`` is a dry run: it prints every well's declared field count
+  without validating anything, so you can decide how to split the work before
+  committing to a chunking scheme. It always lists every well — combining it
+  with ``--wells``/``--field-offset``/``--field-limit`` is a usage error
+  rather than silently ignoring the filter. Respects ``--output json``.
+
+These options require ``PATH`` to point directly at a single HCS plate store
+— not a discovery root — since subsetting within one already-identified plate
+is orthogonal to, and mechanically incompatible with, discovering multiple
+stores under a parent prefix in the same invocation.
+
+When any of these narrow what was validated, both output formats carry an
+explicit partial-run marker (with wells/fields selected vs. the total in
+scope — on-disk fields across every well that got opened, which can be fewer
+than a plate's raw declared count if a field is missing or duplicated) so a
+partial result is never mistaken for full plate coverage. Text output prints
+a ``PARTIAL: ...`` summary line; JSON output adds ``"partial": true`` and a
+``"subset"`` object to the plate-root entry. Partial-ness is
+informational only: it does not change exit-code semantics — the exit code
+still reflects whether errors were found among whatever was actually
+validated.
 
 **S3 discovery strategies**
 
@@ -311,9 +373,11 @@ Normalization statistics (new in v0.2)
 Experimental metadata (new in v0.2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The v0.2 ``dca`` block also carries the experimental-metadata **required floor**
-(``study``, ``biosample``, ``specimen``, ``study_component``, ``provenance``),
-mirrored from the curated Parquet (the source of truth). The validator extracts these
+The v0.2 ``dca`` block also carries the experimental-metadata record, mirrored from the
+curated Parquet (the source of truth). Its **required floor** (``study``,
+``biosample``, ``specimen``, ``study_component``, ``provenance``) is the validated
+part; recommended and optional fields are carried in the same block and are not
+enforced. The validator extracts the floor
 blocks from the ``dca`` object and validates them against the generated **Pydantic
 models** (``helpers/src/dca_helpers/validation/versions/v0_2/_generated_models.py``), which are
 produced from the
@@ -344,16 +408,25 @@ provenance-coverage (see below). Label images are exempt.
      - Structure — object nesting, field types, and numeric bounds
      - experimental-metadata.rst § Conformance
    * - MUST
-     - Required floor present — ``study`` / ``biosample`` / ``specimen`` / ``study_component`` / ``provenance`` and their required fields
+     - Required floor present — ``study`` / ``biosample`` / ``specimen`` / ``study_component`` / ``provenance`` and their required fields. ``perturbation`` is **not** part of this floor; see the next row
      - experimental-metadata.rst § Conformance
+   * - MUST
+     - ``perturbation`` **contents**, whenever the block is present — the structural, enum, CURIE, and conditional rules below all apply to it. Its **presence is never required**: an absent ``perturbation`` is always accepted, because no check can distinguish an unperturbed dataset from a screen whose curator omitted the block (see the limitations below)
+     - experimental-metadata.rst § Conformance
+   * - MUST
+     - ``well_perturbation`` **contents**, whenever a well group's ``dca`` carries the block — dispatched to ``validate_well_perturbation_v0_2`` rather than the image-group entry point (which would filter the block out and misreport the image-only required floor as missing). Same presence rule as ``perturbation``: an absent ``well_perturbation`` is always accepted
+     - experimental-metadata.rst § Conformance
+   * - MUST
+     - Cross-placement agreement — every field of view under one well must carry an identical ``perturbation`` value, checked whether or not the well has a ``well_perturbation`` row at all. Only once the fields agree is that consensus compared against the row, if one is present; a well with no row is unaffected, since the row is an optional, additive index. The image-group block is authoritative, so a mismatch is repaired by re-deriving the well row, never the reverse
+     - experimental-metadata.rst § Where it is written
    * - MUST
      - Controlled-vocabulary enums (``modality``, ``control_class``, ``tissue_type``, ``source_kind``, the instrument enums)
      - experimental-metadata.rst § Conformance
    * - MUST
-     - CURIE shape on ontology-id fields (e.g. ``^NCBITaxon:\d+$``, ``^EFO:\d+$``; the ``unknown`` / ``na`` sentinels are permitted)
+     - CURIE shape on ontology-id fields (e.g. ``^NCBITaxon:\d+$``, ``^EFO:\d+$``; the ``unknown`` / ``na`` / ``unavailable`` sentinels are permitted where the slot allows them). A few "no value" ontology terms are rejected so each sentinel has one spelling: ``ZFS:0000000``, ``FBdv:00007012`` and ``ZFA:0001093``
      - experimental-metadata.rst § Conformance
    * - MUST
-     - ``modality: compound`` requires the ``chemical`` block; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` requires the ``genetic`` block
+     - ``modality: compound`` requires the ``chemical`` block; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require the ``genetic`` block
      - experimental-metadata.rst § Conformance
    * - MUST
      - ``tissue_type: "cell line"`` requires ``cell_line_name``
@@ -362,7 +435,10 @@ provenance-coverage (see below). Label images are exempt.
      - a JUMP-CP ``dataset_name`` requires ``cp_version``
      - experimental-metadata.rst § Conformance
    * - MUST
-     - a non-``empty`` well requires a ``perturbation`` (an ``empty`` well is exempt)
+     - ``study_type`` including ``Other`` requires ``study_type_other``
+     - experimental-metadata.rst § Conformance
+   * - MUST
+     - a non-``empty`` ``control_class`` requires a ``definition`` (``empty`` is exempt). Checked on the image group's ``perturbation`` block, and on a ``WellPerturbation``, which inherits the rule
      - experimental-metadata.rst § Conformance
    * - MUST
      - ``source_kind: agent`` requires a ``citation``
@@ -373,10 +449,22 @@ provenance-coverage (see below). Label images are exempt.
    * - SHOULD
      - Provenance coverage — every populated field should carry a ``provenance`` record (required for agent-curated values); a missing record is a WARNING
      - experimental-metadata.rst § Conformance
+   * - SHOULD
+     - A sentinel ``ontology_term_id`` constrains its ``label``: ``unknown`` / ``na`` repeat the sentinel, ``unavailable`` carries free text. A real term's label is checked against the registry only under ``--check-ontology``
+     - experimental-metadata.rst § What is and is not machine-checked
+   * - SHOULD
+     - ``development_stage`` should use the stage ontology for the ``organism`` (HsapDv / MmusDv / ZFS / FBdv / WBls, or a UBERON life-cycle term). Checked only when exactly one organism is listed, and only for those five; sentinels are exempt
+     - experimental-metadata.rst § What is and is not machine-checked
+   * - SHOULD
+     - For ``tissue_type: "cell line"``, ``tissue`` should carry a ``CVCL:`` accession, and ``cell_line_id`` should match it. Two warnings: ``tissue`` holding no accession at all, and the mirror disagreeing with it
+     - experimental-metadata.rst § What is and is not machine-checked
 
 Provenance coverage is a cross-field check (the set of ``provenance`` keys vs. the
 populated fields) that LinkML rules cannot express, so it is computed by the validator
-alongside the model rules rather than by the schema.
+alongside the model rules rather than by the schema. The two cross-slot SHOULDs above
+are there for the same reason: a LinkML rule is a per-slot predicate and cannot compare
+one slot against another. Both compare fields already present on the same ``Biosample``,
+so neither needs to resolve a term.
 
 ``time_increment_s`` is also conditionally required (for time-lapse data), but its
 condition is the ``zarr.json`` array shape rather than a metadata field, so it is checked
@@ -394,9 +482,13 @@ requirement outside the JSON Schema.
 * **Grounding re-verification** — ``source_kind: agent`` requires a ``citation`` (enforced
   above), but re-checking that the quote actually appears in the source needs the raw
   source pages (not shipped with the store), so it is deferred; downstream trusts the
-  carried ``match_status``. There is no ``grounded: true ⇒ citation`` rule: a boolean
-  ``equals`` precondition does not survive ``gen-json-schema``, and the case is already
-  covered by the agent rule (``grounded`` is only set on agent-curated values).
+  carried ``match_status``.
+* **Whether a ``perturbation`` or ``well_perturbation`` block should be there at all** —
+  "this dataset has perturbations" is a fact about the experiment, not about the store,
+  so no check can distinguish an unperturbed dataset from a screen whose curator forgot
+  the block. The validator enforces each block's *contents* whenever it is present and
+  never requires its presence; an absent block is always accepted at either placement
+  (a possible future opt-in requirement).
 
 Regenerating the schema artifacts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

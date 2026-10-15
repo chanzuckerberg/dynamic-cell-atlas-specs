@@ -23,8 +23,7 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "URL pointing to the version of the specification in the GitHub repository.",
-          "const": "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/v0.2/schema.json"
+          "description": "URL pointing to the version of the specification in the GitHub repository."
         },
         "channels": {
           "type": "array",

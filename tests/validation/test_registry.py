@@ -4,6 +4,7 @@ Unit tests for validation.registry.
 
 import pytest
 
+from dca_helpers import CURRENT_SPEC_VERSION
 from dca_helpers.validation.registry import (
     UnsupportedSpecVersionError,
     get_label_model,
@@ -69,3 +70,14 @@ class TestGetLabelModel:
     def test_error_is_value_error(self):
         with pytest.raises(ValueError):
             get_label_model("0.1")
+
+
+@pytest.mark.unit
+class TestCurrentSpecVersion:
+    """The version bumped in CURRENT_VERSION must have a wired-up spec."""
+
+    def test_current_spec_version_is_minor(self):
+        assert CURRENT_SPEC_VERSION.count(".") == 1
+
+    def test_current_spec_version_is_registered(self):
+        assert get_model(CURRENT_SPEC_VERSION) is not None

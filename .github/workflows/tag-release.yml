@@ -1,0 +1,48 @@
+name: Tag Release
+
+# Tag main's HEAD as v<CURRENT_VERSION> whenever that tag is missing.
+# Runs on push (best-effort) and on demand — never commits to main, only
+# creates a tag, so main stays stable.
+on:
+  push:
+    branches: [ main ]
+    paths: [ CURRENT_VERSION ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Read version
+      id: version
+      run: |
+        version="$(tr -d '[:space:]' < CURRENT_VERSION)"
+        if [ -z "$version" ]; then
+          echo "CURRENT_VERSION is empty" >&2
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+    - name: Create and push tag
+      env:
+        TAG: ${{ steps.version.outputs.tag }}
+      run: |
+        if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+          echo "Tag $TAG already exists; nothing to do."
+          exit 0
+        fi
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git tag -a "$TAG" -m "Release $TAG"
+        git push origin "$TAG"
+        echo "Created and pushed $TAG."

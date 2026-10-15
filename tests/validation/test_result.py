@@ -5,8 +5,10 @@ Unit tests for validation.result — ValidationSummary and ValidationRun.
 import pytest
 from click.testing import CliRunner
 
+from dca_helpers import CURRENT_SPEC_VERSION, __version__
 from dca_helpers.validation.cli import _print_text
 from dca_helpers.validation.result import (
+    PlateSubsetInfo,
     ValidationRun,
     ValidationSummary,
     ZarrNodeValidationResult,
@@ -23,6 +25,7 @@ def make_result(
     node_type: ZarrNodeType | None = None,
     multiscale_level_count: int | None = None,
     skipped: bool = False,
+    subset_coverage: PlateSubsetInfo | None = None,
 ) -> ZarrNodeValidationResult:
     return ZarrNodeValidationResult(
         node_path="/fake/store",
@@ -31,6 +34,7 @@ def make_result(
         node_type=node_type,
         multiscale_level_count=multiscale_level_count,
         skipped=skipped,
+        subset_coverage=subset_coverage,
     )
 
 
@@ -90,10 +94,18 @@ class TestValidationSummaryFromResults:
     def test_stores_discovered_and_duration_forwarded(self):
         results = [make_result(True)]
         summary = ValidationSummary.from_results(
-            results, duration_seconds=4.2, stores_discovered=10
+            results,
+            duration_seconds=4.2,
+            stores_discovered=10,
+            start_timestamp="2026-03-01T10:00:00Z",
         )
         assert summary.stores_discovered == 10
         assert summary.duration_seconds == pytest.approx(4.2)
+        assert summary.start_timestamp == "2026-03-01T10:00:00Z"
+
+    def test_start_timestamp_defaults_to_empty_string(self):
+        summary = ValidationSummary.from_results([make_result(True)])
+        assert summary.start_timestamp == ""
 
     def test_skipped_zero_by_default(self):
         summary = ValidationSummary.from_results(
@@ -141,6 +153,55 @@ class TestValidationSummaryFromResults:
 
 
 # ---------------------------------------------------------------------------
+# ValidationSummary.from_results — well/field subset aggregation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestValidationSummarySubset:
+    def test_is_partial_false_without_any_subset(self):
+        summary = ValidationSummary.from_results([make_result(True)])
+        assert summary.is_partial is False
+        assert summary.wells_total == 0
+        assert summary.wells_selected == 0
+        assert summary.fields_total == 0
+        assert summary.fields_selected == 0
+
+    def test_is_partial_true_and_counts_forwarded(self):
+        subset = PlateSubsetInfo(
+            wells_total=6,
+            wells_selected=1,
+            fields_total=124000,
+            fields_selected=5000,
+        )
+        results = [make_result(True, subset_coverage=subset), make_result(True)]
+        summary = ValidationSummary.from_results(results)
+        assert summary.is_partial is True
+        assert summary.wells_total == 6
+        assert summary.wells_selected == 1
+        assert summary.fields_total == 124000
+        assert summary.fields_selected == 5000
+
+    def test_subset_counts_sum_across_multiple_plate_roots(self):
+        subset_a = PlateSubsetInfo(
+            wells_total=2, wells_selected=1, fields_total=10, fields_selected=5
+        )
+        subset_b = PlateSubsetInfo(
+            wells_total=3, wells_selected=2, fields_total=20, fields_selected=8
+        )
+        results = [
+            make_result(True, subset_coverage=subset_a),
+            make_result(True, subset_coverage=subset_b),
+        ]
+        summary = ValidationSummary.from_results(results)
+        assert summary.is_partial is True
+        assert summary.wells_total == 5
+        assert summary.wells_selected == 3
+        assert summary.fields_total == 30
+        assert summary.fields_selected == 13
+
+
+# ---------------------------------------------------------------------------
 # ValidationRun
 # ---------------------------------------------------------------------------
 
@@ -151,7 +212,9 @@ class TestValidationRun:
         summary = ValidationSummary.from_results(
             results, duration_seconds=1.0, stores_discovered=len(results)
         )
-        return ValidationRun(path="/fake/root", results=results, summary=summary)
+        return ValidationRun(
+            path="/fake/root", results=results, summary=summary, spec_version="0.1"
+        )
 
     def test_len(self):
         run = self._make_run([make_result(True), make_result(False)])
@@ -170,6 +233,15 @@ class TestValidationRun:
         run = self._make_run([])
         assert run.path == "/fake/root"
 
+    def test_spec_version_and_validator_version_have_defaults(self):
+        # Regression test: spec_version used to be a required field with no
+        # default, so this constructor call raised TypeError for any
+        # external caller that didn't pass it.
+        summary = ValidationSummary.from_results([])
+        run = ValidationRun(path="/fake/root", results=[], summary=summary)
+        assert run.spec_version == CURRENT_SPEC_VERSION
+        assert run.validator_version == __version__
+
 
 # ---------------------------------------------------------------------------
 # _print_text — skipped-store output
@@ -180,7 +252,9 @@ def _make_run(results):
     summary = ValidationSummary.from_results(
         results, duration_seconds=0.1, stores_discovered=len(results)
     )
-    return ValidationRun(path="/fake/root", results=results, summary=summary)
+    return ValidationRun(
+        path="/fake/root", results=results, summary=summary, spec_version="0.2"
+    )
 
 
 @pytest.mark.unit
@@ -208,6 +282,19 @@ class TestPrintTextSkipped:
         run = _make_run([geff])
         output = self._capture(run)
         assert "1 skipped (GEFF)" in output
+
+    def test_partial_marker_absent_on_full_run(self):
+        run = _make_run([make_result(True)])
+        output = self._capture(run)
+        assert "PARTIAL" not in output
+
+    def test_partial_marker_present_with_subset_counts(self):
+        subset = PlateSubsetInfo(
+            wells_total=6, wells_selected=1, fields_total=124000, fields_selected=5000
+        )
+        run = _make_run([make_result(True, subset_coverage=subset)])
+        output = self._capture(run)
+        assert "PARTIAL: 1/6 wells, 5000/124000 fields selected" in output
 
     def test_skipped_line_absent_when_zero(self):
         run = _make_run([make_result(True)])

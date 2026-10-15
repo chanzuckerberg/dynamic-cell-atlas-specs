@@ -15,20 +15,16 @@ store** by an agent or human curation from source text
 record, the required fields and the optional ones alike, each with inline provenance;
 the Parquet is the **source of truth**.
 
-A small **required floor** (see :ref:`Conformance <experimental-conformance>`) is
-additionally **mirrored into** the ``dca`` block in ``zarr.json``, alongside the channel
-and normalization-statistics metadata it already carries (see :doc:`dca-metadata`), so
-these stable, every-dataset fields are compliant with the `OME-NGFF storage format
+The same record is **mirrored into** the ``dca`` block in ``zarr.json``, alongside the
+channel and normalization-statistics metadata it already carries (see
+:doc:`dca-metadata`), so these fields are compliant with the `OME-NGFF storage format
 <https://ngff.openmicroscopy.org/0.5/#storage-format>`_, which places group-level
-metadata in the ``zarr.json`` attributes. That
-``zarr.json`` copy is derived from the Parquet; **optional or not-yet-standardized**
-fields stay in the Parquet alone until they are
-:ref:`promoted <experimental-promotion>`.
-
-Every curated value carries its **provenance as plain columns alongside it** (see
+metadata in the ``zarr.json`` attributes. That ``zarr.json`` copy is derived from the
+Parquet. A small **required floor** (see :ref:`Conformance <experimental-conformance>`)
+MUST be present; the recommended and optional fields MAY be omitted, and are validated
+when present. Every value carries its **provenance alongside it** (see
 :ref:`Provenance <experimental-evidence>`), so each field is tied to its source and
-independently verifiable. Because metadata is often derived from prose, keeping it in a
-re-curatable Parquet lets values be corrected as the source understanding improves.
+independently verifiable.
 
 This document organizes the fields by REMBI component: **Study**, **Study Component**
 (imaging method + assay class), **Biosample**, **Specimen** (sample preparation),
@@ -81,6 +77,13 @@ of this table. The DCA spec is meant to be interoperable with the broader commun
        tissue_type, disease, development stage, assay. Incorporates Cellosaurus
        (``CVCL:`` terms, see ontologies below) for **cell lines** (``tissue_type``
        "cell line").
+   * - `cryoET Data Portal core (cdp-common) <https://github.com/chanzuckerberg/cryoet-data-portal-backend/blob/main/schema/core/v2.0.0/common.yaml>`_
+     - Sibling CZI standard. ``close_mappings`` from the biosample and specimen axes to
+       its flat ``organism_taxid`` / ``organism_name``, ``tissue_id`` / ``tissue_name``,
+       ``cell_type_id`` / ``cell_name``, ``cell_strain_id`` / ``cell_strain_name``,
+       ``development_stage_id`` / ``development_stage_name``,
+       ``preparation_sample_type`` and ``sample_preparation`` slots (cryoET splits name
+       + id; DCA uses one ``ontology_term_id`` + label pair).
    * - `schema.org <https://schema.org/>`_
      - Dataset-level ``dataset_name`` / ``license`` / ``related_publication`` /
        ``release_date`` (``name`` / ``license`` / ``citation`` / ``datePublished``).
@@ -99,10 +102,15 @@ of this table. The DCA spec is meant to be interoperable with the broader commun
        `NCBITaxon <https://obofoundry.org/ontology/ncbitaxon>`_,
        `UBERON <https://obofoundry.org/ontology/uberon>`_,
        `CL <https://obofoundry.org/ontology/cl>`_,
+       `ZFA <https://obofoundry.org/ontology/zfa>`_,
        `MONDO <https://obofoundry.org/ontology/mondo>`_,
        `EFO <https://www.ebi.ac.uk/ols4/ontologies/efo>`_,
        `FBbi <https://obofoundry.org/ontology/fbbi>`_,
        `HsapDv <https://obofoundry.org/ontology/hsapdv>`_,
+       `MmusDv <https://obofoundry.org/ontology/mmusdv>`_,
+       `ZFS <https://obofoundry.org/ontology/zfs>`_,
+       `FBdv <https://obofoundry.org/ontology/fbdv>`_,
+       `WBls <https://obofoundry.org/ontology/wbls>`_,
        `PATO <https://obofoundry.org/ontology/pato>`_,
        `Cellosaurus <https://www.cellosaurus.org/>`_,
        `NCBI Gene <https://www.ncbi.nlm.nih.gov/gene>`_,
@@ -120,19 +128,17 @@ DCA extensions
 The following are the only concepts this spec **adds**, each at a
 genuine gap no referenced standard covers:
 
-* **Per-value provenance (the main extension).** The inline ``Provenance`` columns —
-  ``citation`` (``source_url`` / ``quote`` / ``match_status`` / ``char_start`` /
-  ``char_end``),
-  ``grounded``, ``source_kind`` — carried alongside *every* curated value. The
+* **Per-value provenance (the main extension).** The inline ``Provenance`` fields —
+  ``citation`` (``source_url`` / ``quote`` / ``match_status``) and ``source_kind`` —
+  carried alongside *every* curated value. The
   catalog records dataset-level ``data_quality`` but nothing per-field; no referenced
   standard models per-value grounding/citation this way (it comes from the agent's
   provenance layer).
 * **Storage + promotion model.** The full curated record in a sibling Parquet
-  (source of truth), the required floor mirrored into ``zarr.json`` (alongside the
-  channel / normalization-statistics metadata), and the
-  :ref:`promotion <experimental-promotion>` path that extends that mirror to more fields.
-  The catalog is storage-agnostic (its ``metadata`` is opaque JSON on the Dataset
-  record); how that metadata is physically laid out in the store is a DCA convention.
+  (source of truth), mirrored into ``zarr.json`` (alongside the
+  channel / normalization-statistics metadata) with the required floor as the validated
+  subset, and the :ref:`promotion <experimental-promotion>` path that brings more fields
+  into that subset.
 * **``additional_metadata``** — the promotable, evidence-backed free-text bucket. The
   catalog permits extra key-value pairs, but the promotion + provenance mechanism is
   DCA-specific.
@@ -142,10 +148,12 @@ genuine gap no referenced standard covers:
   ``Reagent`` and generalized to chemical / genetic / physical / biological. REMBI
   scopes treatment as a single (unstructured) Biosample "extrinsic variable"; DCA
   instead models it as separate ``Perturbation`` (a reusable per-construct codebook) and
-  ``WellPerturbation`` (the per-well assignment with dosing / control / timing) classes,
+  ``PerturbationAssignment`` (the assignment with dosing / control / timing) classes,
   because the grain differs from a single ``Biosample`` and a free-text entry cannot
-  capture it. The link is by key: ``Biosample.group_id`` ↔ ``WellPerturbation.plate`` /
-  ``well`` (the OME-NGFF HCS path).
+  capture it. The assignment travels with the image group as the ``perturbation``
+  block; an arrayed HCS screen additionally indexes it per well as
+  ``WellPerturbation``, linked by key: ``Biosample.group_id`` ↔
+  ``WellPerturbation.plate`` / ``well`` (the OME-NGFF HCS path).
 * **``Specimen.specimen_state``** — the coarse specimen state (``live`` / ``fixed`` /
   ``unknown``), a DCA controlled vocabulary. No referenced standard structures the
   live-vs-fixed distinction cleanly across specimen types (OME / Bio-Formats has no
@@ -164,12 +172,8 @@ via ``exact_mappings`` / ``close_mappings`` in the LinkML schema.
 Conformance: Required, Recommended, Optional
 --------------------------------------------
 
-All experimental metadata lives in the Parquet; the **required** fields are
-additionally mirrored into ``zarr.json`` (the ``dca`` block). The table below is the
-field reference by category; for nested blocks (``microscope`` / ``objective`` /
-``detector`` / ``imaging_environment``, ``experimenter``, ``related_publication``) it
-names the block rather than each leaf — the :download:`LinkML schema
-<../../schema/v0.2/dca_experimental_metadata.yaml>` is the exhaustive, authoritative list:
+All experimental metadata lives in the Parquet and is mirrored into ``zarr.json``
+(the ``dca`` block); the **required** fields are the ones a store MUST carry:
 
 * **Required** — the field MUST be **present** and is mirrored into ``zarr.json``. Where
   a value does not exist or apply, state it with a sentinel (see the sentinel definitions
@@ -179,7 +183,9 @@ names the block rather than each leaf — the :download:`LinkML schema
   **required only when a
   condition holds** and omitted otherwise (the perturbation fields when a dataset has
   perturbations, ``cell_line_name`` for ``tissue_type`` "cell line", ``cp_version`` for a
-  JUMP-CP ``dataset_name``, ``time_increment_s`` for time-lapse data).
+  JUMP-CP ``dataset_name``, ``study_type_other`` when ``study_type`` includes "Other",
+  ``time_increment_s`` for time-lapse data, ``timestamps`` when ``time_sampling`` is
+  ``variable``).
 
   The sentinels, used in place of a value rather than dropping the field:
 
@@ -193,20 +199,27 @@ names the block rather than each leaf — the :download:`LinkML schema
   free-text value. Which sentinels a field accepts is per field (e.g. ``imaging_method``
   accepts only a real FBbi term or ``unavailable``).
 * **Recommended** — **SHOULD** be populated whenever the information exists (e.g.
-  ``related_publication``, ``accession_id``, ``protocol_url``). Lives in the Parquet, not
-  the ``zarr.json`` floor, and is not enforced. Unlike Optional, omitting it when the
-  value *is* available is discouraged.
+  ``related_publication``, ``accession_id``, ``protocol_url``). Written like every other
+  field, and outside the required floor, so a store is not failed for omitting it —
+  though what is present is validated. Unlike Optional, omitting it when the value
+  *is* available is discouraged.
 * **Optional** — **MAY** be populated; do so when available, and simply **omit**
-  otherwise. Lives in the Parquet; an absent Optional field is fine and needs no
-  sentinel.
+  otherwise. Outside the required floor; an absent Optional field is fine and needs no
+  sentinel, and a present one is validated like any other.
 
-The **Recommended** and **Optional** fields (the Parquet layer, outside the ``zarr.json``
-floor) are **promotion candidates**: a future spec version may reclassify one as
-**Required** (unconditionally or when a condition holds) and mirror it into the floor,
+The **Recommended** and **Optional** fields (written, but outside the required floor)
+are **promotion candidates**: a future spec version may reclassify one as
+**Required** (unconditionally or when a condition holds) and bring it into the floor,
 once it is verifiable, schema-stable, and consistently scoped (see
 :ref:`Promotion <experimental-promotion>`).
 ``additional_metadata`` goes one step further: its free-text entries can first become
 defined fields before being promoted.
+
+The table below is the field reference by category. For nested blocks (``microscope`` /
+``objective`` / ``detector`` / ``imaging_environment``, ``experimenter``,
+``related_publication``) it names the block rather than each leaf; the
+:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` is the
+exhaustive, authoritative list.
 
 .. list-table:: Experimental metadata fields
    :header-rows: 1
@@ -233,6 +246,10 @@ defined fields before being promoted.
      - ``study_type``
      - Required
      - OME ``Experiment.Type``
+   * - Study
+     - ``study_type_other``
+     - Required when ``Other``
+     - free text; used only when ``study_type`` includes ``Other``
    * - Study
      - ``source``
      - Required
@@ -274,10 +291,11 @@ defined fields before being promoted.
      - ``tissue_type``
      - Required
      - cross-modality (``tissue`` / ``cell culture`` / ``cell line`` / ``organoid``)
+       + ``unknown``
    * - Sample
      - ``tissue`` (``ontology_term_id`` + ``label``)
      - Required
-     - cross-modality · UBERON / CL
+     - cross-modality · UBERON / CL / ZFA
    * - Sample
      - ``disease`` (``ontology_term_id`` + ``label``)
      - Required
@@ -285,7 +303,7 @@ defined fields before being promoted.
    * - Sample
      - ``development_stage`` (``ontology_term_id`` + ``label``)
      - Required
-     - cross-modality · HsapDv
+     - cross-modality · HsapDv / MmusDv / ZFS / FBdv / WBls / UBERON
    * - Study component
      - ``assay`` (``ontology_term_id`` + ``label``; assay / experiment class)
      - Required
@@ -310,7 +328,7 @@ defined fields before being promoted.
      - Optional
      - OPS ``cellular.plate_type``
    * - Perturbation
-     - ``modality`` / ``control_class`` (+ the per-well ``perturbation`` reference);
+     - ``modality`` / ``control_class`` (+ the ``definition`` reference);
        ``perturbation_identifier`` and ``concentration`` optional
      - Required when perturbed
      - OME ``Reagent`` + CellPainting Gallery
@@ -321,12 +339,12 @@ defined fields before being promoted.
    * - Perturbation
      - genetic (``gene_symbol`` / ``ncbi_gene_id`` / ``vector`` …)
      - Required when CRISPR / ORF
-     - CellPainting Gallery (JUMP) + HGNC / NCBIGene
+     - CellPainting Gallery + HGNC / NCBIGene
    * - Perturbation
-     - per-well dosing / timing (``solvent`` / ``duration_h`` /
-       ``timepoint_primary_h`` / ``timepoint_secondary_h`` / ``secondary_perturbation``)
+     - dosing / timing (``solvent`` / ``duration_h`` /
+       ``timepoint_primary_h`` / ``timepoint_secondary_h`` / ``cotreatment``)
      - Optional
-     - CellPainting Gallery (``WellPerturbation``)
+     - CellPainting Gallery (``PerturbationAssignment``)
    * - Study component
      - ``imaging_method`` (``ontology_term_id`` + ``label``; acquisition modality)
      - Required (``unavailable`` only if no FBbi term fits)
@@ -334,7 +352,17 @@ defined fields before being promoted.
    * - Acquisition
      - ``time_increment_s``
      - Required when time-lapse
-     - OME ``Image.TimeIncrement``
+     - OME ``Image.TimeIncrement``; the **nominal** cadence when sampling is variable
+   * - Acquisition
+     - ``time_sampling`` (``uniform`` / ``variable``)
+     - Optional; absent reads as ``uniform``
+     - DCA vocabulary. ``variable`` relaxes the temporal-axis unit MUST
+       (:doc:`ome-zarr-metadata`) and requires ``timestamps``
+   * - Acquisition
+     - ``timestamps``
+     - Required when ``time_sampling`` is ``variable``
+     - Per-frame acquisition times as seconds since the Unix epoch (UTC), one per
+       timepoint of the level-0 array, non-decreasing
    * - Acquisition
      - ``timepoint_acquisition``
      - Optional
@@ -351,12 +379,12 @@ defined fields before being promoted.
    * - Extra
      - ``additional_metadata`` — extra study-provided values not yet defined in this spec
      - Optional
-     - DCA-native · agent-minted, each with inline provenance columns. Lives in the
+     - DCA-native · agent-minted, each with inline provenance fields. Lives in the
        Parquet and can be **elevated** to a defined (and ultimately required,
        ``zarr.json``) field once it stabilizes — see
        :ref:`Promotion <experimental-promotion>`.
 
-The :ref:`provenance columns <experimental-evidence>` are **REQUIRED for
+The :ref:`provenance fields <experimental-evidence>` are **REQUIRED for
 agent-curated values** and **OPTIONAL for manually entered values** (set
 ``source_kind: human``; the citation MAY be blank).
 
@@ -397,47 +425,23 @@ agent-curated values** and **OPTIONAL for manually entered values** (set
    with one row per image group: a single-image store has one row, an HCS plate one row
    per well (which ``WellPerturbation.plate`` / ``well`` also key on).
 
-.. _experimental-promotion:
-
-Promotion to ``zarr.json``
---------------------------
-
-The required floor is already mirrored into ``zarr.json``; every *optional* or
-*recommended* field stays in the Parquet alone. This keeps agent-extracted,
-unstandardized, or experiment-specific fields queryable as soon as they are curated, so
-consumers do not have to wait for a spec revision before they are available. An optional
-or recommended field **MAY** be promoted into the ``zarr.json`` ``dca`` block in a future
-spec version (joining the required floor), but only when **all** of the following hold:
-
-1. **Verifiable** — the value can be confirmed deterministically (measured from the
-   array, or via a reproducible grounded / cross-source check), not solely a
-   model's prose extraction.
-2. **Schema-stable** — its shape and vocabulary are settled and not expected to
-   churn as taxonomies / ontologies update.
-3. **Consistently scoped** — its applicability is well defined, so a consumer
-   knows when to expect it. This can be either:
-
-   * **corpus-wide** — it applies to essentially all datasets (written uniformly,
-     ``null`` / ``"unknown"`` where unavailable) and joins the unconditional
-     required floor; or
-   * **experiment-class conditional** — it is *optional corpus-wide but required
-     for a defined class of experiments* (e.g. perturbation fields for screens,
-     ``cell_line_*`` when ``tissue_type`` is "cell line"). Such a field is promoted
-     to ``zarr.json`` and made **conditionally required** on that class, rather than
-     left optional — so consumers of that experiment type can rely on it.
-
-Promotion is a **per-field specification decision made via a version bump**. For a
-corpus-wide field it applies uniformly; for an experiment-class field it applies
-to that class. When a field is promoted, the Parquet remains the **source of truth**
-and the ``zarr.json`` copy is a derived, versioned snapshot.
 
 Acquisition Metadata
 --------------------
 
-Image Acquisition is about how the images were captured. It is optional, so it lives
-in the Parquet (not ``zarr.json``). The only field expected across datasets is
-``time_increment_s`` (conditional, for time-lapse); see the field reference under
-:ref:`Conformance <experimental-conformance>`.
+Image Acquisition is about how the images were captured. Its fields are optional
+apart from ``time_increment_s``, which is **required when the data are time-lapse**,
+and ``timestamps``, which is **required** when ``time_sampling`` is ``variable``.
+
+``time_sampling`` states whether the timepoints are evenly spaced. Absent, it reads as
+``uniform``, and the OME ``t``-axis scale describes the spacing. ``variable`` says the
+scale does not, because the acquisition was interrupted or re-paced; the per-frame
+``timestamps`` are authoritative instead, and ``time_increment_s`` carries the nominal
+cadence the acquisition targeted. ``timestamps`` are seconds since the Unix epoch (UTC),
+a single encoding so a consumer needs no companion unit field, and their length and
+ordering are checked whenever they are present. Declaring ``variable`` relaxes the temporal-axis unit
+MUST (see :doc:`ome-zarr-metadata`) and is checked against the array, so it cannot be
+used to avoid stating a cadence that is in fact uniform.
 
 A minimal, **optional** OME instrument set — ``microscope``, ``objective``,
 ``detector``, ``imaging_environment``, and ``acquisition_date`` — is defined in the
@@ -504,8 +508,8 @@ The sub-groups, and the standard each field draws on:
   `CZI cross-modality schema v1.1.0
   <https://github.com/chanzuckerberg/data-guidance/blob/main/standards/cross-modality/1.1.0/schema.md>`_
   (CELLxGENE-aligned) as ``ontology_term_id`` + ``label`` object pairs: ``organism``
-  (NCBITaxon), ``tissue`` (UBERON / CL) + ``tissue_type``, ``disease`` (MONDO /
-  PATO), and ``development_stage`` (HsapDv) — each a list of
+  (NCBITaxon), ``tissue`` (UBERON / CL / ZFA) + ``tissue_type``, ``disease`` (MONDO /
+  PATO), and ``development_stage`` — each a list of
   ``{ontology_term_id, label}`` objects. When ``tissue_type`` is ``"cell culture"``,
   ``tissue``'s ``ontology_term_id`` takes a Cell Ontology
   (`CL <https://obofoundry.org/ontology/cl>`_) term identifying the cell type (e.g.
@@ -539,16 +543,190 @@ The sub-groups, and the standard each field draws on:
    ``ontology_term_id`` to the UBERON term for the tissue of origin (not a
    ``CVCL:`` accession); the ``cell_line_*`` fields do not apply.
 
+   **Development stage follows the organism.** Use the stage ontology
+   cross-modality names for that organism: `HsapDv
+   <https://obofoundry.org/ontology/hsapdv>`_ (human), `MmusDv
+   <https://obofoundry.org/ontology/mmusdv>`_ (mouse), `ZFS
+   <https://obofoundry.org/ontology/zfs>`_ (zebrafish), `FBdv
+   <https://obofoundry.org/ontology/fbdv>`_ (fly), `WBls
+   <https://obofoundry.org/ontology/wbls>`_ (worm), and a UBERON life-cycle term for
+   organisms with no dedicated stage ontology. Prefer the organism's own ontology over
+   a UBERON term where one exists: only 13 of ZFS's 54 stage terms have a UBERON
+   equivalent, and the two periods most whole-embryo zebrafish time-lapses cover
+   (``ZFS:0000049`` segmentation, ``ZFS:0007000`` hatching) have none, so UBERON
+   coarsens them to ``UBERON:0000068`` "embryo stage". Do not use an ontology's own
+   "no value" term: ``ZFS:0000000`` "unknown" and ``FBdv:00007012`` "life stage" are
+   rejected on ``development_stage``, as is ``ZFA:0001093`` "unspecified" on ``tissue``,
+   so that ``unknown`` has one spelling (the sentinel).
+
+   **Zebrafish anatomy versus cell type.** Cross-modality splits these across two
+   fields; DCA folds both into ``tissue`` and keys the distinction off ``tissue_type``.
+   In the anatomy role (``tissue_type`` ``tissue`` or ``organoid``) use a descendant of
+   ``ZFA:0100000`` outside the ``ZFA:0009000`` "cell" branch; in the cell-type role
+   (``tissue_type`` ``cell culture``) use a CL term, or a ``ZFA:0009000`` descendant
+   where CL has no equivalent.
+
+   **Unrecorded sample type (``tissue_type = "unknown"``).** Image corpora pooled from
+   many studies without a per-image manifest (e.g. segmentation training sets) may not
+   record what any given image depicts. Set ``tissue_type`` to ``unknown`` and the
+   sample-context term ids to the ``unknown`` sentinel, rather than guessing a value or
+   omitting the sample. ``unknown`` means the source does not record it, not that it
+   has not been looked up yet.
+
 See the field reference under :ref:`Conformance <experimental-conformance>` for the
 full Study / Sample field list with required-vs-optional status, and the
 ``Study``, ``Experimenter``, ``Biosample``, ``Specimen`` classes in the
 :download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` for the
 authoritative field list.
 
+Perturbation Metadata
+---------------------
+
+Perturbation metadata is modeled as a **modality-agnostic ``Perturbation``**
+(mapped to the OME ``Reagent`` entity), specialized by a ``modality`` discriminator
+into a **chemical** or **genetic** block. This generalizes beyond chemical
+perturbation to **CRISPR / gene knockout / ORF** (and ``physical`` / ``biological``).
+The genetic block carries the gene target that CellPainting Gallery cannot express
+(its ``Treatment_Category`` enum names ``CRISPR``/``ORF`` but provides no gene
+field). The fields are harmonized across two sources: OME/Bio-Formats ``Reagent``
+and the CellPainting Gallery ``Treatment_*`` fields.
+
+These fields apply to **any perturbation dataset**, not just CellPainting Gallery
+ones; the ``cpg:`` entries are alignment mappings (provenance), not a
+requirement that the data originate from those projects. A custom drug screen or an
+in-house CRISPR experiment populates the **same** ``Perturbation``
+/ ``PerturbationAssignment`` structure, with values sourced from wherever its metadata
+lives (``source_kind`` records that, e.g. ``original_data`` from the source's own
+manifest).
+
+**Required when present.** A dataset with no perturbations simply has no
+``perturbation`` block. But **if a dataset has perturbations**, the core fields are
+**required**: ``perturbation_id`` + ``modality`` on the ``Perturbation``, and
+``control_class`` on the ``PerturbationAssignment``. ``definition`` is required on
+every **treated or control** assignment (``treatment`` / ``negcon`` / ``poscon``) but
+is **omitted when** ``control_class`` **is** ``empty``, which has nothing to record.
+The ``chemical`` vs ``genetic`` block is required according to ``modality``. All three
+conditionals are enforced as schema rules (see Validation).
+
+.. _experimental-perturbation-placement:
+
+**Where it is written.** Two things are modeled separately, because their grains
+differ:
+
+* The ``Perturbation`` *definition* (a codebook entry) is per-construct and reusable
+  across the dataset. It is what the perturbagen IS.
+* The ``PerturbationAssignment`` — that definition plus the dosing / control class /
+  timing — is what was DONE to imaged material. It carries the definition in its
+  ``definition`` slot, plus an optional ``cotreatment`` for a second definition
+  applied alongside.
+
+The assignment is the ``perturbation`` block of ``ExperimentalMetadata``, so it is
+**mirrored into the image group's** ``dca`` **block like every other experimental
+block** (``study`` / ``biosample`` / ``specimen`` / ``study_component``). A consumer
+reads a perturbation from the image group it already has open, with no second lookup
+and no HCS key to resolve — and a plateless ``image_collection`` store can express a
+perturbation at all.
+
+For an **arrayed HCS screen** the same assignment is **also** indexed per well as a
+``WellPerturbation`` (a ``PerturbationAssignment`` plus the ``(plate, well)`` key),
+written under the well group's ``dca`` block as the ``well_perturbation`` key —
+i.e. ``dca.well_perturbation`` on the well group's ``zarr.json``, the well-level
+counterpart to the image group's ``dca.perturbation``. The well level is derived from
+the image group's perturbation information, so a consumer can enumerate a plate's
+design without opening every field of view.
+
+The image-group ``perturbation`` block is **authoritative**; the ``WellPerturbation``
+row is **derived** from it. The two MUST agree — for every image group under a well,
+its ``perturbation`` block is that well's assignment — and because the direction is
+defined, a disagreement has one correct repair: re-derive the well row from the image
+groups, never the reverse. Two reasons the image group holds the primary copy:
+
+* It is the only placement **every** layout can carry. A plateless
+  ``image_collection`` store has no well group to write to.
+* It matches the grain of the fact for datasets where it can differ. Per-well is a
+  property of arrayed screens specifically, not of perturbation in general.
+
+Both placements are checked for their own internal validity, and the validator also
+cross-checks one against the other: every field of view under a well must carry an
+identical ``perturbation`` value, and — when the well also carries a
+``well_perturbation`` row — that consensus must match the row (see :doc:`validator`).
+Authoritativeness is what gives a mismatch one defined repair (re-derive the well row)
+rather than an ambiguous merge.
+
+Producers that hold the well assignment as their source data (an arrayed screen's
+plate map, typically) should project it onto the image groups and derive the well row
+from the same projection, so a single input produces both placements and they cannot
+diverge.
+
+See the ``Perturbation``, ``ChemicalPerturbation``, ``GeneticPerturbation``,
+``PerturbationAssignment``, and ``WellPerturbation`` classes in the
+:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>`.
+
+.. list-table:: Cross-source field mapping (minimal set)
+   :header-rows: 1
+   :widths: 34 33 33
+
+   * - Concept
+     - OME ``Reagent``
+     - CellPainting Gallery
+   * - External id
+     - ``ReagentIdentifier``
+     - ``Treatment_Broad_Sample``
+   * - Modality
+     - —
+     - ``Treatment_Category``
+   * - Control class
+     - —
+     - ``Treatment_Control_Class``
+   * - Concentration
+     - —
+     - ``Treatment_Concentration`` (str)
+   * - Compound ids
+     - (``AnnotationRef``)
+     - ``InChIKey`` / ``SMILES`` / ``PubChem_CID``
+   * - **Gene target**
+     - —
+     - **absent**
+
+The reconciled vocabularies (see the schema enums):
+
+* ``modality`` — lowercased superset of CPG ``Treatment_Category``, plus
+  non-molecular categories: ``compound`` | ``orf`` |
+  ``crispr`` | ``shrna`` | ``mirna`` | ``sirna`` | ``physical`` (e.g. heat shock) |
+  ``biological`` | ``other`` | ``unknown``.
+* ``control_class`` — ``treatment`` | ``negcon`` | ``poscon`` | ``empty`` (CPG's
+  redundant ``Control`` dropped; ``empty`` added for untreated wells).
+
+Known gaps and contradictions:
+
+* **Gene target gap** — CellPainting Gallery has no gene field; the genetic block adds one.
+* **Concentration type** — CPG records free text; DCA uses
+  ``{value, unit}``. The schema keeps structured ``value``/``unit`` with a
+  free-text ``text`` fallback.
+* **Gene identifier** — NCBI Gene ID is the canonical key; HGNC
+  symbol is the label; Ensembl is optional cross-map.
+
+.. _experimental-deferred-pooled:
+
+Deferred: pooled / optical pooled screens (OPS)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``PerturbationAssignment`` covers **arrayed** screens (one perturbation per image
+group, and per well). In a **pooled / optical pooled screen (OPS)** a single well
+contains a library of many sgRNAs and the perturbation is assigned **per cell** by
+decoding an integrated barcode after imaging. That assignment is therefore **not**
+expressible per image group, let alone per well. The
+pooled-screen reagent fields (sgRNA protospacer, PAM, barcode, target locus) and the
+per-cell assignment table are **deferred** to a future version, as is the broader move
+from this spec's current **Parquet** tables to AnnData / SpatialData conventions for
+single-cell data. The ``Perturbation`` *definition* above is unchanged for pooled
+libraries; only the level at which a perturbation is assigned differs (per image
+group for arrayed screens, per cell for pooled).
+
 .. _experimental-gap-fill:
 
 Free-Text Gap-Fill
-~~~~~~~~~~~~~~~~~~~
+------------------
 
 Free-text ``additional_metadata`` is the mechanism for concepts that have **no
 stable structured schema** in this version. Examples include the **iPSC-specific
@@ -564,7 +742,6 @@ available on ``study`` and ``biosamples``:
      "name": "differentiation_state",
      "value": "definitive endoderm, day 5 of directed differentiation",
      "provenance": {
-       "grounded": true,
        "citation": {
          "source_url": "https://doi.org/10.1234/example",
          "quote": "hiPSCs were differentiated toward definitive endoderm over five days",
@@ -575,146 +752,80 @@ available on ``study`` and ``biosamples``:
    }
 
 Each ``additional_metadata`` entry **MUST** carry a ``name`` and ``value`` and
-**SHOULD** carry its :ref:`provenance columns <experimental-evidence>`. An agent
+**SHOULD** carry its :ref:`provenance fields <experimental-evidence>`. An agent
 **MAY** mint new ``additional_metadata`` fields; as with every agent-curated value,
-each **MUST** carry its extracted value, source citation, and grounding flag.
+each **MUST** carry its extracted value, its source citation, and the citation's
+``match_status``.
 As fields here stabilize and gain a community schema, they are promoted to
 first-class structured slots in a future version. ``additional_metadata`` is a
 **staging area**, not a permanent home.
 
-Perturbation Metadata
-~~~~~~~~~~~~~~~~~~~~~~~
+.. _experimental-promotion:
 
-Perturbation metadata is modelled as a **modality-agnostic ``Perturbation``**
-(mapped to the OME ``Reagent`` entity), specialized by a ``modality`` discriminator
-into a **chemical** or **genetic** block. This generalizes beyond chemical
-perturbation to **CRISPR / gene knockout / ORF** (and ``physical`` / ``biological``).
-The genetic block carries the gene target that CellPainting Gallery cannot express
-(its ``Treatment_Category`` enum names ``CRISPR``/``ORF`` but provides no gene
-field). The fields are harmonized across three sources: OME/Bio-Formats ``Reagent``,
-the CellPainting Gallery ``Treatment_*`` fields, and the JUMP compound/orf/crispr
-tables.
+Promotion to the required floor
+-------------------------------
 
-These fields apply to **any perturbation dataset**, not just CellPainting Gallery /
-JUMP ones; the ``cpg:`` / JUMP entries are alignment mappings (provenance), not a
-requirement that the data originate from those projects. A custom drug screen, an
-IDR dataset, or an in-house CRISPR experiment populates the **same** ``Perturbation``
-/ ``WellPerturbation`` structure, with values sourced from wherever its metadata
-lives (``source_kind`` records that, e.g. ``original_data`` from the source's own CSV).
+The whole record is written to ``zarr.json`` and to the Parquet, but only the required
+floor is *required*; every *optional* or *recommended* field rides along, validated
+when present and never demanded. This keeps extracted, unstandardized, or experiment-specific fields
+queryable as soon as they are curated, so consumers do not have to wait for a spec
+revision before they are available. An optional or recommended field **MAY** be promoted
+into the required floor in a future spec version, but only when **all** of the following
+hold:
 
-**Required when present.** A dataset with no perturbations simply has no
-``Perturbation`` / ``WellPerturbation``. But **if a dataset has perturbations**, the
-core fields are **required** and written to ``zarr.json`` (well level):
-``perturbation_id`` + ``modality`` on the ``Perturbation``, and ``plate`` / ``well``
-/ ``control_class`` on the ``WellPerturbation``. ``perturbation`` is required on
-every **treated or control** well (``treatment`` / ``negcon`` / ``poscon``) but is
-**omitted for an** ``empty`` **well**, which has nothing to record. The ``chemical``
-vs ``genetic`` block is required according to ``modality``. All three conditionals
-are enforced as schema rules (see Validation).
+1. **Verifiable** — the value can be confirmed deterministically (measured from the
+   array, or via a reproducible grounded / cross-source check), not solely a
+   model's prose extraction.
+2. **Schema-stable** — its shape and vocabulary are settled and not expected to
+   churn as taxonomies / ontologies update.
+3. **Consistently scoped** — its applicability is well defined, so a consumer
+   knows when to expect it. This can be either:
 
-The ``Perturbation`` *definition* (a codebook entry) is reusable across wells. Its
-**assignment** is recorded per ``(plate, well)`` for **arrayed** screens as a
-``WellPerturbation`` row. See the ``Perturbation``, ``ChemicalPerturbation``,
-``GeneticPerturbation``, and ``WellPerturbation`` classes in the
-:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>`.
+   * **corpus-wide** — it applies to essentially all datasets (written uniformly,
+     ``null`` / ``"unknown"`` where unavailable) and joins the unconditional
+     required floor; or
+   * **experiment-class conditional** — it is *optional corpus-wide but required
+     for a defined class of experiments* (e.g. ``cell_line_*`` when ``tissue_type``
+     is "cell line"). Such a field is promoted
+     to ``zarr.json`` and made **conditionally required** on that class, rather than
+     left optional — so consumers of that experiment type can rely on it. The
+     ``perturbation`` block is the worked example: optional corpus-wide, required for
+     every image group of a dataset that has perturbations (see
+     :ref:`Where it is written <experimental-perturbation-placement>`).
 
-.. list-table:: Cross-source field mapping (minimal set)
-   :header-rows: 1
-   :widths: 26 24 25 25
-
-   * - Concept
-     - OME ``Reagent``
-     - CellPainting Gallery
-     - JUMP
-   * - External id
-     - ``ReagentIdentifier``
-     - ``Treatment_Broad_Sample``
-     - ``broad_sample`` / ``jcp2022``
-   * - Modality
-     - —
-     - ``Treatment_Category``
-     - ``perturbation_modality``
-   * - Control class
-     - —
-     - ``Treatment_Control_Class``
-     - control ``pert_type``
-   * - Concentration
-     - —
-     - ``Treatment_Concentration`` (str)
-     - structured value+unit
-   * - Compound ids
-     - (``AnnotationRef``)
-     - ``InChIKey`` / ``SMILES`` / ``PubChem_CID``
-     - ``inchikey`` / ``inchi`` / ``smiles``
-   * - **Gene target**
-     - —
-     - **absent**
-     - ``symbol`` + ``ncbi_gene_id`` (+ ORF ``transcript``)
-
-The reconciled vocabularies (see the schema enums):
-
-* ``modality`` — lowercased superset of CPG ``Treatment_Category`` and JUMP
-  ``perturbation_modality``, plus non-molecular categories: ``compound`` | ``orf`` |
-  ``crispr`` | ``shrna`` | ``mirna`` | ``physical`` (e.g. heat shock) |
-  ``biological`` | ``other`` | ``unknown``.
-* ``control_class`` — ``treatment`` | ``negcon`` | ``poscon`` | ``empty`` (CPG's
-  redundant ``Control`` dropped; JUMP's ``empty`` retained).
-
-Known gaps and contradictions:
-
-* **Gene target gap** — CellPainting Gallery has no gene field; filled from JUMP.
-* **Concentration type** — CPG records free text; DCA and JUMP use
-  ``{value, unit}``. The schema keeps structured ``value``/``unit`` with a
-  free-text ``text`` fallback.
-* **Gene identifier** — NCBI Gene ID is the canonical key (JUMP-native); HGNC
-  symbol is the label; Ensembl is optional cross-map.
-
-.. _experimental-deferred-pooled:
-
-Deferred: pooled / optical pooled screens (OPS)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-``WellPerturbation`` covers **arrayed** screens (one perturbation per well). In a
-**pooled / optical pooled screen (OPS)** a single well contains a library of many
-sgRNAs and the perturbation is assigned **per cell** by decoding an integrated
-barcode after imaging. That assignment is therefore **not** expressible per well. The
-pooled-screen reagent fields (sgRNA protospacer, PAM, barcode, target locus) and the
-per-cell assignment table are **deferred** to a future version, as is the broader move
-from this spec's current **Parquet** tables to AnnData / SpatialData conventions for
-single-cell data. The ``Perturbation`` *definition* above is unchanged for pooled
-libraries; only the level at which a perturbation is assigned differs (per well for
-arrayed screens, per cell for pooled).
+Promotion is a **per-field specification decision made via a version bump**. For a
+corpus-wide field it applies uniformly; for an experiment-class field it applies
+to that class. When a field is promoted, the Parquet remains the **source of truth**
+and the ``zarr.json`` copy is a derived, versioned snapshot.
 
 .. _experimental-evidence:
 
 Provenance
-~~~~~~~~~~
+----------
 
 Because metadata can be extracted by an agent, each value carries its **provenance**
-(``source_kind`` + grounding ``citation`` + ``grounded`` flag). ``source_kind`` is
+(``source_kind`` + grounding ``citation``). ``source_kind`` is
 **always required** — it is the discriminator that tells a consumer whether a value was
 ``agent``-extracted, ``human``-entered, or taken from the source's own
 ``original_data``. The grounding ``citation`` is **required for ``agent`` values** and
 **optional for ``human`` / ``original_data``** (left blank when there is nothing to
 cite). This lets a consumer decide how much to trust a value without re-reading the
-source. The provenance has two equivalent layouts for the two stores:
+source.
 
-* In the **Parquet** it is **plain columns alongside each value** (one row per
-  group, companion columns per field).
-* In the **object form** (``zarr.json`` / the worked example) it is the
-  ``ExperimentalMetadata.provenance`` **map**, keyed by each value's dotted
-  ``field_path`` (e.g. ``biosample.organism``). The values stay plain
-  and provenance travels as a parallel layer; a deterministic post-ingest step folds the
-  two together. Free-text ``additional_metadata`` values are keyed the same way, by
-  ``<block>.additional_metadata.<name>``, so all provenance lives in the one map.
+Provenance is the ``ExperimentalMetadata.provenance`` **map**, keyed by each value's
+dotted ``field_path`` (e.g. ``biosample.organism``). The values stay plain and
+provenance travels as a parallel layer. Free-text ``additional_metadata`` values are
+keyed the same way, by ``<block>.additional_metadata.<name>``, so all provenance lives
+in the one map. The Parquet (``tables/obs``) carries the same record, one row per image
+group, with the block held as an embedded JSON object rather than expanded into
+per-field columns.
 
-``grounded`` is **computed deterministically by the agent's grounding gate, not
-self-reported by the model**: a *grounding gate* checks whether the cited ``quote`` is
-an (exact or fuzzy) substring of the fetched source page, recording the result as
-``match_status`` (``exact`` / ``fuzzy`` / ``none``) plus the character offsets of the
-match. The gate runs at curation time against the raw source pages; ``match_status``
-and the offsets carry its result so the grounding stays **auditable downstream**, where
-the raw corpus is no longer available.
+``match_status`` is **computed deterministically by the agent's grounding gate, not
+self-reported by the model**: the gate checks whether the cited ``quote`` is an (exact
+or fuzzy) substring of the fetched source page and records the result as ``exact`` /
+``fuzzy`` / ``none``. It runs at curation time against the raw source pages, so
+``match_status`` carries that result and the grounding stays **auditable downstream**,
+where the raw corpus is no longer available.
 
 .. list-table::
    :header-rows: 1
@@ -733,15 +844,6 @@ the raw corpus is no longer available.
      - enum
      - Grounding-gate result locating the quote in the source page: ``exact`` /
        ``fuzzy`` (grounded) | ``none`` (ungrounded).
-   * - ``citation.char_start`` / ``char_end``
-     - integer
-     - Half-open span of the located quote in the source page's raw text; blank when
-       ``match_status`` is ``none``.
-   * - ``grounded``
-     - boolean
-     - ``true`` if the grounding gate located the cited quote (exact or fuzzy) in the
-       fetched source text — the cited evidence is real, not fabricated. **Computed,
-       not self-reported.** (Boolean rollup of ``match_status``.)
    * - ``source_kind``
      - enum
      - ``agent`` (provenance required) | ``human`` (manually entered; provenance
@@ -762,3 +864,48 @@ Bio-Formats/OME, CellPainting Gallery, CZI cross-modality, schema.org, the
 Scientific Dataset Catalog, and external ontologies. The same ``Study`` / ``Biosample``
 classes can therefore be validated against, or projected to, other specs that publish a
 LinkML schema (e.g. OPS) without a second validator.
+
+What is and is not machine-checked
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ontology-term slots are checked by CURIE **prefix pattern**, not by resolving the term.
+What the pattern cannot express falls into two groups: comparisons between fields already
+in hand, which the validator makes, and questions about the ontology itself, which it
+cannot answer offline.
+
+**Checked.** These are field comparisons, enforced in the v0.2 validator
+rather than the schema, since a LinkML rule is a per-slot predicate.
+
+* **The stage ontology should match ``organism``.** The slot pattern is a flat union, so
+  ``HsapDv`` on a zebrafish biosample satisfies it; the validator pairs the two slots and
+  warns on a mismatch. It covers the five organisms cross-modality names a stage ontology
+  for, and always accepts ``UBERON`` and the sentinels. It is skipped for any other
+  organism, which has no stage ontology to compare against, and for a biosample listing
+  several organisms, since ``organism`` and ``development_stage`` are independent lists
+  with no positional correspondence.
+* **A sentinel id constrains its ``label``.** ``unknown`` and ``na`` repeat themselves in
+  the label; ``unavailable`` carries the free-text value there instead. The validator
+  warns on both. This matters because ``label`` is the field consumers display, so a
+  real-sounding label beside an ``unknown`` id shows a value the record does not have.
+* **``tissue`` should carry a cell line's Cellosaurus term, and ``cell_line_id`` should
+  agree with it.** ``tissue`` is authoritative and ``cell_line_id`` mirrors it. The
+  validator warns when ``tissue`` holds no ``CVCL:`` accession (usually a UBERON or CL
+  term instead), and separately when the mirror disagrees.
+
+**Not checked offline.** Whether a term exists, and where it sits in the hierarchy, needs
+a live ontology service. Cross-modality writes its per-organism rules as subtree
+restrictions ("the most accurate descendant of ``ZFS:0100000``"), and no regex or field
+comparison can evaluate descent, so offline a well-formed CURIE naming no real term, or a
+real term outside the intended subtree, passes. The three terms cross-modality excludes
+**by name** (``ZFS:0000000``, ``FBdv:00007012``, ``ZFA:0001093``) are rejected offline,
+since a named exclusion is expressible where a subtree is not; the ``ZFA:0009000`` "cell"
+branch stays prose-only.
+
+``dca-validate --check-ontology`` closes both gaps. It resolves every
+``ontology_term_id`` against the registry its prefix belongs to (EBI OLS4 for the
+OBO-library and EFO ontologies, the Cellosaurus API for ``CVCL``) and, for the two FBbi
+branch slots ``imaging_method`` and ``preparation_method``, checks descent from the
+required ancestor. An unresolvable id, or a label matching none of the registry's names,
+is an error; an unreachable registry is a warning, so a flaky network degrades to
+"unverified" rather than failing the store. It is off by default because it makes network
+requests; see :doc:`validator` for the full behavior.

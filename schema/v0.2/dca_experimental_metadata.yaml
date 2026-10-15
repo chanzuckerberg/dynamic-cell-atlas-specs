@@ -6,17 +6,18 @@ description: >-
   source of truth for the acquisition, study/sample, and perturbation context
   curated for DCA datasets.
 
-  Required metadata is written to the ``zarr.json`` ``dca`` block (alongside the
-  machine-measured channels + normalization statistics); optional / conditional
-  metadata is agent-curated into a sibling Parquet. Every value carries its
-  provenance as plain columns alongside it (citation incl. grounding match +
-  grounded flag + source_kind), blank when not applicable, in both stores. A field is promoted into
-  ``zarr.json`` when verifiable, schema-stable, and consistently scoped.
+  Metadata is curated into a sibling Parquet (the source of truth) and written to the
+  ``zarr.json`` ``dca`` block (alongside the machine-measured channels + normalization
+  statistics); required, recommended and optional fields alike go to both. Only the
+  required floor MUST be present; whatever is present is validated. Every value carries its
+  provenance alongside it (citation incl. grounding match +
+  source_kind), blank when not applicable, in both stores. A field is promoted into
+  the required floor when verifiable, schema-stable, and consistently scoped.
 
   Anchoring: the overall Study / Biosample / Specimen / acquisition structure follows
   the REMBI reporting guideline; within it, instrument / acquisition fields →
   Bio-Formats / OME; study & people → OME ``Experiment`` / ``Experimenter`` + Broad CellPainting Gallery; cell line & organism → CellPainting Gallery + NCBITaxon;
-  perturbation → OME ``Reagent`` + CPG + JUMP. Concepts with no equivalent in those
+  perturbation → OME ``Reagent`` + CPG. Concepts with no equivalent in those
   sources are added as DCA-native extensions (REMBI-derived).
 
 license: MIT
@@ -56,10 +57,20 @@ prefixes:
   MONDO: http://purl.obolibrary.org/obo/MONDO_
   UBERON: http://purl.obolibrary.org/obo/UBERON_
   CL: http://purl.obolibrary.org/obo/CL_
+  ZFA: http://purl.obolibrary.org/obo/ZFA_
   HsapDv: http://purl.obolibrary.org/obo/HsapDv_
+  MmusDv: http://purl.obolibrary.org/obo/MmusDv_
+  ZFS: http://purl.obolibrary.org/obo/ZFS_
+  FBdv: http://purl.obolibrary.org/obo/FBdv_
+  WBls: http://purl.obolibrary.org/obo/WBls_
   PATO: http://purl.obolibrary.org/obo/PATO_
   ops: https://github.com/chanzuckerberg/ops-schema/blob/main/standards/ops/0.1.0/experimental-metadata.md#
   sdc: https://github.com/chanzuckerberg/dataset-catalog#
+  # cryoET Data Portal core schema (cdp-common v2.0.0) — CZI sibling standard; DCA's
+  # biosample and specimen axes map to its flat organism / tissue / cell-type / strain /
+  # development-stage / sample-preparation slots (close mappings: cryoET splits name + id,
+  # DCA uses ontology_term_id + label).
+  cdp: https://github.com/chanzuckerberg/cryoet-data-portal-backend/blob/main/schema/core/v2.0.0/common.yaml#
 
 imports:
   - linkml:types
@@ -117,14 +128,14 @@ enums:
 
   ProvenanceSourceKind:
     description: >-
-      How the value was obtained, which determines whether the provenance columns
+      How the value was obtained, which determines whether the provenance fields
       (citation + grounding) are **required**: required for ``agent`` values, optional
       for ``human`` and ``original_data``. DCA-defined.
     permissible_values:
       agent:
         description: >-
           Extracted by an agent from a source document. The provenance
-          columns (citation + grounding-gate result) are REQUIRED.
+          fields (citation + grounding-gate result) are REQUIRED.
       human:
         description: >-
           Manually entered by a person. Provenance is optional (the citation MAY be
@@ -152,9 +163,8 @@ enums:
   PerturbationModality:
     description: >-
       How the perturbation acts. Normalized superset of CellPainting Gallery
-      ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]) and JUMP
-      ``perturbation_modality`` ([compound, orf, crispr, unknown]). Values are
-      lowercased to reconcile the two casings; ``unknown`` from JUMP is retained.
+      ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), with
+      values lowercased.
     permissible_values:
       compound:
         description: Small-molecule / chemical perturbation.
@@ -167,6 +177,11 @@ enums:
         description: Short hairpin RNA knockdown (CPG only).
       mirna:
         description: microRNA perturbation (CPG only).
+      sirna:
+        description: >-
+          Small interfering RNA knockdown — transient, transfected synthetic
+          duplex, distinct from the vector-delivered, stably-expressed ``shrna``.
+          Not in the CPG source vocabulary.
       physical:
         description: Physical perturbation (e.g. heat shock, irradiation).
       biological:
@@ -174,14 +189,14 @@ enums:
       other:
         description: Perturbation not covered by the categories above.
       unknown:
-        description: Modality not determinable (JUMP only).
+        description: Modality not determinable.
 
   PerturbationControlClass:
     description: >-
-      Control role of a well. Reconciles CellPainting Gallery
-      ``Treatment_Control_Class`` ([Control, Treatment, NegCon, PosCon]) and JUMP
-      control ``pert_type`` ([negcon, poscon, empty]). CPG's redundant "Control" is
-      dropped in favor of the explicit negcon/poscon; JUMP's ``empty`` is kept.
+      Control role of a well. Based on CellPainting Gallery
+      ``Treatment_Control_Class`` ([Control, Treatment, NegCon, PosCon]). CPG's
+      redundant "Control" is dropped in favor of the explicit negcon/poscon, and
+      ``empty`` is added for untreated wells.
     permissible_values:
       treatment:
         description: Experimental (non-control) perturbation.
@@ -190,15 +205,25 @@ enums:
       poscon:
         description: Positive control.
       empty:
-        description: Empty / untreated well (JUMP).
+        description: Empty / untreated well.
 
   TissueType:
-    description: CZI cross-modality ``tissue_type`` (v1.1.0).
+    description: >-
+      CZI cross-modality ``tissue_type`` (v1.1.0), plus ``unknown`` for sources that do
+      not record what the sample was.
+    close_mappings: [cdp:preparation_sample_type]
     permissible_values:
       tissue: {}
       "cell culture": {}
       "cell line": {}
       organoid: {}
+      unknown:
+        description: >-
+          Sample type not determinable from the source. For image corpora assembled
+          without a per-image manifest (e.g. segmentation training sets pooled from
+          many studies), where the sample type genuinely is not recorded. Carries the
+          same meaning as the ``unknown`` sentinel on the ontology-term slots, and is
+          likewise not a shortcut for "not looked up yet".
 
   SpecimenState:
     description: >-
@@ -214,6 +239,22 @@ enums:
         description: Chemically or cryo-fixed before imaging.
       unknown:
         description: State not determinable from the source.
+
+  TimeSampling:
+    description: >-
+      Whether an image group's timepoints are evenly spaced in time. DCA controlled
+      vocabulary: OME-NGFF v0.5 expresses spacing only as a uniform ``t``-axis scale,
+      so a non-uniform acquisition has no way to say so without this.
+    permissible_values:
+      uniform:
+        description: >-
+          Evenly spaced; the ``t``-axis scale describes the spacing. The meaning of an
+          absent ``time_sampling``, so an existing store keeps its current reading.
+      variable:
+        description: >-
+          Not evenly spaced, so the ``t``-axis scale cannot describe it and
+          ``timestamps`` is authoritative. Requires ``timestamps``; not a way to avoid
+          declaring a cadence that is in fact uniform.
 
   StudyType:
     description: >-
@@ -240,7 +281,7 @@ enums:
 
 # ===========================================================================
 # ACQUISITION metadata — minimal Bio-Formats / OME-aligned instrument set.
-# Optional → agent-curated into the Parquet with inline provenance columns.
+# Curated with inline provenance fields, like every other block.
 # ===========================================================================
 classes:
   ExperimentalMetadata:
@@ -248,10 +289,11 @@ classes:
       Root container for one image group's experimental metadata (a flattened REMBI
       Study + Study Component): the study, the ``study_component`` (assay class +
       imaging method), the sample (``biosample`` + ``specimen``), acquisition, and
-      image-data context, plus the per-value ``provenance`` map. This is the object curated into a Parquet
-      row (one per ``Biosample.group_id``); the required fields are mirrored into the
-      ``zarr.json`` ``dca`` block. Arrayed-screen perturbations are recorded per well
-      in :class:`WellPerturbation` (well-level), not nested here.
+      image-data context, the ``perturbation`` assignment, plus the per-value
+      ``provenance`` map. This is the object curated into a Parquet
+      row (one per ``Biosample.group_id``) and mirrored into the ``zarr.json`` ``dca``
+      block. Arrayed HCS screens ALSO index the same assignment per well as
+      :class:`WellPerturbation` (well-level), which is derived from this block.
     tree_root: true
     attributes:
       study:
@@ -266,6 +308,21 @@ classes:
         range: Specimen
         inlined: true
         required: true
+      perturbation:
+        description: >-
+          The perturbation applied to this image group's material — dosing / control
+          class / timing plus the :class:`Perturbation` it references (its
+          ``definition`` slot).
+          CONDITIONALLY REQUIRED: present for every image group of a dataset that has
+          perturbations, absent for a dataset that has none. Mirrored into the
+          ``zarr.json`` ``dca`` block like the other required blocks, so a
+          perturbation is readable from the image group a consumer already has open,
+          without resolving a plate / well key — and so it is expressible for a
+          plateless ``image_collection`` store. This is the AUTHORITATIVE placement:
+          an arrayed HCS screen may additionally index the same assignment per well as
+          a :class:`WellPerturbation`, which is derived from this block.
+        range: PerturbationAssignment
+        inlined: true
       acquisition:
         range: AcquisitionMetadata
         inlined: true
@@ -279,9 +336,8 @@ classes:
       provenance:
         description: >-
           Per-value provenance, as a map keyed by each value's dotted ``field_path``
-          (e.g. ``biosample.organism``). A parallel provenance layer;
-          a deterministic post-ingest step folds each entry onto its value's provenance
-          columns in the Parquet and the ``zarr.json`` mirror. REQUIRED for
+          (e.g. ``biosample.organism``). A parallel provenance layer, carried in the
+          Parquet and the ``zarr.json`` mirror alike. REQUIRED for
           ``agent``-curated values, optional for
           ``human`` / ``original_data`` (see :class:`FieldProvenance` /
           :class:`Provenance`).
@@ -333,8 +389,8 @@ classes:
     description: >-
       Image-acquisition metadata (REMBI Image Acquisition): instrument attributes
       (microscope / objective / detector / imaging environment) and acquisition
-      parameters (acquisition date, time increment, …), all OME-aligned. All optional,
-      so stored in the Parquet (not ``zarr.json``). The acquisition
+      parameters (acquisition date, time increment, …), all OME-aligned. Optional apart
+      from ``time_increment_s``, which is required for time-lapse data. The acquisition
       **modality** (FBbi ``imaging_method``) is not here: REMBI scopes it to the Study
       Component, so it lives on :class:`ExperimentalMetadata`. Populate what the source
       supports; omit the rest rather than guessing.
@@ -353,12 +409,39 @@ classes:
           Time between successive timepoints, in seconds. Required for time-lapse
           data; the validator derives the time-lapse condition from the ``zarr.json``
           array shape (time dimension T > 1) rather than from a metadata flag, so this
-          is enforced by the validator, not a LinkML ``if/then`` rule.
+          is enforced by the validator, not a LinkML ``if/then`` rule. The **nominal**
+          cadence: when ``time_sampling`` is ``variable`` this is the spacing the
+          acquisition targeted, and ``timestamps`` is what the frames actually are.
         range: float
         unit:
           ucum_code: s
         exact_mappings:
           - bioformats:Image.TimeIncrement
+      time_sampling:
+        description: >-
+          Whether the timepoints are evenly spaced. ``uniform`` (the default when
+          absent) means the OME ``t``-axis scale describes the spacing. ``variable``
+          means it does not, and the per-frame ``timestamps`` are authoritative:
+          acquisitions interrupted mid-run (a scope fault, a media change) or
+          deliberately re-paced by experimental phase cannot be expressed by a single
+          scale. Declaring ``variable`` relaxes the temporal-axis unit MUST
+          (ome-zarr-metadata.rst § Units) and REQUIRES ``timestamps``, so the claim is
+          checkable rather than an escape hatch.
+        range: TimeSampling
+      timestamps:
+        description: >-
+          Per-frame acquisition times, one per timepoint of the level-0 array, as
+          **seconds since the Unix epoch (UTC)**. One encoding rather than several,
+          so a consumer can read the values without a companion unit field; an
+          explicit unit / epoch is part of the general time-coordinate design and
+          not in this version. REQUIRED when ``time_sampling`` is ``variable`` and
+          OPTIONAL otherwise. Length MUST equal the array's ``T`` and the values MUST
+          be non-decreasing, whichever mode is declared. This is the time coordinate
+          the ``t`` axis cannot carry; treat the shape here as provisional.
+        range: float
+        multivalued: true
+        unit:
+          ucum_code: s
       timepoint_acquisition:
         description: Acquisition timepoint (elapsed acquisition time).
         exact_mappings: [cpg:Timepoint_Acquisition]
@@ -466,19 +549,18 @@ classes:
         exact_mappings: [bioformats:ImagingEnvironment.AirPressure]
 
   # =========================================================================
-  # STUDY / SAMPLE metadata (sibling Parquet, NOT zarr.json)
+  # STUDY / SAMPLE metadata
   #
   # Anchored on Bio-Formats / OME (Experiment, Experimenter) and the Broad
   # CellPainting Gallery fields (Source, DOI_to_Cite, Year_Imaged,
   # Cell_Line_*). Concepts with no Bio-Formats / CPG equivalent are kept as
-  # DCA-native extensions (REMBI-derived) and labeled as such. Agent-curated, with
-  # inline provenance columns per value.
+  # DCA-native extensions (REMBI-derived) and labeled as such. Curated by an agent or
+  # a human, with inline provenance per value recording which.
   # =========================================================================
   Study:
     description: >-
       Study-level descriptors. Anchored on OME ``Experiment`` + the Broad
-      CellPainting Gallery study fields + schema.org. Required fields are written
-      to ``zarr.json``; optional fields to the Parquet.
+      CellPainting Gallery study fields + schema.org.
     class_uri: OME:Experiment
     rules:
       - description: >-
@@ -591,7 +673,7 @@ classes:
         description: >-
           Extra study-provided values not yet defined in this spec. Optional;
           promotable — once a field here stabilizes it can be elevated to a defined
-          (ultimately required, zarr.json) slot in a future version.
+          (ultimately required) slot in a future version.
         range: AdditionalMetadataField
         multivalued: true
         inlined_as_list: true
@@ -636,8 +718,7 @@ classes:
     description: >-
       Sample-level descriptors. Sample context reuses the CZI cross-modality schema
       v1.1.0 (CELLxGENE-aligned) as ``ontology_term_id`` + label pairs; cell-line
-      identity uses the CellPainting Gallery + Cellosaurus. Required term-id fields
-      go to ``zarr.json``; labels, cell-line and DCA-native fields to the Parquet.
+      identity uses the CellPainting Gallery + Cellosaurus.
     rules:
       - description: >-
           A cell-line sample must name the line. ``cell_line_name`` is required when
@@ -680,9 +761,17 @@ classes:
         close_mappings: [sdc:sample.tissue.type]
       tissue:
         description: >-
-          Tissue as an ``ontology_term_id`` + ``label`` pair. The id is a UBERON term;
-          a CL term when ``tissue_type`` is "cell culture"; a Cellosaurus ``CVCL:`` term
-          when ``tissue_type`` is "cell line" (cross-modality v1.1.0). When
+          Tissue as an ``ontology_term_id`` + ``label`` pair. The id is a UBERON term (or
+          a ZFA term for zebrafish anatomy); a CL term when ``tissue_type`` is "cell
+          culture"; a Cellosaurus ``CVCL:`` term
+          when ``tissue_type`` is "cell line" (cross-modality v1.1.0). Cross-modality
+          splits anatomy and cell type across two fields; DCA folds both into this one
+          slot and keys the distinction off ``tissue_type``. For zebrafish that means:
+          in the anatomy role (``tissue_type`` "tissue" or "organoid") use a descendant
+          of ``ZFA:0100000`` outside the ``ZFA:0009000`` ("cell") branch, and in the
+          cell-type role (``tissue_type`` "cell culture") use a CL term, or a descendant
+          of ``ZFA:0009000`` where CL has no equivalent. ``ZFA:0001093``
+          ("unspecified") is never valid — use the ``unknown`` sentinel. When
           ``tissue_type`` is "organoid", use the UBERON term for the **tissue of origin**
           from which the organoid was derived (e.g. ``UBERON:0002108`` for small
           intestine organoids, ``UBERON:0000948`` for cardiac organoids). All ids are
@@ -703,24 +792,34 @@ classes:
         required: true
       development_stage:
         description: >-
-          Development stage as an ``ontology_term_id`` + ``label`` pair; the id is an
-          HsapDv / MmusDv / UBERON life-cycle term.
+          Development stage as an ``ontology_term_id`` + ``label`` pair. Use the stage
+          ontology for the organism — HsapDv (human), MmusDv (mouse), ZFS (zebrafish),
+          FBdv (fly), WBls (worm) — or a UBERON life-cycle term for organisms with no
+          dedicated stage ontology.
         range: DevelopmentStageTerm
         multivalued: true
         inlined_as_list: true
         required: true
-      # --- Cell line (CellPainting Gallery / Broad) — REQUIRED when tissue_type = "cell line" ---
+      # --- Cell line (CellPainting Gallery / Broad) — when tissue_type = "cell line":
+      #     cell_line_name REQUIRED (enforced by the rule above), cell_line_id RECOMMENDED ---
       cell_line_name:
-        description: Cell line name (CPG harmonized vocabulary).
+        description: Cell line name (CPG harmonized vocabulary). Required when
+          ``tissue_type`` is "cell line". Repeats ``tissue``'s ``label`` for a cell-line
+          sample; the duplication is deliberate, for CellPainting Gallery alignment.
         exact_mappings: [cpg:Cell_Line_Name]
+        close_mappings: [cdp:cell_strain_name]
       cell_line_id:
         description: >-
           Cellosaurus accession as a colon CURIE (e.g. "CVCL:0030"), resolvable via
           the ``prefixes`` block. Convenience mirror of the **authoritative**
-          ``tissue`` term when ``tissue_type`` is "cell line". iPSC lines
-          that lack one SHOULD record hPSCreg / donor id in ``additional_metadata``.
+          ``tissue`` term when ``tissue_type`` is "cell line", and SHOULD hold the same
+          CVCL accession; a mismatch is a SHOULD warning from the validator (the
+          generated JSON Schema does not check it), and ``tissue`` wins on conflict.
+          RECOMMENDED rather than required: iPSC and primary lines may have no
+          accession, and SHOULD then record hPSCreg / donor id in
+          ``additional_metadata``.
         pattern: "^CVCL:\\w+$"
-        close_mappings: [CVCL:0000000]
+        close_mappings: [CVCL:0000000, cdp:cell_strain_id]
       cell_line_type:
         exact_mappings: [cpg:Cell_Line_Type]
       cell_line_modification:
@@ -742,7 +841,7 @@ classes:
         description: >-
           Extra study-provided values not yet defined in this spec. Optional;
           promotable — once a field here stabilizes it can be elevated to a defined
-          (ultimately required, zarr.json) slot in a future version.
+          (ultimately required) slot in a future version.
         range: AdditionalMetadataField
         multivalued: true
         inlined_as_list: true
@@ -774,6 +873,10 @@ classes:
           record it.
         range: PreparationMethodTerm
         multivalued: true
+        # cryoET's sample_preparation is free-text prose describing *how* the sample was
+        # prepared, so it lands here rather than on specimen_state (the coarse
+        # live-vs-fixed enum this spec deliberately split apart from prep method).
+        close_mappings: [cdp:sample_preparation]
       growth_conditions:
         description: >-
           Free-text description of growth media, supplements, and culture
@@ -812,10 +915,9 @@ classes:
           - sdc:dataset_type
 
   # =========================================================================
-  # Provenance — inline columns carried with every value (citation, grounded,
-  # source_kind), blank when not applicable, in Parquet and zarr.json.
-  # Shape: {citation{source_url, quote, char_start, char_end, match_status}, grounded,
-  # source_kind}.
+  # Provenance — inline fields carried with every value (citation, source_kind),
+  # blank when not applicable, in Parquet and zarr.json.
+  # Shape: {citation{source_url, quote, match_status}, source_kind}.
   # =========================================================================
   AdditionalMetadataField:
     description: >-
@@ -870,20 +972,27 @@ classes:
       ontology_term_id:
         pattern: "^(NCBITaxon:\\d+|unknown|na|unavailable)$"
         exact_mappings: [cxmod:organism_ontology_term_id, ops:experiment.organism_ontology_term_id]
-        close_mappings: [NCBITaxon:0000000, sdc:sample.organism]
+        close_mappings: [NCBITaxon:0000000, sdc:sample.organism, cdp:organism_taxid]
       label:
         exact_mappings: [cxmod:organism, cpg:Cell_Line_Organism, ops:experiment.organism]
+        close_mappings: [cdp:organism_name]
 
   TissueTerm:
-    description: Tissue ontology annotation (UBERON / CL / Cellosaurus CVCL).
+    description: Tissue ontology annotation (UBERON / CL / ZFA / Cellosaurus CVCL).
     is_a: OntologyTerm
     slot_usage:
       ontology_term_id:
-        pattern: "^(UBERON:\\d+|CL:\\d+|CVCL:\\w+|unknown|na|unavailable)$"
+        # ZFA:0001093 ("unspecified") is excluded for the same reason as ZFS:0000000 on
+        # DevelopmentStageTerm: it is a fourth way to say "no value" alongside the
+        # unknown / na / unavailable sentinels. Cross-modality also excludes ZFA:0009000
+        # ("cell") and its descendants from the anatomy role — a subtree restriction a
+        # regex cannot express, so it is stated in the `tissue` slot description instead.
+        pattern: "^(UBERON:\\d+|CL:\\d+|CVCL:\\w+|ZFA:(?!0001093$)\\d+|unknown|na|unavailable)$"
         exact_mappings: [cxmod:tissue_ontology_term_id, ops:experiment.tissue_ontology_term_id]
-        close_mappings: [CVCL:0000000, sdc:sample.tissue]
+        close_mappings: [CVCL:0000000, sdc:sample.tissue, cdp:tissue_id, cdp:cell_type_id]
       label:
         exact_mappings: [cxmod:tissue, ops:experiment.tissue]
+        close_mappings: [cdp:tissue_name, cdp:cell_name]
 
   DiseaseTerm:
     description: Disease ontology annotation (MONDO, or PATO:0000461 for normal/healthy).
@@ -897,15 +1006,25 @@ classes:
         exact_mappings: [cxmod:disease, ops:experiment.disease]
 
   DevelopmentStageTerm:
-    description: Development-stage ontology annotation (HsapDv / MmusDv / UBERON).
+    description: >-
+      Development-stage ontology annotation. Uses the organism-specific stage ontology
+      the CZI cross-modality schema names for that organism — HsapDv (human), MmusDv
+      (mouse), ZFS (zebrafish), FBdv (fly), WBls (worm) — and a UBERON life-cycle term
+      for organisms with no dedicated stage ontology.
     is_a: OntologyTerm
     slot_usage:
       ontology_term_id:
-        pattern: "^(HsapDv:\\d+|MmusDv:\\d+|UBERON:\\d+|unknown|na|unavailable)$"
+        # The two ontology roots cross-modality explicitly excludes are excluded here
+        # too, so there is only one spelling of "unknown": ZFS:0000000 (Unknown) and
+        # FBdv:00007012 (life stage). Use the `unknown` sentinel instead. The rest of
+        # cross-modality's per-organism rules are subtree restrictions ("most accurate
+        # descendant of ...") that a regex cannot express; see § Validation.
+        pattern: "^(HsapDv:\\d+|MmusDv:\\d+|ZFS:(?!0000000$)\\d+|FBdv:(?!00007012$)\\d+|WBls:\\d+|UBERON:\\d+|unknown|na|unavailable)$"
         exact_mappings: [cxmod:development_stage_ontology_term_id, ops:experiment.development_stage_ontology_term_id]
-        close_mappings: [sdc:sample.development_stage]
+        close_mappings: [sdc:sample.development_stage, cdp:development_stage_id]
       label:
         exact_mappings: [cxmod:development_stage, ops:experiment.development_stage]
+        close_mappings: [cdp:development_stage_name]
 
   AssayTerm:
     description: Assay / experiment-class ontology annotation (EFO only).
@@ -942,13 +1061,6 @@ classes:
       how much to trust a field without re-reading the source. Blank for manually
       entered values (``source_kind: human``).
     rules:
-      # NB: there is intentionally no ``grounded: true ⇒ citation`` rule. A boolean
-      # ``equals`` precondition is not expressible in the generated JSON Schema
-      # (``gen-json-schema`` drops ``equals_expression``, degrading it to a mere
-      # "grounded is present" check that wrongly fires for ``grounded: false`` too).
-      # It is also redundant: ``grounded`` is only set on agent-curated values, which
-      # the ``source_kind: agent ⇒ citation`` rule below already requires a citation
-      # for. Any residual "grounded must cite" check belongs in the validator layer.
       - description: >-
           An ``agent``-extracted value MUST carry its citation (source_url + quote);
           provenance is required for agent-curated values, optional for ``human`` /
@@ -965,14 +1077,6 @@ classes:
       citation:
         range: Citation
         inlined: true
-      grounded:
-        description: >-
-          Output of an agent's deterministic grounding gate: ``true`` when the
-          cited ``quote`` was located (exact or fuzzy) in the fetched source text, so
-          the cited evidence is real and not fabricated. Computed, not self-reported
-          — a fabricated quote that is absent from the source grounds to ``false``.
-          Boolean rollup of ``citation.match_status``.
-        range: boolean
       source_kind:
         description: >-
           How the value was obtained. REQUIRED on every provenance entry — it is the
@@ -1001,23 +1105,13 @@ classes:
           Outcome of the deterministic grounding gate for this quote (see
           MatchStatus). ``none`` means the quote did not ground in the cited page.
         range: MatchStatus
-      char_start:
-        description: >-
-          Start offset (inclusive) of the located quote within the cited source
-          page's raw text. Blank when ``match_status`` is ``none``.
-        range: integer
-      char_end:
-        description: >-
-          End offset (exclusive) of the located quote within the cited source page's
-          raw text. Blank when ``match_status`` is ``none``.
-        range: integer
 
   FieldProvenance:
     description: >-
       One entry in the per-value provenance map (``ExperimentalMetadata.provenance``):
       the provenance of a single field, keyed by its dotted ``field_path``. Same shape
-      as :class:`Provenance` (``source_kind`` / ``grounded`` / ``citation`` and its
-      grounding rules) plus the path it applies to, so provenance can travel as a
+      as :class:`Provenance` (``source_kind`` / ``citation`` and its grounding
+      rules) plus the path it applies to, so provenance can travel as a
       parallel layer keyed by field path rather than nested inside each value.
     is_a: Provenance
     attributes:
@@ -1029,17 +1123,19 @@ classes:
         key: true
 
   # =========================================================================
-  # PERTURBATION (group 2; Parquet)
+  # PERTURBATION (group 2)
   #
   # Modality-agnostic Perturbation *definition* — DCA-facing name; anchored on the
   # OME ``Reagent`` entity (its ``class_uri`` mapping) — specialized by a
   # ``modality`` discriminator into a chemical OR genetic block. Generalizes beyond
   # chemical perturbation to CRISPR / gene knockout / ORF and physical / biological.
-  # Maps across three sources: OME Bio-Formats ``Reagent``, CellPainting Gallery
-  # ``Treatment_*`` / ``Cell_Line_*``, and the JUMP compound / orf / crispr tables.
+  # Maps across two sources: OME Bio-Formats ``Reagent`` and CellPainting Gallery
+  # ``Treatment_*`` / ``Cell_Line_*``.
   #
   # GRAIN: the Perturbation *definition* (codebook) is per-construct. Its
-  # *assignment* to images is per-well for ARRAYED screens (``WellPerturbation``).
+  # *assignment* (``PerturbationAssignment``) is per image group, carried as the
+  # ``perturbation`` block of ``ExperimentalMetadata``; an ARRAYED HCS screen also
+  # indexes that assignment per well as ``WellPerturbation``.
   # Pooled / optical-pooled screens (OPS) assign perturbation PER CELL via barcode
   # decode — that per-cell table (keyed by segmentation ``label_id`` in ``tables/``)
   # is DEFERRED (see experimental-metadata.rst "Deferred: pooled / OPS screens").
@@ -1061,8 +1157,8 @@ classes:
             chemical:
               required: true
       - description: >-
-          A genetic perturbation (crispr / orf / shrna / mirna) must carry the
-          genetic-target block.
+          A genetic perturbation (crispr / orf / shrna / mirna / sirna) must carry
+          the genetic-target block.
         preconditions:
           slot_conditions:
             modality:
@@ -1071,6 +1167,7 @@ classes:
                 - equals_string: orf
                 - equals_string: shrna
                 - equals_string: mirna
+                - equals_string: sirna
         postconditions:
           slot_conditions:
             genetic:
@@ -1112,7 +1209,8 @@ classes:
       genetic:
         description: >-
           Genetic-target identifiers — present when ``modality`` is
-          crispr / orf / shrna / mirna. This is the CRISPR/knockout extension.
+          crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation
+          extension (knockout, knockdown, or overexpression of a gene target).
         range: GeneticPerturbation
         inlined: true
 
@@ -1141,8 +1239,7 @@ classes:
     description: >-
       Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The
       gene target is what CellPainting Gallery cannot express (it has only the
-      ``Treatment_Category`` enum); these fields come from the JUMP crispr / orf
-      tables.
+      ``Treatment_Category`` enum); these fields fill that gap.
     attributes:
       gene_symbol:
         description: >-
@@ -1153,15 +1250,15 @@ classes:
       ncbi_gene_id:
         description: >-
           NCBI Gene ID as a colon CURIE (e.g. "NCBIGene:7157") — the canonical,
-          resolvable cross-table gene key in JUMP. The value names its own database
+          resolvable cross-table gene key. The value names its own database
           via the ``prefixes`` block.
         pattern: "^NCBIGene:\\d+$"
         exact_mappings: [cpg:crispr_ncbi_gene_id, cpg:orf_ncbi_gene_id]
         close_mappings: [NCBIGene:0]
       ensembl_gene_id:
         description: >-
-          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510"); cross-map,
-          not JUMP-native. Resolvable via the ``prefixes`` block.
+          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510"); optional
+          cross-map. Resolvable via the ``prefixes`` block.
         pattern: "^ensembl:ENSG\\d+$"
         close_mappings: [ensembl:0]
       transcript_refseq:
@@ -1189,18 +1286,23 @@ classes:
         description: Free-text concentration as recorded (CPG fallback).
         exact_mappings: [cpg:Treatment_Concentration]
 
-  WellPerturbation:
+  PerturbationAssignment:
     description: >-
-      Per-well perturbation assignment for an ARRAYED screen — one row per
-      ``(plate, well)``, written to ``zarr.json`` (well level). References a
-      :class:`Perturbation` definition and adds the per-well dosing / control /
-      timing. Required-when-present: a dataset with perturbations MUST carry the
-      required fields below; a dataset with none simply has no ``WellPerturbation``.
+      The ASSIGNMENT of a :class:`Perturbation` to imaged material — the dosing /
+      control / timing that turns a reusable codebook entry into "what was done to
+      this sample". The entry itself is the ``definition`` slot (plus an optional
+      ``cotreatment``); everything else here is the assignment.
+      Carries no plate / well key, so it is placement-agnostic: it is
+      the ``perturbation`` block of :class:`ExperimentalMetadata` (image level,
+      alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that
+      :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key.
+      Required-when-present: a dataset with perturbations MUST carry the required
+      fields below; a dataset with none simply has no ``perturbation`` block.
       (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)
     rules:
       - description: >-
-          Treated and control wells (treatment / negcon / poscon) must name a
-          perturbation; an ``empty`` well has none to record, so ``perturbation`` is
+          Treated and control material (treatment / negcon / poscon) must name a
+          perturbation; ``empty`` has none to record, so ``definition`` is
           not required there.
         preconditions:
           slot_conditions:
@@ -1209,28 +1311,19 @@ classes:
                 - equals_string: empty
         postconditions:
           slot_conditions:
-            perturbation:
+            definition:
               required: true
     attributes:
-      plate:
-        description: >-
-          Plate identifier. Together with ``well`` this is the link to the image
-          arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in
-          ``zarr.json``) so a row resolves to a well group in the store.
-        required: true
-      well:
-        description: >-
-          Well identifier in row-letter + column-number form (e.g. "A03"), mapping to
-          the OME-NGFF HCS ``row``/``column`` well-group path (``A/3``) under the
-          plate. This is the key tying the assignment to the imaged well.
-        required: true
-      perturbation:
+      definition:
         range: Perturbation
         inlined: true
         description: >-
-          The perturbation applied to this well. Required for treated and control
-          wells (``treatment`` / ``negcon`` / ``poscon``); omitted for ``empty``
-          wells, which have nothing to record (enforced by the class rule above).
+          The :class:`Perturbation` definition this assignment applies — the reusable
+          codebook entry (what the perturbagen IS), as distinct from the dosing /
+          control / timing around it (what was DONE to this material), which are the
+          sibling slots here. Required for treated and control material
+          (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is
+          ``empty``, which has nothing to record (enforced by the class rule above).
       control_class:
         range: PerturbationControlClass
         required: true
@@ -1251,11 +1344,45 @@ classes:
         description: Time of secondary treatment.
         range: float
         exact_mappings: [cpg:Timepoint_Secondary_Treatment]
-      secondary_perturbation:
-        description: Optional second perturbation (cotreatment).
+      cotreatment:
+        description: >-
+          Optional second :class:`Perturbation` definition applied alongside
+          ``definition`` (a cotreatment).
         range: Perturbation
         inlined: true
         exact_mappings: [cpg:Treatment_Secondary_Treatment]
       provenance:
         range: Provenance
         inlined: true
+
+  WellPerturbation:
+    is_a: PerturbationAssignment
+    description: >-
+      Per-well perturbation assignment for an ARRAYED HCS screen — one row per
+      ``(plate, well)``, written to ``zarr.json`` (well level). A
+      :class:`PerturbationAssignment` plus the ``(plate, well)`` key that resolves it
+      to a well group. This form is DERIVED: ``ExperimentalMetadata.perturbation`` on
+      the image group is authoritative, and this is a plate-shaped index over it that
+      exists so a plate's design can be enumerated without opening every field of
+      view. It is unavailable to a plateless ``image_collection`` store (see the
+      ``perturbation`` block for those). The two MUST agree; because the direction is
+      defined, a disagreement is repaired by re-deriving this row from the image
+      groups, never the other way round. The validator checks this row's own
+      contents when present (dispatched to ``validate_well_perturbation_v0_2``), and
+      separately cross-checks it against the consensus ``perturbation`` value of its
+      own well's field(s) of view, reporting a mismatch as an error (see
+      validator.rst).
+      The non-``empty`` ⇒ ``definition`` rule is inherited from the parent.
+    attributes:
+      plate:
+        description: >-
+          Plate identifier. Together with ``well`` this is the link to the image
+          arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in
+          ``zarr.json``) so a row resolves to a well group in the store.
+        required: true
+      well:
+        description: >-
+          Well identifier in row-letter + column-number form (e.g. "A03"), mapping to
+          the OME-NGFF HCS ``row``/``column`` well-group path (``A/3``) under the
+          plate. This is the key tying the assignment to the imaged well.
+        required: true

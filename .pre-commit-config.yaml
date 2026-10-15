@@ -9,6 +9,11 @@ repos:
       - id: trailing-whitespace
         exclude: \.md$  # Markdown might need trailing spaces for line breaks
       - id: end-of-file-fixer
+        # LinkML-generated artifacts (schema/*/generated/*.json, _generated_models.py)
+        # are committed byte-for-byte from `make schema` output, including its
+        # trailing blank line; the drift-guard test (test_generated_artifacts.py)
+        # compares against that raw output, so this hook must not touch them.
+        exclude: (^schema/.*/generated/.*\.json$|_generated_models\.py$)
       - id: check-yaml
       - id: check-added-large-files
         args: ['--maxkb=5000']  # Allow larger files for documentation assets
@@ -22,6 +27,7 @@ repos:
       - id: isort
         args: ["--check-only", "--diff"]
         files: ^(helpers/src|tests)/.*\.py$
+        exclude: _generated_models\.py$  # raw gen-pydantic output, not hand-formatted
 
   # Python code formatting - matches "black --check tests/" from GitHub Actions
   - repo: https://github.com/psf/black
@@ -30,6 +36,7 @@ repos:
       - id: black
         args: ["--check", "--diff"]
         files: ^(helpers/src|tests)/.*\.py$
+        exclude: _generated_models\.py$  # raw gen-pydantic output, not hand-formatted
 
   # Python linting - matches "flake8 tests/ --max-line-length=100 --extend-ignore=E203,W503" from GitHub Actions
   - repo: https://github.com/pycqa/flake8
@@ -38,6 +45,7 @@ repos:
       - id: flake8
         args: ["--max-line-length=100", "--extend-ignore=E203,W503"]
         files: ^(helpers/src|tests)/.*\.py$
+        exclude: _generated_models\.py$  # raw gen-pydantic output, not hand-formatted
 
   # Documentation-specific hooks for this specification repository
   - repo: https://github.com/codespell-project/codespell

@@ -56,7 +56,7 @@ def test_compound_modality_requires_chemical_block():
 
 
 def test_genetic_modality_requires_genetic_block():
-    for modality in ("crispr", "orf", "shrna", "mirna"):
+    for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
         assert _requires({"modality": modality}, "Perturbation", "genetic"), modality
 
 
@@ -82,35 +82,69 @@ def test_non_cell_line_does_not_require_cell_line_name():
     assert not _requires({"tissue_type": "tissue"}, "Biosample", "cell_line_name")
 
 
-# --- WellPerturbation: non-empty well -> perturbation ---------------------
+# --- WellPerturbation: non-empty well -> definition -----------------------
+# The rule is declared once, on PerturbationAssignment; WellPerturbation picks it
+# up through the LinkML `is_a`. These two tests therefore also pin that
+# inheritance — if it ever stopped propagating, they fail.
 
 
-def test_treated_well_requires_perturbation():
+def test_treated_well_requires_definition():
     for role in ("treatment", "negcon", "poscon"):
         assert _requires(
-            {"control_class": role}, "WellPerturbation", "perturbation"
+            {"control_class": role}, "WellPerturbation", "definition"
         ), role
 
 
-def test_empty_well_is_exempt_from_perturbation():
-    assert not _requires({"control_class": "empty"}, "WellPerturbation", "perturbation")
+def test_empty_well_is_exempt_from_definition():
+    assert not _requires({"control_class": "empty"}, "WellPerturbation", "definition")
+
+
+# --- PerturbationAssignment: the placement-agnostic assignment body -------
+
+
+def test_treated_assignment_requires_definition():
+    for role in ("treatment", "negcon", "poscon"):
+        assert _requires(
+            {"control_class": role}, "PerturbationAssignment", "definition"
+        ), role
+
+
+def test_empty_assignment_is_exempt_from_definition():
+    assert not _requires(
+        {"control_class": "empty"}, "PerturbationAssignment", "definition"
+    )
+
+
+def test_assignment_carries_no_hcs_key():
+    # The point of the split: a plateless image_collection store has no
+    # (plate, well), so the assignment must validate without one.
+    msgs = _messages({"control_class": "empty"}, "PerturbationAssignment")
+    assert "'plate' is a required property" not in msgs
+    assert "'well' is a required property" not in msgs
+
+
+def test_well_perturbation_still_requires_its_hcs_key():
+    # Back-compat: extracting the body must not relax the well-level form.
+    assert _requires({"control_class": "empty"}, "WellPerturbation", "plate")
+    assert _requires({"control_class": "empty"}, "WellPerturbation", "well")
 
 
 # --- Provenance: agent -> citation ----------------------------------------
-# The grounded -> citation rule was dropped on the base PR (df32979) as
-# unexpressible; only the source_kind: agent -> citation rule remains.
+# source_kind is the only precondition: `agent` requires a citation, the other
+# two kinds do not. The `grounded` slot that once offered a second precondition
+# was removed as unimplemented (nothing ever authored it).
 
 
 def test_agent_source_requires_citation():
     assert _requires({"source_kind": "agent"}, "Provenance", "citation")
 
 
-def test_grounded_alone_does_not_require_citation():
-    # grounded is no longer a precondition; a grounded human/original_data value
-    # without a citation must validate (source_kind drives the requirement).
-    assert not _requires(
-        {"source_kind": "human", "grounded": True}, "Provenance", "citation"
-    )
+def test_human_source_does_not_require_citation():
+    assert not _requires({"source_kind": "human"}, "Provenance", "citation")
+
+
+def test_original_data_source_does_not_require_citation():
+    assert not _requires({"source_kind": "original_data"}, "Provenance", "citation")
 
 
 # --- Study: JUMP-CP dataset -> cp_version ---------------------------------
@@ -193,11 +227,42 @@ def test_experimental_block_keys_are_the_top_level_blocks():
         "biosample",
         "specimen",
         "study_component",
+        "perturbation",
         "provenance",
     } <= keys
     # channel-metadata keys are NOT experimental blocks
     assert "channels" not in keys
     assert "normalization_statistics" not in keys
+
+
+def test_perturbation_is_an_experimental_block_key():
+    # Load-bearing: validate_dca_experimental_metadata filters the dca object down
+    # to these keys before validating. Until `perturbation` became a block of
+    # ExperimentalMetadata it was silently dropped, so a malformed perturbation in
+    # a store's dca block could not be caught at all.
+    assert "perturbation" in experimental_block_keys()
+
+
+def _perturbation_locs(assignment):
+    dca = {"version": "0.2", "channels": [], "perturbation": assignment}
+    return [
+        i
+        for i in validate_dca_experimental_metadata(dca)
+        if i.loc[:2] == ("dca", "perturbation")
+    ]
+
+
+def test_dca_perturbation_rule_violation_is_reported_under_dca():
+    # A treated assignment with no perturbation is flagged, and the loc points back
+    # into the block. (The oracle renders an if/then miss as an anyOf failure, so
+    # assert on the location rather than the message text.)
+    assert _perturbation_locs({"control_class": "treatment"})
+
+
+def test_dca_valid_perturbation_is_not_flagged():
+    # The negative half: an exempt `empty` assignment draws nothing at that loc, so
+    # the test above is detecting the rule and not merely the block's presence.
+    assert not _perturbation_locs({"control_class": "empty"})
 
 
 def test_dca_channel_only_block_fails_required_floor():

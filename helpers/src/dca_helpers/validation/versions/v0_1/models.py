@@ -37,11 +37,11 @@ RECOMMENDED_CODEC = "zstd"
 RECOMMENDED_LEVEL_MAX = 3
 
 AXES_REQUIRED = ["t", "c", "z", "y", "x"]
+AXES_ACCEPTED = (AXES_REQUIRED, [a.upper() for a in AXES_REQUIRED])
 SPATIAL_AXES = {"z", "y", "x"}
 NON_SPATIAL_AXES = {"t", "c"}
 
-SPATIAL_CHUNK_RECOMMENDED = 128  # SHOULD — each spatial dim
-TC_CHUNK_RECOMMENDED = 1  # SHOULD — time and channel dims
+C_CHUNK_RECOMMENDED = 1  # SHOULD — channel dims
 SPATIAL_SHARD_MAX_RECOMMENDED = 2048  # SHOULD — each spatial shard dim
 TIME_SHARD_MIN_RECOMMENDED = 16  # SHOULD — time shard dim
 
@@ -156,34 +156,13 @@ class DCAScaleLevelSpec(BaseModel):
 
     @model_validator(mode="after")
     def check_chunk_shape_recommendations(self) -> "DCAScaleLevelSpec":
-        t, c, z, y, x = self.chunk_shape
+        c = self.chunk_shape[1]  # channel dim (axes order [t, c, z, y, x])
 
         warnings: list[str] = []
-
-        if t != TC_CHUNK_RECOMMENDED:
+        if c != C_CHUNK_RECOMMENDED:
             warnings.append(
-                f"[SHOULD] Time chunk size should be {TC_CHUNK_RECOMMENDED}; got {t}"
+                f"[SHOULD] Channel chunk size should be {C_CHUNK_RECOMMENDED}; got {c}"
             )
-        if c != TC_CHUNK_RECOMMENDED:
-            warnings.append(
-                f"[SHOULD] Channel chunk size should be {TC_CHUNK_RECOMMENDED}; got {c}"
-            )
-        non_recommended = [
-            name
-            for name, chunk_size, array_size in zip(
-                ("z", "y", "x"), (z, y, x), self.shape[2:]
-            )
-            if chunk_size != SPATIAL_CHUNK_RECOMMENDED
-            and array_size >= SPATIAL_CHUNK_RECOMMENDED
-        ]
-        if non_recommended:
-            warnings.append(
-                f"[SHOULD] Spatial chunk sizes should be "
-                f"{SPATIAL_CHUNK_RECOMMENDED}×{SPATIAL_CHUNK_RECOMMENDED}×"
-                f"{SPATIAL_CHUNK_RECOMMENDED} "
-                f"(z×y×x); got {z}×{y}×{x}"
-            )
-
         if warnings:
             raise ValueError("\n".join(warnings))
 
@@ -196,7 +175,7 @@ class DCAScaleLevelSpec(BaseModel):
 
     @model_validator(mode="after")
     def check_shard_size(self) -> "DCAScaleLevelSpec":
-        if self.shard_shape is None:
+        if self.shard_shape is None or self.level_index > 0:
             return self
 
         shard_bytes = _nbytes(self.shard_shape, self.dtype)
@@ -260,11 +239,7 @@ class DCAScaleLevelSpec(BaseModel):
         ).kind  # 'u' = unsigned int, 'i' = signed int, 'f' = float
 
         if dtype_kind in ("u", "i"):
-            # Integers: SHOULD use zstd (not blosc), level <= 3
-            if self.codec_id == "blosc":
-                warnings.append(
-                    "[SHOULD] Integer data should use zstd (not blosc) for compression"
-                )
+            # Integers: SHOULD level <= 3
             if (
                 self.codec_id == RECOMMENDED_CODEC
                 and self.codec_level is not None
@@ -342,9 +317,10 @@ class DCAStoreSpecV0_1(BaseModel):
     @field_validator("axes")
     @classmethod
     def axes_must_be_tczyx(cls, v: list[str]) -> list[str]:
-        if v != AXES_REQUIRED:
+        if v not in AXES_ACCEPTED:
             raise ValueError(
-                f"Axes must be {AXES_REQUIRED}; got {v}. "
+                f"Axes must be {AXES_REQUIRED} (all lowercase or all uppercase); "
+                f"got {v}. "
                 "All datasets must be 5D with dimensions in t, c, z, y, x order."
             )
         return v
@@ -377,10 +353,12 @@ class DCAStoreSpecV0_1(BaseModel):
         for i in range(len(self.levels) - 1):
             fine = self.levels[i].shape
             coarse = self.levels[i + 1].shape
+            chunks = self.levels[i].chunk_shape
 
             for dim_idx, dim_name in enumerate(AXES_REQUIRED):
                 fine_dim = fine[dim_idx]
                 coarse_dim = coarse[dim_idx]
+                chunk_dim = chunks[dim_idx]
 
                 # Avoid divide-by-zero for degenerate dims
                 if coarse_dim == 0:
@@ -396,8 +374,10 @@ class DCAStoreSpecV0_1(BaseModel):
                             f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
                         )
                 else:
-                    # SHOULD: spatial dims should have factor 2
-                    if not math.isclose(
+                    # SHOULD: spatial dims should have factor 2. Downsampling
+                    # legitimately stops once an axis reaches its chunk floor, so
+                    # skip when fine_dim is already <= its chunk size.
+                    if fine_dim > chunk_dim and not math.isclose(
                         factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
                     ):
                         should_warnings.append(

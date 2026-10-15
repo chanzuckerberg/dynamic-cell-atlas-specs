@@ -163,7 +163,7 @@ class TestDiscoverZarrStoresS3:
 
 
 # ---------------------------------------------------------------------------
-# _list_dir_skip_markers — S3 directory-marker tolerance (issue #107)
+# _list_dir_skip_markers — S3 directory-marker tolerance
 # ---------------------------------------------------------------------------
 
 

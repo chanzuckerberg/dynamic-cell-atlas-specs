@@ -1,0 +1,64 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.5",
+      "multiscales": [
+        {
+          "axes": [
+            {"name": "t", "type": "time", "unit": "second"},
+            {"name": "c", "type": "channel"},
+            {"name": "z", "type": "space", "unit": "micrometer"},
+            {"name": "y", "type": "space", "unit": "micrometer"},
+            {"name": "x", "type": "space", "unit": "micrometer"}
+          ],
+          "datasets": [
+            {"path": "0", "coordinateTransformations": [{"type": "scale", "scale": [1, 1, 1, 1, 1]}]},
+            {"path": "1", "coordinateTransformations": [{"type": "scale", "scale": [1, 1, 2, 2, 2]}]}
+          ]
+        }
+      ]
+    },
+    "dca": {
+      "version": "0.2",
+      "url": "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/v0.2/schema.json",
+      "channels": [
+        {"name": "DAPI", "index": 0, "description": "Nuclear stain"},
+        {"name": "GFP", "index": 1, "description": "Green fluorescent protein"},
+        {"name": "mCherry", "index": 2, "description": "Red fluorescent protein"}
+      ],
+      "normalization_statistics": {
+        "0": {"dataset_statistics": {"p1": 100.0, "p5": 200.0, "p95": 3000.0, "p99": 4000.0}},
+        "1": {"dataset_statistics": {"p1": 50.0, "p5": 100.0, "p95": 2000.0, "p99": 3000.0}},
+        "2": {"dataset_statistics": {"p1": 75.0, "p5": 150.0, "p95": 2500.0, "p99": 3500.0}}
+      },
+      "study": {
+        "source": "Example Lab",
+        "study_type": ["Screen"],
+        "description": "Example fixture where no scale level satisfies the v0.2 coarse-level rule.",
+        "year_imaged": "2024",
+        "experimenter": [],
+        "dataset_name": "Example v0.2 no-coarse-level fixture",
+        "release_date": "2024-01-01",
+        "license": "CC-BY-4.0"
+      },
+      "biosample": {
+        "group_id": "single_image",
+        "organism": [{"ontology_term_id": "NCBITaxon:9606", "label": "Homo sapiens"}],
+        "tissue_type": "tissue",
+        "tissue": [{"ontology_term_id": "unknown", "label": "unknown"}],
+        "disease": [{"ontology_term_id": "PATO:0000461", "label": "normal"}],
+        "development_stage": [{"ontology_term_id": "unknown", "label": "unknown"}]
+      },
+      "specimen": {
+        "specimen_state": "unknown"
+      },
+      "study_component": {
+        "imaging_method": [{"ontology_term_id": "unavailable", "label": "widefield fluorescence"}],
+        "assay": [{"ontology_term_id": "unavailable", "label": "high-content imaging"}]
+      },
+      "provenance": {}
+    }
+  }
+}
