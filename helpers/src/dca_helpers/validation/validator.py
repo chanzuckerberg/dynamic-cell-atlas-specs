@@ -457,8 +457,9 @@ def _process_one_well(
     Open one well and run the per-well MUST checks documented on
     _gather_plate_fields. Returns (well_path, issues, well_field_paths,
     selected_field_paths, well_perturbation_or_sentinel) — the last element
-    is _WELL_OPEN_FAILED when the well group itself couldn't be opened, so
-    the caller adds no well_perturbation_by_well entry for it.
+    is _WELL_OPEN_FAILED when the well group couldn't be opened or its
+    children couldn't be listed over S3, so the caller adds no
+    well_perturbation_by_well entry for it.
 
     Pure function of its arguments (no shared mutable state) so it can run
     concurrently across wells via a thread pool — see _gather_plate_fields.
