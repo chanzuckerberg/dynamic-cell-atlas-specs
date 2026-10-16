@@ -434,6 +434,17 @@ _WELL_OPEN_FAILED = object()  # sentinel: distinguishes "well couldn't be
 # opened" from a legitimate well_perturbation of None
 
 
+def _well_s3_issue(well_path: str, action: str, exc: Exception) -> Issue:
+    return Issue(
+        loc=("s3_io",),
+        message=(
+            f"S3 access error (network/throttling/auth) {action} "
+            f"well '{well_path}': {exc}"
+        ),
+        severity=Severity.ERROR,
+    )
+
+
 def _process_one_well(
     node_path: str,
     well_path: str,
@@ -454,6 +465,14 @@ def _process_one_well(
     """
     try:
         well_group = open_zarr_group(f"{node_path}/{well_path}")
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "opening", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         return (
             well_path,
@@ -478,6 +497,14 @@ def _process_one_well(
     field_images = well_images(well_ome)
     try:
         well_keys = set(well_group.keys())
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "listing", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         well_keys = set()
 
