@@ -434,6 +434,17 @@ _WELL_OPEN_FAILED = object()  # sentinel: distinguishes "well couldn't be
 # opened" from a legitimate well_perturbation of None
 
 
+def _well_s3_issue(well_path: str, action: str, exc: Exception) -> Issue:
+    return Issue(
+        loc=("s3_io",),
+        message=(
+            f"S3 access error (network/throttling/auth) {action} "
+            f"well '{well_path}': {exc}"
+        ),
+        severity=Severity.ERROR,
+    )
+
+
 def _process_one_well(
     node_path: str,
     well_path: str,
@@ -446,14 +457,23 @@ def _process_one_well(
     Open one well and run the per-well MUST checks documented on
     _gather_plate_fields. Returns (well_path, issues, well_field_paths,
     selected_field_paths, well_perturbation_or_sentinel) — the last element
-    is _WELL_OPEN_FAILED when the well group itself couldn't be opened, so
-    the caller adds no well_perturbation_by_well entry for it.
+    is _WELL_OPEN_FAILED when the well group couldn't be opened or its
+    children couldn't be listed over S3, so the caller adds no
+    well_perturbation_by_well entry for it.
 
     Pure function of its arguments (no shared mutable state) so it can run
     concurrently across wells via a thread pool — see _gather_plate_fields.
     """
     try:
         well_group = open_zarr_group(f"{node_path}/{well_path}")
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "opening", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         return (
             well_path,
@@ -478,6 +498,14 @@ def _process_one_well(
     field_images = well_images(well_ome)
     try:
         well_keys = set(well_group.keys())
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "listing", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         well_keys = set()
 
