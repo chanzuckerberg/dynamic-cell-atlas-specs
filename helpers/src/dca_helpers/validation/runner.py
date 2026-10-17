@@ -73,6 +73,7 @@ def validate(
     wells: "str | None" = None,
     field_offset: int = 0,
     field_limit: "int | None" = None,
+    snapshot_id: str | None = None,
 ) -> ValidationRun:
     """
     Validate Zarr stores at or under `path`.
@@ -89,6 +90,9 @@ def validate(
     check_ontology : when True, additionally resolve every ``ontology_term_id``
         in the experimental metadata against the EBI Ontology Lookup Service and
         check its label. Makes network requests; off by default.
+    snapshot_id : optional caller-managed immutable dataset revision, required
+        for combining persisted HCS chunk reports with a coverage manifest.
+        This labels evidence; it does not freeze a mutable store.
     wells, field_offset, field_limit : well/field-subset selection for a
         single HCS plate. `wells` is a comma-separated list of
         exact `plate.wells[].path` strings (e.g. "A/1,B/2"). Any of these
@@ -101,6 +105,8 @@ def validate(
     -------
     ValidationRun — iterable collection of ZarrNodeValidationResult with summary metrics
     """
+    if snapshot_id is not None and not snapshot_id.strip():
+        raise ValueError("snapshot_id must be nonempty when supplied")
     ModelClass = get_model(spec_version)
     path_is_store = is_zarr_store(path)
 
@@ -159,6 +165,7 @@ def validate(
         summary=summary,
         spec_version=spec_version,
         validator_version=__version__,
+        snapshot_id=snapshot_id,
     )
 
 

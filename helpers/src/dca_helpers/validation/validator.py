@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pprint import pformat
 from typing import TYPE_CHECKING
 
 import obstore.exceptions as _obs_exc
@@ -32,6 +33,12 @@ from ome_zarr_models.v05.image import Image
 
 from dca_helpers import CURRENT_SPEC_VERSION
 from dca_helpers.validation.discovery import open_zarr_group, well_of_field
+from dca_helpers.validation.hcs_facts import (
+    HCSFieldFacts,
+    HCSPlateFacts,
+    HCSWellFacts,
+    metadata_digest,
+)
 from dca_helpers.validation.registry import (
     UnsupportedSpecVersionError,
     get_label_model,
@@ -441,13 +448,14 @@ def _process_one_well(
     check_well_perturbation: bool,
     field_offset: int,
     field_slice_end: "int | None",
-) -> "tuple[str, list[Issue], list[str], list[str], object]":
+) -> "tuple[str, list[Issue], list[str], list[str], object, HCSWellFacts | None]":
     """
     Open one well and run the per-well MUST checks documented on
     _gather_plate_fields. Returns (well_path, issues, well_field_paths,
-    selected_field_paths, well_perturbation_or_sentinel) — the last element
+    selected_field_paths, well_perturbation_or_sentinel, well_facts). The fifth element
     is _WELL_OPEN_FAILED when the well group itself couldn't be opened, so
-    the caller adds no well_perturbation_by_well entry for it.
+    the caller adds no well_perturbation_by_well entry for it. well_facts
+    records declared coverage independently of missing on-disk field groups.
 
     Pure function of its arguments (no shared mutable state) so it can run
     concurrently across wells via a thread pool — see _gather_plate_fields.
@@ -470,6 +478,7 @@ def _process_one_well(
             [],
             [],
             _WELL_OPEN_FAILED,
+            None,
         )
 
     issues: list[Issue] = []
@@ -579,7 +588,33 @@ def _process_one_well(
         )
 
     selected_field_paths = well_field_paths[field_offset:field_slice_end]
-    return well_path, issues, well_field_paths, selected_field_paths, well_perturbation
+    declared_images = (
+        well_ome.get("well", {}).get("images")
+        if isinstance(well_ome.get("well"), dict)
+        else None
+    )
+    declared_paths = [_entry_path(image) for image in field_images]
+    try:
+        facts = HCSWellFacts(
+            metadata_digest=metadata_digest(well_attrs),
+            expected_fields=[f"{well_path}/{p}" for p in declared_paths if p],
+            inventory_complete=(
+                isinstance(declared_images, list)
+                and all(declared_paths)
+                and len(set(declared_paths)) == len(declared_paths)
+            ),
+            perturbation=well_perturbation,
+        )
+    except (TypeError, ValueError):
+        facts = None  # unsupported metadata cannot establish rollup coverage
+    return (
+        well_path,
+        issues,
+        well_field_paths,
+        selected_field_paths,
+        well_perturbation,
+        facts,
+    )
 
 
 def _gather_plate_fields(
@@ -591,6 +626,7 @@ def _gather_plate_fields(
     well_filter: "frozenset[str] | None" = None,
     field_offset: int = 0,
     field_limit: "int | None" = None,
+    well_facts: dict[str, HCSWellFacts] | None = None,
 ) -> "tuple[list[Issue], list[str], list[str], dict[str, object]]":
     """
     Open each in-scope declared well zarr.json once and return:
@@ -695,6 +731,7 @@ def _gather_plate_fields(
             well_field_paths,
             well_selected,
             perturbation,
+            facts,
         ) in executor.map(
             lambda wp: _process_one_well(
                 node_path,
@@ -706,6 +743,8 @@ def _gather_plate_fields(
             ),
             well_paths_to_process,
         ):
+            if well_facts is not None and facts is not None:
+                well_facts[well_path] = facts
             issues.extend(well_issues)
             field_paths.extend(well_field_paths)
             selected_field_paths.extend(well_selected)
@@ -892,6 +931,12 @@ def _validate_field(
     well's well_perturbation row without reopening this field.
     """
     full_path = f"{node_path}/{field_path}"
+
+    def failed_result(*args, **kwargs):
+        result = _single_error_result(*args, **kwargs)
+        result.hcs_facts = HCSFieldFacts(read_success=False).evidence_json()
+        return result
+
     try:
         field_zarr_group = open_zarr_group(full_path)
         dca = dict(field_zarr_group.attrs).get("dca")
@@ -899,7 +944,7 @@ def _validate_field(
         node_dict = _build_node_dict(field_img)
     except _obs_exc.BaseError as exc:
         return (
-            _single_error_result(
+            failed_result(
                 full_path,
                 spec_version,
                 ("s3_io",),
@@ -914,7 +959,7 @@ def _validate_field(
         )
     except Exception as exc:
         return (
-            _single_error_result(
+            failed_result(
                 full_path,
                 spec_version,
                 ("plate", field_path, "metadata_extraction"),
@@ -952,6 +997,12 @@ def _validate_field(
             multiscale_level_count=level_count,
             issues=issues,
             node_type=ZarrNodeType.IMAGE,
+            hcs_facts=HCSFieldFacts(
+                read_success=True,
+                axes=list(axes),
+                chunk_shape=list(chunk_shape) if chunk_shape is not None else None,
+                perturbation=perturbation,
+            ).evidence_json(),
         ),
         axes,
         chunk_shape,
@@ -1064,12 +1115,15 @@ def _check_well_perturbation_agreement(
                         f"dca.perturbation is not identical across all field(s) of "
                         f"view in well '{well_path}' ({len(disagreeing)} of "
                         f"{len(fps) - 1} disagree with '{reference_fp}'): "
-                        f"'{reference_fp}' has {consensus!r}, '{example_fp}' has "
-                        f"{perturbation_by_field.get(example_fp)!r}. All fields of "
+                        f"'{reference_fp}' has {pformat(consensus, sort_dicts=True)}, "
+                        f"'{example_fp}' has "
+                        f"{pformat(perturbation_by_field.get(example_fp), sort_dicts=True)}. "
+                        f"All fields of "
                         f"view under one well must carry the identical perturbation "
                         f"assignment."
                     ),
                     severity=Severity.ERROR,
+                    code="hcs.perturbation_agreement",
                 )
             )
             continue
@@ -1086,14 +1140,49 @@ def _check_well_perturbation_agreement(
                     message=(
                         f"dca.well_perturbation disagrees with the dca.perturbation "
                         f"consensus derived from the field(s) of view in well "
-                        f"'{well_path}': well_perturbation has {well_assignment!r}, "
-                        f"image groups have {consensus!r}. The image-group block is "
+                        f"'{well_path}': well_perturbation has "
+                        f"{pformat(well_assignment, sort_dicts=True)}, "
+                        f"image groups have {pformat(consensus, sort_dicts=True)}. "
+                        f"The image-group block is "
                         f"authoritative; re-derive this well row from it, never the "
                         f"reverse."
                     ),
                     severity=Severity.ERROR,
+                    code="hcs.well_perturbation_agreement",
                 )
             )
+
+    return issues
+
+
+def _uniformity_issues(seen_axes: list[tuple], seen_chunks: list[tuple]) -> list[Issue]:
+    """Shared deterministic form of the existing plate-wide SHOULD checks."""
+    issues: list[Issue] = []
+    if len(set(seen_axes)) > 1:
+        issues.append(
+            Issue(
+                loc=("plate", "axes"),
+                message=(
+                    f"Axes are not uniform across all plate fields: "
+                    f"{sorted(set(seen_axes))}"
+                ),
+                severity=Severity.WARNING,
+                code="hcs.axes_uniformity",
+            )
+        )
+
+    if len(set(seen_chunks)) > 1:
+        issues.append(
+            Issue(
+                loc=("plate", "chunk_shape"),
+                message=(
+                    f"Level-0 chunk shapes are not uniform across all "
+                    f"plate fields: {sorted(set(seen_chunks))}"
+                ),
+                severity=Severity.WARNING,
+                code="hcs.chunk_uniformity",
+            )
+        )
 
     return issues
 
@@ -1139,6 +1228,7 @@ def _validate_hcs_plate(
     """
     schema_issues = _check_plate_schema(raw_plate_attrs)
     declared_wells = _as_list(raw_plate_attrs.get("wells"))
+    well_facts: dict[str, HCSWellFacts] = {}
     gather_issues, field_paths, selected_field_paths, well_perturbation_by_well = (
         _gather_plate_fields(
             node_path,
@@ -1148,6 +1238,7 @@ def _validate_hcs_plate(
             well_filter=well_filter,
             field_offset=field_offset,
             field_limit=field_limit,
+            well_facts=well_facts,
         )
     )
     plate_issues = schema_issues + gather_issues
@@ -1193,29 +1284,7 @@ def _validate_hcs_plate(
             )
         )
 
-    if len(set(seen_axes)) > 1:
-        plate_issues.append(
-            Issue(
-                loc=("plate", "axes"),
-                message=(
-                    f"Axes are not uniform across all plate fields: "
-                    f"{set(seen_axes)}"
-                ),
-                severity=Severity.WARNING,
-            )
-        )
-
-    if len(set(seen_chunks)) > 1:
-        plate_issues.append(
-            Issue(
-                loc=("plate", "chunk_shape"),
-                message=(
-                    f"Level-0 chunk shapes are not uniform across all "
-                    f"plate fields: {set(seen_chunks)}"
-                ),
-                severity=Severity.WARNING,
-            )
-        )
+    plate_issues.extend(_uniformity_issues(seen_axes, seen_chunks))
 
     subset_coverage = None
     if well_filter is not None or field_offset or field_limit is not None:
@@ -1242,6 +1311,20 @@ def _validate_hcs_plate(
                 fields_selected=fields_selected,
             )
 
+    try:
+        plate_facts = HCSPlateFacts(
+            metadata_digest=metadata_digest(raw_plate_attrs),
+            declared_wells=[_entry_path(w) for w in declared_wells if _entry_path(w)],
+            inventory_complete=(
+                isinstance(raw_plate_attrs.get("wells"), list)
+                and all(_entry_path(w) for w in declared_wells)
+                and len({_entry_path(w) for w in declared_wells}) == len(declared_wells)
+            ),
+            wells=well_facts,
+        ).evidence_json()
+    except (TypeError, ValueError):
+        plate_facts = None
+
     errors = [i for i in plate_issues if i.severity == Severity.ERROR]
     plate_result = ZarrNodeValidationResult(
         node_path=node_path,
@@ -1250,6 +1333,7 @@ def _validate_hcs_plate(
         ngff_version=ngff_version,
         issues=plate_issues,
         subset_coverage=subset_coverage,
+        hcs_facts=plate_facts,
     )
 
     return [plate_result] + field_results

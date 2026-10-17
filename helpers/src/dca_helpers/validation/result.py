@@ -17,6 +17,7 @@ class Issue:
     loc: tuple[int | str, ...]  # mirrors Pydantic's error location tuple
     message: str
     severity: Severity
+    code: str | None = None  # stable origin for safely replacing derived findings
 
 
 @dataclass
@@ -58,6 +59,10 @@ class ZarrNodeValidationResult:
     skipped: bool = False  # store was intentionally not validated (e.g., GEFF)
     subset_coverage: PlateSubsetInfo | None = None  # set on the plate-root result
     # of a partial (well/field-subset) HCS plate run; None otherwise
+
+    # Versioned metadata-only evidence used by cross-chunk HCS rollup.
+    # JSON keeps arbitrary perturbation metadata lossless in Parquet.
+    hcs_facts: str | None = None
 
     # For HCS plates, one result is produced per field image (parent_path = plate root).
     # For standalone images, parent_path is None.
@@ -146,6 +151,9 @@ class ValidationRun:
     # Defaults to the running package's own version so direct construction
     # (tests, ad hoc scripts) doesn't need to care.
     validator_version: str = field(default_factory=lambda: __version__)
+
+    # User-provided immutable dataset revision, required only for HCS rollup.
+    snapshot_id: str | None = None
 
     def __iter__(self):
         return iter(self.results)
