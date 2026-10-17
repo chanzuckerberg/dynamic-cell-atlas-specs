@@ -21,7 +21,9 @@ the node rows, so storing it a second time here would just be a second
 source of truth that could silently disagree with the first. `passed`/
 `node_type`/`parent_path` are plain top-level columns, not nested inside an
 array, so a consumer filters directly (e.g. `WHERE parent_path IS NULL AND
-passed = false` for "which stores failed") instead of unnesting, and
+passed = false` for "which store roots failed"; field and label rows carry a
+parent_path, so a store whose only defect is in a field or label has a passing
+root row) instead of unnesting, and
 Parquet row-group pruning has real per-row stats to act on once a report
 spans many stores -- unlike the single-row-per-run design this replaced.
 
