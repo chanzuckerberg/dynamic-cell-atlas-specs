@@ -35,7 +35,7 @@ def add_labels(
     dtype: str = "uint32",
     image_label: bool = True,
     chunk_shape: "list[int] | None" = None,
-    extra_dirs: "list[str]" = (),
+    extra_dirs: "tuple[str, ...] | list[str]" = (),
 ) -> None:
     """Add labels/ to an image group: ome.labels lists `names`; groups are
     created for `create` (default: all of names), mirroring the image's own
