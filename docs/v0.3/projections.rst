@@ -20,9 +20,13 @@ they are known (see `Projections made before deposit`_), and nothing else on thi
 applies to it.
 
 ``dca.projection`` records what was done, not how it was configured: the method and the
-source planes actually used for each output channel, as absolute indices. The method
-vocabulary is shared with the ``project`` command in
-`biahub <https://github.com/czbiohub-sf/biahub>`_ (see `Relation to biahub`_).
+source planes actually used for each output channel, as absolute indices.
+
+This projection model is adapted from the ``project`` command in
+`biahub <https://github.com/czbiohub-sf/biahub>`_ and shaped during collaboration with
+the biahub team. The four methods, projecting each output channel separately (including
+keeping only some channels), half-open plane ranges with a step, and the record of how
+an in-focus plane was found all come from it (see `Relation to biahub`_).
 
 Store Layout
 ------------

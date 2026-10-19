@@ -41,7 +41,7 @@ Changes from v0.2
 * **Projections** (new): layout and metadata for 2D projections of 3D images
   (maximum, mean or sum intensity, or a single plane), with a ``dca.projection`` block
   that records the method and the planes actually used, uniformly or per channel. The
-  method vocabulary is shared with biahub's ``project`` command. Its uniform form keeps
+  model is adapted from biahub's ``project`` command. Its uniform form keeps
   the field names of the top-level ``mip`` attribute that v0.2-era projection stores
   carry. See :doc:`projections`.
 * ``dca.version`` is ``"0.3"``.
