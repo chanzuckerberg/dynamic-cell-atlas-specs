@@ -15,8 +15,8 @@ Rules added on top of the generated model:
 * ``"raw"`` means "no processing" and MUST be the only item when present.
 * Items SHOULD come from the ``ProcessingStep`` vocabulary.
 
-The projection-specific agreement (an image lists "maximum intensity projection"
-exactly when it carries ``dca.projection``) is not experimental metadata and is
+The projection-specific agreement (an image lists the projection step of each method
+it uses exactly when it carries ``dca.projection``) is not experimental metadata and is
 checked with the other projection rules in ``versions/v0_3/models.py``.
 """
 
@@ -42,6 +42,17 @@ PROCESSING_STEPS: frozenset[str] = frozenset(
 )
 RAW_STEP = _generated_models.ProcessingStep.raw.value
 MIP_STEP = _generated_models.ProcessingStep.maximum_intensity_projection.value
+
+# projections.rst § Methods: each dca.projection method and the processing step a
+# projection using it lists. Values come from the generated vocabulary, so a renamed
+# step fails at import rather than drifting.
+PROJECTION_STEP_BY_METHOD: dict[str, str] = {
+    "max": MIP_STEP,
+    "mean": _generated_models.ProcessingStep.mean_intensity_projection.value,
+    "sum": _generated_models.ProcessingStep.sum_intensity_projection.value,
+    "slice": _generated_models.ProcessingStep.z_slice.value,
+}
+PROJECTION_STEPS: frozenset[str] = frozenset(PROJECTION_STEP_BY_METHOD.values())
 
 
 class DCAExperimentalMetadataV0_3(DCAExperimentalMetadataV0_2):

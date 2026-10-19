@@ -79,7 +79,13 @@ class TestProcessingVariantList:
         assert validate_dca_experimental_metadata_v0_3(dca) == []
 
     def test_vocabulary_contains_mip_and_raw(self):
-        assert {"raw", "maximum intensity projection"} <= PROCESSING_STEPS
+        assert {
+            "raw",
+            "maximum intensity projection",
+            "mean intensity projection",
+            "sum intensity projection",
+            "z slice",
+        } <= PROCESSING_STEPS
 
 
 @pytest.mark.unit

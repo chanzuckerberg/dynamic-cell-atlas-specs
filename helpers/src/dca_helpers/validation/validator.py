@@ -848,6 +848,11 @@ def _image_facts(node_dict: dict, dca: object) -> "ImageFacts | None":
             k.lower(): v for k, v in (node_dict.get("axis_scales") or {}).items()
         },
         projection=projection if isinstance(projection, dict) else None,
+        channel_names=tuple(
+            c["name"]
+            for c in ((dca.get("channels") if isinstance(dca, dict) else None) or [])
+            if isinstance(c, dict) and isinstance(c.get("name"), str)
+        ),
     )
 
 

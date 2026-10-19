@@ -6,7 +6,10 @@ with z=16 at level 0) and writes, under a temporary directory:
 
 * ``plate.ome.zarr``     — the source, upgraded to dca.version "0.3"
 * ``plate_mip.ome.zarr`` — its maximum intensity projection: z=1 at every
-  level, z scale 1.0, ``dca.projection`` and the MIP processing step
+  level, z scale 1.0, ``dca.projection`` (uniform form) and the MIP processing step
+
+``to_per_channel`` turns that projection into the per-channel form (a subset of the
+channels, each with its own method), optionally with a float dtype and a focus block.
 
 Each builder takes ``edit_source`` / ``edit_mip`` callbacks that receive the
 store root ``Path`` so a test can break exactly one thing.
@@ -101,3 +104,57 @@ def make_pair(
     if with_mip and edit_mip:
         edit_mip(mip)
     return source, mip
+
+
+def to_per_channel(
+    store: Path,
+    channels: dict[str, dict],
+    steps: list[str],
+    *,
+    dtype: str | None = None,
+    focus: dict | None = None,
+) -> None:
+    """Rewrite a uniform-form projection made by ``make_pair`` into the per-channel form.
+
+    ``channels`` maps each kept output channel name to its ``dca.projection.channels``
+    entry, in output order; the arrays' c axis, ``dca.channels`` and
+    ``normalization_statistics`` are cut down to match. ``steps`` is the full
+    ``processing_variant`` list to write.
+    """
+    field_dir = store / FIELD
+    group = read_json(field_dir / "zarr.json")
+    attrs = group["attributes"]
+    dca = attrs["dca"]
+    by_name = {c["name"]: c for c in dca["channels"]}
+    old_index = {c["name"]: c["index"] for c in dca["channels"]}
+    kept = []
+    for i, name in enumerate(channels):
+        source = channels[name].get("source_channel", name)
+        kept.append({**by_name[source], "name": name, "index": i})
+    dca["channels"] = kept
+    stats = dca["normalization_statistics"]
+    new_stats = {k: v for k, v in stats.items() if not k.isdigit()}
+    for i, name in enumerate(channels):
+        source = channels[name].get("source_channel", name)
+        if str(old_index[source]) in stats:
+            new_stats[str(i)] = stats[str(old_index[source])]
+    dca["normalization_statistics"] = new_stats
+    projection = {
+        "source_store": dca["projection"]["source_store"],
+        "z_dim_source": SOURCE_Z,
+    }
+    projection["channels"] = channels
+    if focus is not None:
+        projection["focus"] = focus
+    dca["projection"] = projection
+    dca["image_data"]["processing_variant"] = steps
+    ms = attrs["ome"]["multiscales"][0]
+    ci = [a["name"].lower() for a in ms["axes"]].index("c")
+    for ds in ms["datasets"]:
+        arr_path = field_dir / ds["path"] / "zarr.json"
+        arr = read_json(arr_path)
+        arr["shape"][ci] = len(channels)
+        if dtype is not None:
+            arr["data_type"] = dtype
+        write_json(arr_path, arr)
+    write_json(field_dir / "zarr.json", group)

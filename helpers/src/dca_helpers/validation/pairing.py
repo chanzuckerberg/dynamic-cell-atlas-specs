@@ -15,15 +15,22 @@ For each projection store (one whose image groups carry ``dca.projection``):
   dataset). Not found → ERROR. Found on disk but not part of this run → WARNING
   (the remaining checks need both stores in one run).
 * All image groups name the same ``source_store`` → otherwise ERROR.
-* The store name ends in ``_mip.ome.zarr`` → otherwise WARNING.
+* The store name ends in ``_proj.ome.zarr`` (or ``_mip.ome.zarr`` when every channel
+  uses ``max``) → otherwise WARNING.
 * Same image groups as the source (HCS wells and fields) → otherwise ERROR.
-* Per image group: t, c, y, x sizes and dtype match the source's level 0, the
-  t, y, x scales match, and ``z_dim_source`` (when given) equals the source's z
-  → otherwise ERROR. A source with z of size 1 → WARNING (nothing to project).
+* Per image group, against the source's level 0:
+  - t, y, x sizes and t, y, x scales match, and ``z_dim_source`` (when given)
+    equals the source's z → otherwise ERROR;
+  - channels: the uniform form keeps every source channel in order; in the
+    per-channel form each output's ``source_channel`` (default: its own name) is a
+    source channel; ``focus.channel`` is a source channel → otherwise ERROR;
+  - dtype equals the source's when every method is ``max`` / ``slice``,
+    and is otherwise the source's or a floating-point type → otherwise ERROR.
+  A source with z of size 1 → WARNING (nothing to project).
 
-With ``require_mip`` (``dca-validate --require-mip``), additionally: every 3D
-image store in the run (z > 1 at level 0) that is not itself a projection MUST
-be named as the source of some projection in the run → otherwise ERROR. The spec
+With ``require_projection`` (``dca-validate --require-projection``), additionally:
+every 3D image store in the run (z > 1 at level 0) that is not itself a projection
+MUST be named as the source of some projection in the run → otherwise ERROR. The spec
 does not require projections, so this is opt-in.
 
 Issues are added to existing results: store-level findings to the store's
@@ -40,9 +47,15 @@ from dataclasses import dataclass, field
 
 from dca_helpers.validation.discovery import is_zarr_store
 from dca_helpers.validation.result import Issue, Severity, ZarrNodeValidationResult
+from dca_helpers.validation.versions.v0_3.models import (
+    VALUE_PRESERVING_METHODS,
+    projection_methods,
+)
 from dca_helpers.validation.zarr_node import ZarrNodeType
 
-PROJECTION_STORE_SUFFIX = "_mip.ome.zarr"
+PROJECTION_STORE_SUFFIX = "_proj.ome.zarr"
+# Accepted for a projection whose every channel uses max (the v0.2-era name).
+MAX_PROJECTION_STORE_SUFFIX = "_mip.ome.zarr"
 
 # Results that are not image stores and never take part in pairing.
 _NON_IMAGE_NODE_TYPES = frozenset(
@@ -169,7 +182,7 @@ def _compare_image(
             f"{where}: the source has z of size {src_z}, so there is nothing to "
             "project.",
         )
-    kept = [i for i in range(len(m.axes)) if i != zi]
+    kept = [i for i, ax in enumerate(m.axes) if ax in ("t", "y", "x")]
     m_dims = [m.level0_shape[i] for i in kept]
     s_dims = [s.level0_shape[i] for i in kept]
     if m_dims != s_dims:
@@ -179,16 +192,30 @@ def _compare_image(
             Severity.ERROR,
             ("projection", "source", "shape"),
             f"{where}: level-0 {names} sizes {m_dims} differ from the source's "
-            f"{s_dims}; a projection MUST keep every axis but the projected one.",
+            f"{s_dims}; a projection MUST keep t, y and x.",
         )
+    _compare_channels(where, mip, m, s)
+    projection = m.projection or {}
+    methods = projection_methods(projection)
     if m.level0_dtype != s.level0_dtype:
-        _add(
-            mip,
-            Severity.ERROR,
-            ("projection", "source", "dtype"),
-            f"{where}: dtype {m.level0_dtype} differs from the source's "
-            f"{s.level0_dtype}; a projection MUST keep the source dtype.",
-        )
+        if methods and methods <= VALUE_PRESERVING_METHODS:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("projection", "source", "dtype"),
+                f"{where}: dtype {m.level0_dtype} differs from the source's "
+                f"{s.level0_dtype}; a projection using only {sorted(methods)} MUST "
+                "keep the source dtype.",
+            )
+        elif not m.level0_dtype.startswith("float"):
+            _add(
+                mip,
+                Severity.ERROR,
+                ("projection", "source", "dtype"),
+                f"{where}: dtype {m.level0_dtype} differs from the source's "
+                f"{s.level0_dtype}; a projection MUST keep the source dtype or, when "
+                "a channel uses mean or sum, use a floating-point type.",
+            )
     for ax in ("t", "y", "x"):
         mv, sv = m.level0_scale.get(ax), s.level0_scale.get(ax)
         if mv is not None and sv is not None and not math.isclose(mv, sv, rel_tol=1e-9):
@@ -210,6 +237,60 @@ def _compare_image(
         )
 
 
+def _compare_channels(where, mip, m, s) -> None:
+    """Output channels map onto source channels (projections.rst § Per-channel form)."""
+    projection = m.projection or {}
+    c_out = m.level0_shape[m.axes.index("c")] if "c" in m.axes else None
+    c_src = s.level0_shape[s.axes.index("c")] if "c" in s.axes else None
+    channels = projection.get("channels")
+    if isinstance(channels, dict):
+        if s.channel_names:
+            unknown = sorted(
+                (spec.get("source_channel") or name)
+                for name, spec in channels.items()
+                if isinstance(spec, dict)
+                and (spec.get("source_channel") or name) not in s.channel_names
+            )
+            if unknown:
+                _add(
+                    mip,
+                    Severity.ERROR,
+                    ("dca", "projection", "channels"),
+                    f"{where}: source channel(s) {unknown} are not channels of the "
+                    f"source ({list(s.channel_names)}); set source_channel when an "
+                    "output channel is renamed.",
+                )
+    elif projection.get("method") is not None:
+        if c_out != c_src:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("projection", "source", "shape", "c"),
+                f"{where}: {c_out} channels but the source has {c_src}; the uniform "
+                "form keeps every source channel (use the per-channel form to keep "
+                "a subset).",
+            )
+        elif m.channel_names and s.channel_names and m.channel_names != s.channel_names:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("dca", "channels"),
+                f"{where}: channels {list(m.channel_names)} differ from the source's "
+                f"{list(s.channel_names)}; the uniform form keeps them in order.",
+            )
+    focus = projection.get("focus")
+    focus_channel = focus.get("channel") if isinstance(focus, dict) else None
+    if isinstance(focus_channel, str) and s.channel_names:
+        if focus_channel not in s.channel_names:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("dca", "projection", "focus", "channel"),
+                f"{where}: focus.channel '{focus_channel}' is not a channel of the "
+                f"source ({list(s.channel_names)}).",
+            )
+
+
 def _check_projection_store(
     store: _Store,
     stores: dict[str, _Store],
@@ -228,13 +309,29 @@ def _check_projection_store(
             f"dca.projection: {_listed(plain)}.",
         )
 
-    if not posixpath.basename(store.root).endswith(PROJECTION_STORE_SUFFIX):
+    base = posixpath.basename(store.root)
+    store_methods = set().union(
+        *(
+            projection_methods(r.image_facts.projection)
+            for r in projection_images.values()
+        )
+    )
+    max_only = store_methods == {"max"}
+    if not (
+        base.endswith(PROJECTION_STORE_SUFFIX)
+        or (max_only and base.endswith(MAX_PROJECTION_STORE_SUFFIX))
+    ):
         _add(
             anchor,
             Severity.WARNING,
             ("projection", "store_name"),
-            f"Projection store name should end in '{PROJECTION_STORE_SUFFIX}' "
-            "(projections.rst § Store Layout).",
+            f"Projection store name should end in '{PROJECTION_STORE_SUFFIX}'"
+            + (
+                f" (or '{MAX_PROJECTION_STORE_SUFFIX}', as every channel uses max)"
+                if max_only
+                else ""
+            )
+            + " (projections.rst § Store Layout).",
         )
 
     names = {
@@ -304,7 +401,7 @@ def _check_projection_store(
 def check_projection_pairs(
     results: list[ZarrNodeValidationResult],
     *,
-    require_mip: bool = False,
+    require_projection: bool = False,
     source_exists: Callable[[str], bool] = is_zarr_store,
 ) -> None:
     """Run the cross-store projection checks, adding issues to ``results`` in place.
@@ -320,7 +417,7 @@ def check_projection_pairs(
             if target is not None:
                 sourced.add(target)
 
-    if not require_mip:
+    if not require_projection:
         return
     for root, store in stores.items():
         if store.projection_images or not store.is_3d or root in sourced:
@@ -328,9 +425,9 @@ def check_projection_pairs(
         _add(
             store.anchor,
             Severity.ERROR,
-            ("projection", "require_mip"),
+            ("projection", "require_projection"),
             "3D image store has no projection in this run naming it as "
-            "dca.projection.source_store (--require-mip). Expected e.g. "
+            "dca.projection.source_store (--require-projection). Expected e.g. "
             f"'{posixpath.basename(root).removesuffix('.ome.zarr')}"
             f"{PROJECTION_STORE_SUFFIX}' next to it.",
         )
