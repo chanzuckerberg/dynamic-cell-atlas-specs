@@ -321,14 +321,12 @@
     "Projection": {
       "type": "object",
       "description": "Parameters of a projected image (projections.rst, Projection block): the method and the source planes actually used. Array metadata, zarr.json only; not part of the experimental-metadata record. Exactly one of `method` (uniform form) and `channels` (per-channel form).",
-      "required": [
-        "source_store"
-      ],
+      "required": [],
       "properties": {
         "source_store": {
           "type": "string",
           "minLength": 1,
-          "description": "Source store: its name (resolved as a sibling of this store; preferred) or its full URL / absolute path."
+          "description": "Source store: its name (resolved as a sibling of this store; preferred) or its full URL / absolute path. Required when the 3D source is in the DCA (checked across stores); omitted for a projection made before deposit."
         },
         "z_dim_source": {
           "type": "integer",
@@ -363,7 +361,7 @@
           "additionalProperties": {
             "$ref": "#/$defs/ProjectionChannel"
           },
-          "description": "Per-channel form, keyed by output channel name (dca.channels[].name)."
+          "description": "Per-channel form, keyed by projected output channel name (a subset of dca.channels[].name)."
         },
         "focus": {
           "$ref": "#/$defs/ProjectionFocus"

@@ -13,6 +13,12 @@ experimental metadata as its source and **MUST** satisfy every image-array requi
 in this specification (array standard, ``dca`` block, required floor). This page adds
 only what is specific to projections.
 
+The requirements below apply to a projection whose **3D source is also in the DCA**.
+An image that was projected before it was deposited, and whose stack is not shared, is
+simply a 2D image: it **MAY** carry ``dca.projection`` to record the parameters when
+they are known (see `Projections made before deposit`_), and nothing else on this page
+applies to it.
+
 ``dca.projection`` records what was done, not how it was configured: the method and the
 source planes actually used for each output channel, as absolute indices. The method
 vocabulary is shared with the ``project`` command in
@@ -21,7 +27,8 @@ vocabulary is shared with the ``project`` command in
 Store Layout
 ------------
 
-* A projection **MUST** be written to its own store, a sibling of its source store. It
+* A projection of a 3D image in the DCA **MUST** be written to its own store, a sibling
+  of its source store. It
   **MUST NOT** be written into the source store (for example as an extra resolution
   level or a ``labels/`` entry).
 * The projection store name **SHOULD** be the source store name with ``_proj`` inserted
@@ -92,8 +99,10 @@ the step of every method it uses (table above), so the full chain is readable on
 projection itself; e.g. a maximum intensity projection of a deconvolved, registered
 stack lists ``["deconvolved", "registered", "maximum intensity projection"]``, and a
 projection using ``max`` for some channels and ``slice`` for others lists both steps.
-An image lists a projection step exactly when it carries ``dca.projection``, and the
-projection steps it lists **MUST** be exactly those of the methods it uses. A projection
+An image that carries ``dca.projection`` **MUST** list exactly the projection steps of
+the methods it uses. An image **MAY** list a projection step without carrying
+``dca.projection`` only when it was projected before deposit and its 3D source is not in
+the DCA (see `Projections made before deposit`_). A projection
 of an unprocessed stack lists only its projection steps, since ``"raw"`` means no
 processing at all. A projection copies its source's ``image_data.processing_description``
 unchanged, so the source's full description is available on the projection too.
@@ -101,8 +110,9 @@ unchanged, so the source's full description is available on the projection too.
 Projection block
 ~~~~~~~~~~~~~~~~
 
-Each image group of a projection **MUST** carry a ``dca.projection`` object in its
-``zarr.json``. It records the parameters a reader needs to interpret the array.
+Each image group of a projection whose 3D source is in the DCA **MUST** carry a
+``dca.projection`` object in its ``zarr.json``. It records the parameters a reader needs
+to interpret the array.
 
 ``dca.projection`` describes the array, like ``dca.channels`` and
 ``dca.normalization_statistics``. It is **not** part of the experimental-metadata
@@ -128,7 +138,7 @@ share these fields:
      - Description
    * - ``source_store``
      - string
-     - **MUST**
+     - **MUST** when the 3D source is in the DCA; omitted otherwise
      - The source store, as either its name (e.g. ``"plate_01.ome.zarr"``), resolved
        as a sibling of this store, or its full URL or absolute path (e.g.
        ``"s3://bucket/datasets/plate_01.ome.zarr"``). The name form **SHOULD** be
@@ -195,9 +205,11 @@ A projection over a central slab rather than the full depth is expressed through
 Per-channel form
 ^^^^^^^^^^^^^^^^
 
-``channels`` maps each output channel, by its ``dca.channels[].name``, to how it was
-projected. Its keys **MUST** be exactly the projection's channel names. A source channel
-that is not projected is simply absent.
+``channels`` maps each projected output channel, by its ``dca.channels[].name``, to how
+it was projected. Every key **MUST** be one of the image's channel names. A channel that
+is not a key was not projected along ``z`` (for example a reconstruction or a virtual
+stain computed another way), and its ``processing_variant`` steps describe it. A source
+channel that is not projected is simply absent.
 
 .. list-table::
    :header-rows: 1
@@ -295,6 +307,25 @@ choice resolved to. For a ``project`` run:
    * - (not recorded)
      - ``source_store``, ``z_dim_source``
 
+Projections made before deposit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some datasets are deposited as 2D images that were projected from stacks that are not
+shared. These are 2D datasets: the store-layout, pairing and source rules above do not
+apply, and ``dca.projection`` is not required.
+
+* ``processing_variant`` **MAY** list the projection step as part of the image's
+  history, with the detail in ``processing_description``.
+* When the parameters are known, ``dca.projection`` **MAY** record them, without
+  ``source_store``: e.g. ``z_dim_source`` for the depth of the original stack and, per
+  projected channel, the method and planes used. Channels that were not projected are
+  left out of ``channels``.
+
+Whether a projection's 3D source is in the DCA is decided when a dataset is validated as
+a whole: a projection store named after a 3D sibling (``plate_01_mip.ome.zarr`` or
+``plate_01_proj.ome.zarr`` next to ``plate_01.ome.zarr``) is a projection of that store,
+and **MUST** then carry ``dca.projection`` with ``source_store``.
+
 Normalization Statistics
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -379,6 +410,31 @@ abridged):
        "processing_variant": [
          "maximum intensity projection", "mean intensity projection", "z slice"
        ]
+     }
+   }
+
+An image projected before deposit, recording the known parameters for its two projected
+channels; its label-free channel, a reconstruction, is not a key (``dca`` only,
+abridged):
+
+.. code-block:: json
+
+   {
+     "channels": [
+       {"name": "Phase2D", "index": 0, "...": "..."},
+       {"name": "GFP", "index": 1, "...": "..."},
+       {"name": "mCherry", "index": 2, "...": "..."}
+     ],
+     "projection": {
+       "z_dim_source": 7,
+       "channels": {
+         "GFP": {"method": "max", "z_start": 0, "z_end": 7},
+         "mCherry": {"method": "max", "z_start": 0, "z_end": 7}
+       }
+     },
+     "image_data": {
+       "processing_variant": ["maximum intensity projection"],
+       "processing_description": "Maximum intensity projection of a 7-plane z-stack (2 um steps)"
      }
    }
 
