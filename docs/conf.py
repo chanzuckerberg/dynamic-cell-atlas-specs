@@ -38,6 +38,7 @@ def _git_last_updated(path):
 
 last_updated_v01 = _git_last_updated("docs/v0.1/")
 last_updated_v02 = _git_last_updated("docs/v0.2/")
+last_updated_v03 = _git_last_updated("docs/v0.3/")
 
 # -- General configuration ---------------------------------------------------
 
@@ -57,6 +58,7 @@ suppress_warnings = ["toc.not_included"]
 rst_prolog = f"""
 .. |last_updated_v01| replace:: {last_updated_v01}
 .. |last_updated_v02| replace:: {last_updated_v02}
+.. |last_updated_v03| replace:: {last_updated_v03}
 """
 
 # -- Options for HTML output ------------------------------------------------

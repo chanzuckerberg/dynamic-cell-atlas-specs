@@ -1,4 +1,4 @@
-.. _experimental-timelapse-example:
+.. _v03-experimental-timelapse-example:
 
 Experimental Metadata Example
 =============================
@@ -16,7 +16,7 @@ the channel and normalization-statistics metadata the block already holds. Becau
 is a time-lapse dataset, the conditionally-required ``acquisition.time_increment_s`` is
 included. The optional and recommended fields are carried in the same block but are
 trimmed from this listing for length; they are
-:ref:`described below <example-parquet>`.
+:ref:`described below <v03-example-parquet>`.
 
 The experimental blocks sit **directly** in ``dca`` (no wrapper key), next to
 ``version`` / ``url`` / ``channels`` / ``normalization_statistics``. Per-value provenance
@@ -33,7 +33,7 @@ are illustrative.
    {
      "attributes": {
        "dca": {
-         "version": "0.2",
+         "version": "0.3",
          "url": "s3://my-bucket/datasets/example/002_deconv.ome.zarr",
          "channels": [
            {"name": "H2B-mCherry", "index": 0, "description": "nuclei (H2B-mCherry reporter)"},
@@ -98,7 +98,7 @@ are illustrative.
      }
    }
 
-.. _example-parquet:
+.. _v03-example-parquet:
 
 The recommended and optional fields
 -----------------------------------

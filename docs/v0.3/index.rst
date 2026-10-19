@@ -1,7 +1,7 @@
-🚧 Version 0.2 Specification - WIP
-====================================
+🚧 Version 0.3 Specification - Draft
+=====================================
 
-Last updated: |last_updated_v02|
+Last updated: |last_updated_v03|
 
 Overview
 --------
@@ -35,6 +35,18 @@ Throughout this document, conformance requirements are expressed with descriptiv
 * **SHOULD NOT** / **NOT RECOMMENDED**: Strong discouragement
 * **MAY** / **OPTIONAL**: Truly optional
 
+Changes from v0.2
+-----------------
+
+* **Projections** (new): layout and metadata for maximum intensity projections,
+  including a ``dca.projection`` block for the projected range. Its fields keep the
+  names of the top-level ``mip`` attribute that v0.2-era projection stores carry.
+  See :doc:`projections`.
+* ``dca.version`` is ``"0.3"``.
+* The experimental-metadata schema is unchanged from v0.2.
+* No v0.3 validator exists yet. Use the :doc:`v0.2 validator </v0.2/validator>` for the
+  parts that are unchanged.
+
 Contents
 --------
 
@@ -42,20 +54,17 @@ Contents
    :maxdepth: 2
 
    array-standard
+   projections
 
 .. toctree::
    :maxdepth: 3
 
    metadata-standard
 
-.. toctree::
-   :maxdepth: 2
-
-   validator
-
 .. ingestion
 
 Previous Versions
 -----------------
 
+* :doc:`Version 0.2 </v0.2/index>`
 * :doc:`Version 0.1 </v0.1/index>`

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/chanzuckerberg/dynamic-cell-atlas-specs/main/docs/v0.2/schema.json",
+  "$id": "https://raw.githubusercontent.com/chanzuckerberg/dynamic-cell-atlas-specs/main/docs/v0.3/schema.json",
   "title": "DCA Metadata Schema",
-  "description": "Schema for per-channel metadata and normalization statistics in DCA datasets.",
+  "description": "Schema for the DCA namespace in zarr.json: per-channel metadata, normalization statistics and projection parameters on image groups.",
   "type": "object",
   "properties": {
     "dca": {
@@ -18,7 +18,7 @@
         "version": {
           "type": "string",
           "description": "Version of the DCA specification.",
-          "const": "0.2"
+          "const": "0.3"
         },
         "url": {
           "type": "string",
@@ -34,6 +34,9 @@
         },
         "normalization_statistics": {
           "$ref": "#/$defs/NormalizationStatistics"
+        },
+        "projection": {
+          "$ref": "#/$defs/Projection"
         }
       }
     }
@@ -77,7 +80,7 @@
         },
         "description": {
           "type": "string",
-          "description": "Rich natural language description suitable for text embedding. Recommended format — fluorescent: '{biological_target} visualized via {marker}'; labelfree: '{reconstruction_type} label-free imaging'; predicted: '{biological_target} predicted by virtual staining'."
+          "description": "Rich natural language description suitable for text embedding. Recommended format \u2014 fluorescent: '{biological_target} visualized via {marker}'; labelfree: '{reconstruction_type} label-free imaging'; predicted: '{biological_target} predicted by virtual staining'."
         },
         "biological_annotation": {
           "$ref": "#/$defs/BiologicalAnnotation"
@@ -279,7 +282,7 @@
         "cpg_labeled_structure": {
           "type": "string",
           "enum": [
-            "β-tubulin",
+            "\u03b2-tubulin",
             "Endoplasmic Reticulum",
             "f-Actin",
             "Golgi, Plasma Membrane",
@@ -299,7 +302,7 @@
           "type": "string",
           "enum": [
             "Acidic Compartments",
-            "β-tubulin",
+            "\u03b2-tubulin",
             "DNA",
             "DNA, RNA",
             "f-Actin",
@@ -313,6 +316,57 @@
           ],
           "description": "Optional. CellPainting Gallery harmonized molecular target the reagent binds."
         }
+      }
+    },
+    "Projection": {
+      "type": "object",
+      "description": "Parameters of a projected image (projections.rst, Projection block). Array metadata, zarr.json only; not part of the experimental-metadata record.",
+      "required": [
+        "method",
+        "source_store"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "const": "max"
+        },
+        "z_dim_source": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "z_start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "First source z index projected (inclusive)."
+        },
+        "z_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Last source z index projected (exclusive)."
+        },
+        "source_store": {
+          "type": "string",
+          "minLength": 1
+        },
+        "z_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      },
+      "dependentRequired": {
+        "z_start": [
+          "z_end",
+          "z_dim_source"
+        ],
+        "z_end": [
+          "z_start",
+          "z_dim_source"
+        ],
+        "z_dim_source": [
+          "z_start",
+          "z_end"
+        ]
       }
     }
   }

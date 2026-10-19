@@ -20,10 +20,10 @@ channel and normalization-statistics metadata it already carries (see
 :doc:`dca-metadata`), so these fields are compliant with the `OME-NGFF storage format
 <https://ngff.openmicroscopy.org/0.5/#storage-format>`_, which places group-level
 metadata in the ``zarr.json`` attributes. That ``zarr.json`` copy is derived from the
-Parquet. A small **required floor** (see :ref:`Conformance <experimental-conformance>`)
+Parquet. A small **required floor** (see :ref:`Conformance <v03-experimental-conformance>`)
 MUST be present; the recommended and optional fields MAY be omitted, and are validated
 when present. Every value carries its **provenance alongside it** (see
-:ref:`Provenance <experimental-evidence>`), so each field is tied to its source and
+:ref:`Provenance <v03-experimental-evidence>`), so each field is tied to its source and
 independently verifiable.
 
 This document organizes the fields by REMBI component: **Study**, **Study Component**
@@ -37,7 +37,7 @@ This document organizes the fields by REMBI component: **Study**, **Study Compon
    human iPSC dataset) of how a 3D+t live-imaging dataset is filled in,
    including which concepts still land in ``additional_metadata``.
 
-.. _experimental-standards:
+.. _v03-experimental-standards:
 
 Standards Repurposed
 --------------------
@@ -120,7 +120,7 @@ of this table. The DCA spec is meant to be interoperable with the broader commun
      - Term ids underpinning the cross-modality, imaging-method, cell-line and
        perturbation fields, enabling queries and cross-spec (e.g. OPS) projection.
 
-.. _experimental-dca-native:
+.. _v03-experimental-dca-native:
 
 DCA extensions
 --------------
@@ -137,7 +137,7 @@ genuine gap no referenced standard covers:
 * **Storage + promotion model.** The full curated record in a sibling Parquet
   (source of truth), mirrored into ``zarr.json`` (alongside the
   channel / normalization-statistics metadata) with the required floor as the validated
-  subset, and the :ref:`promotion <experimental-promotion>` path that brings more fields
+  subset, and the :ref:`promotion <v03-experimental-promotion>` path that brings more fields
   into that subset.
 * **``additional_metadata``** — the promotable, evidence-backed free-text bucket. The
   catalog permits extra key-value pairs, but the promotion + provenance mechanism is
@@ -167,7 +167,7 @@ DCA-native: ``Experimenter.orcid`` and the nested ``Publication`` fields (public
 title, authors, year). Everything else maps to a referenced standard or the catalog
 via ``exact_mappings`` / ``close_mappings`` in the LinkML schema.
 
-.. _experimental-conformance:
+.. _v03-experimental-conformance:
 
 Conformance: Required, Recommended, Optional
 --------------------------------------------
@@ -211,7 +211,7 @@ The **Recommended** and **Optional** fields (written, but outside the required f
 are **promotion candidates**: a future spec version may reclassify one as
 **Required** (unconditionally or when a condition holds) and bring it into the floor,
 once it is verifiable, schema-stable, and consistently scoped (see
-:ref:`Promotion <experimental-promotion>`).
+:ref:`Promotion <v03-experimental-promotion>`).
 ``additional_metadata`` goes one step further: its free-text entries can first become
 defined fields before being promoted.
 
@@ -382,9 +382,9 @@ exhaustive, authoritative list.
      - DCA-native · agent-minted, each with inline provenance fields. Lives in the
        Parquet and can be **elevated** to a defined (and ultimately required,
        ``zarr.json``) field once it stabilizes — see
-       :ref:`Promotion <experimental-promotion>`.
+       :ref:`Promotion <v03-experimental-promotion>`.
 
-The :ref:`provenance fields <experimental-evidence>` are **REQUIRED for
+The :ref:`provenance fields <v03-experimental-evidence>` are **REQUIRED for
 agent-curated values** and **OPTIONAL for manually entered values** (set
 ``source_kind: human``; the citation MAY be blank).
 
@@ -573,7 +573,7 @@ The sub-groups, and the standard each field draws on:
    omitting the sample. ``unknown`` means the source does not record it, not that it
    has not been looked up yet.
 
-See the field reference under :ref:`Conformance <experimental-conformance>` for the
+See the field reference under :ref:`Conformance <v03-experimental-conformance>` for the
 full Study / Sample field list with required-vs-optional status, and the
 ``Study``, ``Experimenter``, ``Biosample``, ``Specimen`` classes in the
 :download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` for the
@@ -608,7 +608,7 @@ is **omitted when** ``control_class`` **is** ``empty``, which has nothing to rec
 The ``chemical`` vs ``genetic`` block is required according to ``modality``. All three
 conditionals are enforced as schema rules (see Validation).
 
-.. _experimental-perturbation-placement:
+.. _v03-experimental-perturbation-placement:
 
 **Where it is written.** Two things are modeled separately, because their grains
 differ:
@@ -649,7 +649,7 @@ groups, never the reverse. Two reasons the image group holds the primary copy:
 Both placements are checked for their own internal validity, and the validator also
 cross-checks one against the other: every field of view under a well must carry an
 identical ``perturbation`` value, and — when the well also carries a
-``well_perturbation`` row — that consensus must match the row (see :doc:`validator`).
+``well_perturbation`` row — that consensus must match the row (see :doc:`/v0.2/validator`).
 Authoritativeness is what gives a mismatch one defined repair (re-derive the well row)
 rather than an ambiguous merge.
 
@@ -706,7 +706,7 @@ Known gaps and contradictions:
 * **Gene identifier** — NCBI Gene ID is the canonical key; HGNC
   symbol is the label; Ensembl is optional cross-map.
 
-.. _experimental-deferred-pooled:
+.. _v03-experimental-deferred-pooled:
 
 Deferred: pooled / optical pooled screens (OPS)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -723,7 +723,7 @@ single-cell data. The ``Perturbation`` *definition* above is unchanged for poole
 libraries; only the level at which a perturbation is assigned differs (per image
 group for arrayed screens, per cell for pooled).
 
-.. _experimental-gap-fill:
+.. _v03-experimental-gap-fill:
 
 Free-Text Gap-Fill
 ------------------
@@ -752,7 +752,7 @@ available on ``study`` and ``biosamples``:
    }
 
 Each ``additional_metadata`` entry **MUST** carry a ``name`` and ``value`` and
-**SHOULD** carry its :ref:`provenance fields <experimental-evidence>`. An agent
+**SHOULD** carry its :ref:`provenance fields <v03-experimental-evidence>`. An agent
 **MAY** mint new ``additional_metadata`` fields; as with every agent-curated value,
 each **MUST** carry its extracted value, its source citation, and the citation's
 ``match_status``.
@@ -760,7 +760,7 @@ As fields here stabilize and gain a community schema, they are promoted to
 first-class structured slots in a future version. ``additional_metadata`` is a
 **staging area**, not a permanent home.
 
-.. _experimental-promotion:
+.. _v03-experimental-promotion:
 
 Promotion to the required floor
 -------------------------------
@@ -791,14 +791,14 @@ hold:
      left optional — so consumers of that experiment type can rely on it. The
      ``perturbation`` block is the worked example: optional corpus-wide, required for
      every image group of a dataset that has perturbations (see
-     :ref:`Where it is written <experimental-perturbation-placement>`).
+     :ref:`Where it is written <v03-experimental-perturbation-placement>`).
 
 Promotion is a **per-field specification decision made via a version bump**. For a
 corpus-wide field it applies uniformly; for an experiment-class field it applies
 to that class. When a field is promoted, the Parquet remains the **source of truth**
 and the ``zarr.json`` copy is a derived, versioned snapshot.
 
-.. _experimental-evidence:
+.. _v03-experimental-evidence:
 
 Provenance
 ----------
@@ -855,7 +855,7 @@ Validation
 
 The :download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` is the
 authoring layer and single source of truth for all three groups; from it we generate
-**Pydantic models** (enforced by the :doc:`validator <validator>`) and a committed
+**Pydantic models** (enforced by the :doc:`validator </v0.2/validator>`) and a committed
 **JSON Schema** (interop artifact and test-suite oracle cross-check).
 
 Authoring in LinkML (rather than hand-maintaining JSON Schema and Pydantic) also gives
@@ -908,4 +908,4 @@ branch slots ``imaging_method`` and ``preparation_method``, checks descent from 
 required ancestor. An unresolvable id, or a label matching none of the registry's names,
 is an error; an unreachable registry is a warning, so a flaky network degrades to
 "unverified" rather than failing the store. It is off by default because it makes network
-requests; see :doc:`validator` for the full behavior.
+requests; see :doc:`/v0.2/validator` for the full behavior.

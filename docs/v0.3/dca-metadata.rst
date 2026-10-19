@@ -7,7 +7,7 @@ In an OME-Zarr HCS layout this is the field-of-view level (e.g. ``plate.ome.zarr
 
 The ``dca`` object **MUST** contain:
 
-* ``version`` — a string specifying the version of this specification (currently ``"0.2"``)
+* ``version`` — a string specifying the version of this specification (currently ``"0.3"``)
 * ``url`` — a URL pointing to the specification in the GitHub repository
 * ``channels`` — an array of channel metadata objects (see :doc:`channel-metadata`)
 * ``normalization_statistics`` — per-channel normalization statistics keyed by channel index (see :doc:`normalization-statistics`)
@@ -15,15 +15,22 @@ The ``dca`` object **MUST** contain:
 For image groups it **MUST** additionally carry the experimental-metadata
 **required floor** — the ``study``, ``biosample``, ``specimen``,
 ``study_component``, and ``provenance`` blocks — mirrored from the curated Parquet
-(see :ref:`experimental-metadata-storage` below and :doc:`experimental-metadata`).
+(see :ref:`v03-experimental-metadata-storage` below and :doc:`experimental-metadata`).
 
-One further key is **conditionally required** (or required when present). Datasets
-without perturbations applied will not have this and omitting it is correct for them:
+Two further keys are **conditionally required**:
 
-* ``perturbation`` — the ``PerturbationAssignment`` applied to this image group's
-  material: the ``Perturbation`` it references (its ``definition`` slot), plus dosing
-  / control class / timing (see
-  :ref:`Where it is written <experimental-perturbation-placement>`). A dataset **with**
+* ``projection`` — the parameters of a projected image (e.g. a maximum intensity
+  projection). **MUST** be present on every projection and
+  **MUST NOT** be present on an image that is not a projection. Like ``channels`` and
+  ``normalization_statistics`` it describes the array and is not part of the
+  experimental-metadata record. See :doc:`projections`.
+
+* ``perturbation`` — required for datasets with perturbations applied; a dataset
+  without perturbations omits it, and omitting it is correct for them. It is the
+  ``PerturbationAssignment`` applied to this image group's material: the
+  ``Perturbation`` it references (its ``definition`` slot), plus dosing / control
+  class / timing (see
+  :ref:`Where it is written <v03-experimental-perturbation-placement>`). A dataset **with**
   perturbations MUST carry it on every image group; a dataset with **none** simply
   omits the key, and omitting it is not an error. Whether a dataset "has
   perturbations" is a judgement about the experiment, not a machine-checkable property
@@ -50,11 +57,12 @@ without perturbations applied will not have this and omitting it is correct for 
    }
 
 The :download:`JSON Schema <schema.json>` is the authoritative definition of the
-``version``, ``url``, ``channels``, and ``normalization_statistics`` fields; the
+``version``, ``url``, ``channels``, ``normalization_statistics`` and ``projection``
+fields; the
 required floor is defined by a separate schema
 (``schema/v0.2/dca_experimental_metadata.yaml``, see :doc:`experimental-metadata`).
 
-.. _experimental-metadata-storage:
+.. _v03-experimental-metadata-storage:
 
 Experimental metadata storage
 -----------------------------

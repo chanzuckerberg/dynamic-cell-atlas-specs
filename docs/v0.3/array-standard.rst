@@ -37,6 +37,11 @@ Labels
 
 Following `OME-ngff 0.5 image layout specification <https://ngff.openmicroscopy.org/0.5/#image-layout>`_, labels **SHOULD** be added within the group level of the Zarr store.
 
+Projections
+~~~~~~~~~~~
+
+Projections (e.g. maximum intensity projections) **MUST** be stored in a separate sibling store that mirrors the source hierarchy. See :doc:`projections`.
+
 High Content Screening Datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
