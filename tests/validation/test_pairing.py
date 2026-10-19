@@ -365,3 +365,57 @@ class TestPerChannel:
 
         make_pair(tmp_path, edit_mip=drop_channel)
         assert any("keeps every source channel" in m for m in _messages(_run(tmp_path)))
+
+
+def _drop_projection(mip):
+    edit_field_attrs(mip, lambda a: a["dca"].pop("projection"))
+
+
+def _drop_source_store(mip):
+    edit_field_attrs(mip, lambda a: a["dca"]["projection"].pop("source_store"))
+
+
+@pytest.mark.functional
+class TestSourceInDataset:
+    """dca.projection is required only when the 3D source is in the DCA."""
+
+    def test_projection_of_a_sibling_without_block_is_error(self, tmp_path):
+        make_pair(tmp_path, edit_mip=_drop_projection)
+        run = _run(tmp_path)
+        assert any(
+            "is a projection of 'plate.ome.zarr'" in m and "MUST carry" in m
+            for m in _messages(run)
+        )
+        assert run.summary.stores_failed > 0
+
+    def test_projection_of_a_sibling_without_source_store_is_error(self, tmp_path):
+        make_pair(tmp_path, edit_mip=_drop_source_store)
+        run = _run(tmp_path)
+        assert any("MUST name it as source_store" in m for m in _messages(run))
+
+    def test_projected_before_deposit_without_block_warns_only(self, tmp_path):
+        _, mip = make_pair(tmp_path, edit_mip=_drop_projection)
+        shutil.rmtree(tmp_path / "plate.ome.zarr")  # the stack is not shared
+        run = _run(tmp_path)
+        assert _messages(run) == []
+        assert any(
+            "projected before deposit" in m for m in _messages(run, Severity.WARNING)
+        )
+        assert run.summary.stores_failed == 0
+
+    def test_projected_before_deposit_with_known_parameters_passes(self, tmp_path):
+        def known_parameters(mip):
+            def edit(a):
+                a["dca"]["projection"] = {
+                    "z_dim_source": 16,
+                    "channels": {"GFP": {"method": "max", "z_start": 0, "z_end": 16}},
+                }
+                a["dca"]["image_data"]["processing_variant"] = [MIP_STEP]
+
+            edit_field_attrs(mip, edit)
+
+        make_pair(tmp_path, mip_name="plate_2d.ome.zarr", edit_mip=known_parameters)
+        shutil.rmtree(tmp_path / "plate.ome.zarr")
+        run = _run(tmp_path)
+        assert _issues(run) == []
+        assert run.summary.stores_failed == 0

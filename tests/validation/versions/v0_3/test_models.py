@@ -96,10 +96,12 @@ class TestUniformForm:
     def test_full_url_source_store_passes(self):
         _valid(_projection(source_store="s3://bucket/datasets/plate.ome.zarr"))
 
-    def test_missing_source_store_errors(self):
+    def test_missing_source_store_passes_per_store(self):
+        # Required only when the 3D source is in the DCA, which the cross-store pass
+        # checks; on its own a block without it is a projection made before deposit.
         data = _projection()
         del data["source_store"]
-        _invalid(data, "source_store")
+        _valid(data)
 
     def test_z_start_without_z_end_errors(self):
         _invalid(_projection(z_end=None), "together")
@@ -200,9 +202,11 @@ class TestCheckProjection:
         dca = _dca(steps=("deconvolved",), projection=None)
         assert check_projection_v0_3(_node(z_sizes=(16, 8)), dca, {}) == []
 
-    def test_projection_step_without_block_errors(self):
+    def test_projection_step_without_block_warns(self):
+        # Fine for an image projected before deposit; an error only when the 3D
+        # source is in the dataset (checked across stores).
         issues = check_projection_v0_3(_node(), _dca(projection=None), {})
-        assert _sev(issues) == ["error"]
+        assert _sev(issues) == ["warning"]
         assert issues[0].loc == ("dca", "projection")
 
     def test_block_without_projection_step_errors(self):
@@ -232,7 +236,7 @@ class TestCheckProjection:
         )
         assert _sev(check_projection_v0_3(_node(), dca, {})) == ["error"]
 
-    def test_per_channel_keys_must_match_channel_names(self):
+    def test_per_channel_key_that_is_not_a_channel_errors(self):
         dca = _dca(
             steps=(MIP, MEAN, SLICE),
             projection=_per_channel(),
@@ -240,7 +244,16 @@ class TestCheckProjection:
         )
         issues = check_projection_v0_3(_node(), dca, {})
         assert _sev(issues) == ["error"]
-        assert "missing ['RFP']" in issues[0].message
+        assert "['mCherry']" in issues[0].message
+
+    def test_per_channel_keys_may_be_a_subset(self):
+        # Phase2D (a reconstruction) is a channel but was not projected along z.
+        projection = {
+            "z_dim_source": 7,
+            "channels": {"GFP": {"method": "max", "z_start": 0, "z_end": 7}},
+        }
+        dca = _dca(steps=(MIP,), projection=projection, channels=["Phase2D", "GFP"])
+        assert check_projection_v0_3(_node(c=2), dca, {}) == []
 
     def test_per_timepoint_planes_must_cover_every_timepoint(self):
         dca = _dca(

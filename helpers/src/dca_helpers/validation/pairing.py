@@ -7,7 +7,13 @@ of a validate() call, after the per-store work, and compares each projection
 with its source using the ImageFacts collected during validation, so it needs no
 second read of either store.
 
-For each projection store (one whose image groups carry ``dca.projection``):
+A store named after a 3D sibling in the run (``plate_01_proj.ome.zarr`` /
+``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``) is a projection of it, so its
+image groups MUST carry ``dca.projection`` with ``source_store`` → otherwise ERROR. A
+projection that names no source and has no such sibling was projected before deposit,
+and none of the checks below apply to it.
+
+For each projection store that names a ``source_store``:
 
 * ``source_store`` resolves to a store: a bare name is a sibling of the
   projection; a URL or absolute path is used as given (falling back to a
@@ -22,8 +28,8 @@ For each projection store (one whose image groups carry ``dca.projection``):
   - t, y, x sizes and t, y, x scales match, and ``z_dim_source`` (when given)
     equals the source's z → otherwise ERROR;
   - channels: the uniform form keeps every source channel in order; in the
-    per-channel form each output's ``source_channel`` (default: its own name) is a
-    source channel; ``focus.channel`` is a source channel → otherwise ERROR;
+    per-channel form each projected output's ``source_channel`` (default: its own
+    name) is a source channel; ``focus.channel`` is a source channel → otherwise ERROR;
   - dtype equals the source's when every method is ``max`` / ``slice``,
     and is otherwise the source's or a floating-point type → otherwise ERROR.
   A source with z of size 1 → WARNING (nothing to project).
@@ -309,6 +315,16 @@ def _check_projection_store(
             f"dca.projection: {_listed(plain)}.",
         )
 
+    names = {
+        r.image_facts.projection.get("source_store") for r in projection_images.values()
+    }
+    names.discard(None)
+    if not names:
+        # No source named: an image projected before deposit (projections.rst §
+        # Projections made before deposit), unless _check_sibling_source finds its 3D
+        # source in the run. Naming and pairing do not apply.
+        return None
+
     base = posixpath.basename(store.root)
     store_methods = set().union(
         *(
@@ -334,18 +350,13 @@ def _check_projection_store(
             + " (projections.rst § Store Layout).",
         )
 
-    names = {
-        r.image_facts.projection.get("source_store") for r in projection_images.values()
-    }
-    names.discard(None)  # a missing source_store is a per-image model error
-    if len(names) != 1:
-        if len(names) > 1:
-            _add(
-                anchor,
-                Severity.ERROR,
-                ("dca", "projection", "source_store"),
-                f"Image groups name different source stores: {_listed(list(names))}.",
-            )
+    if len(names) > 1:
+        _add(
+            anchor,
+            Severity.ERROR,
+            ("dca", "projection", "source_store"),
+            f"Image groups name different source stores: {_listed(list(names))}.",
+        )
         return None
     (source_store,) = names
     if not isinstance(source_store, str) or not source_store:
@@ -398,6 +409,62 @@ def _check_projection_store(
     return target
 
 
+def _sibling_source(root: str, stores: dict[str, _Store]) -> str | None:
+    """The 3D store in the run that ``root`` is named after, if any.
+
+    ``plate_01_proj.ome.zarr`` / ``plate_01_mip.ome.zarr`` next to a 3D, non-projection
+    ``plate_01.ome.zarr`` (projections.rst § Projections made before deposit).
+    """
+    base = posixpath.basename(root)
+    for suffix in (PROJECTION_STORE_SUFFIX, MAX_PROJECTION_STORE_SUFFIX):
+        if base.endswith(suffix):
+            candidate = posixpath.join(
+                posixpath.dirname(root), base[: -len(suffix)] + ".ome.zarr"
+            )
+            source = stores.get(candidate)
+            if source is not None and source.is_3d and not source.projection_images:
+                return candidate
+    return None
+
+
+def _check_sibling_source(store: _Store, stores: dict[str, _Store]) -> None:
+    """A store named after a 3D sibling in the run is its projection, so every image
+    group MUST carry ``dca.projection`` with ``source_store``."""
+    if store.is_3d:
+        return
+    sibling = _sibling_source(store.root, stores)
+    if sibling is None:
+        return
+    name = posixpath.basename(sibling)
+    images = {p: r for p, r in store.images.items() if r.image_facts is not None}
+    no_block = [p or "/" for p, r in images.items() if r.image_facts.projection is None]
+    no_source = [
+        p or "/"
+        for p, r in images.items()
+        if r.image_facts.projection is not None
+        and not r.image_facts.projection.get("source_store")
+    ]
+    if no_block:
+        _add(
+            store.anchor,
+            Severity.ERROR,
+            ("dca", "projection"),
+            f"This store is a projection of '{name}', which is part of this dataset, "
+            f"so every image group MUST carry dca.projection naming it as "
+            f"source_store; missing on {_listed(no_block)} "
+            "(projections.rst § Projections made before deposit).",
+        )
+    if no_source:
+        _add(
+            store.anchor,
+            Severity.ERROR,
+            ("dca", "projection", "source_store"),
+            f"This store is a projection of '{name}', which is part of this dataset, "
+            f"so dca.projection MUST name it as source_store; missing on "
+            f"{_listed(no_source)} (projections.rst § Projection block).",
+        )
+
+
 def check_projection_pairs(
     results: list[ZarrNodeValidationResult],
     *,
@@ -412,6 +479,7 @@ def check_projection_pairs(
     stores = _group_by_store(results)
     sourced: set[str] = set()
     for store in stores.values():
+        _check_sibling_source(store, stores)
         if store.projection_images:
             target = _check_projection_store(store, stores, source_exists)
             if target is not None:

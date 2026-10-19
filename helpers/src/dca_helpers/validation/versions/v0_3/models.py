@@ -11,8 +11,10 @@ v0.3 keeps every v0.2 image and label rule and adds projections
     source planes actually used, as absolute half-open ``[z_start, z_end)`` ranges.
     The uniform form is ``method`` plus the ``z_start`` / ``z_end`` / ``z_dim_source``
     / ``z_fraction`` that v0.2-era stores already carry; the per-channel form is
-    ``channels``, keyed by output channel name, where ``z_start`` / ``z_end`` may be
-    per-timepoint lists. ``focus`` is optional provenance about how planes were chosen.
+    ``channels``, keyed by projected output channel name (a subset of the image's
+    channels), where ``z_start`` / ``z_end`` may be per-timepoint lists. ``focus`` is
+    optional provenance about how planes were chosen. ``source_store`` is required only
+    when the 3D source is in the DCA, which the cross-store pass checks.
 
 The rules that relate ``dca.projection`` to the rest of the group (the
 processing-variant agreement, z of size 1 at every level, channel names, per-timepoint
@@ -166,7 +168,9 @@ class DCAProjectionV0_3(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     # projections.rst § Projection block — shared
-    source_store: str = Field(min_length=1)
+    # MUST when the 3D source is in the DCA, which only the cross-store pass can see
+    # (pairing.py); omitted for an image projected before deposit.
+    source_store: str | None = Field(default=None, min_length=1)
     z_dim_source: int | None = Field(default=None, ge=1)
     focus: ProjectionFocusV0_3 | None = None
 
@@ -316,11 +320,15 @@ def check_projection_v0_3(
     listed = [s for s in steps if s in PROJECTION_STEPS]
 
     if listed and not has_block:
-        error(
+        # Allowed for an image projected before deposit; an error only when its 3D
+        # source is in the dataset, which pairing.py checks across stores.
+        warning(
             ("dca", "projection"),
-            f"image_data.processing_variant lists projection steps {listed} but "
-            "dca.projection is missing; every projection MUST carry dca.projection "
-            "(projections.rst § Projection block).",
+            f"image_data.processing_variant lists projection steps {listed} but there "
+            "is no dca.projection. If the 3D source is part of this dataset, the "
+            "projection MUST carry dca.projection; if it was projected before deposit, "
+            "this can be ignored, or dca.projection can record known parameters "
+            "(projections.rst § Projections made before deposit).",
         )
     if has_block and not listed:
         error(
@@ -364,13 +372,12 @@ def check_projection_v0_3(
         names = [
             c.get("name") for c in dca.get("channels") or [] if isinstance(c, dict)
         ]
-        missing = sorted(n for n in names if n not in channels)
         extra = sorted(k for k in channels if k not in names)
-        if missing or extra:
+        if extra:
             error(
                 ("dca", "projection", "channels"),
-                "dca.projection.channels keys MUST be exactly the projection's "
-                f"dca.channels names; missing {missing}, not a channel {extra} "
+                f"dca.projection.channels keys {extra} are not channels of this image "
+                f"({names}); every key MUST be one of its dca.channels names "
                 "(projections.rst § Per-channel form).",
             )
         if t_size is not None:
