@@ -38,6 +38,22 @@ class PlateSubsetInfo:
 
 
 @dataclass
+class ImageFacts:
+    """Level-0 facts about one validated image group, kept for cross-store checks.
+
+    The projection pairing pass (validation/pairing.py) compares a projection with
+    its source from these, so it needs no second read of either store. Not part of
+    the report: reporter._NODE_RESULT_EXCLUDED_FIELDS drops it.
+    """
+
+    axes: tuple[str, ...]  # lowercased
+    level0_shape: tuple[int, ...]
+    level0_dtype: str
+    level0_scale: dict[str, "float | None"]  # by lowercased axis name
+    projection: "dict | None"  # raw dca.projection, when present
+
+
+@dataclass
 class ZarrNodeValidationResult:
     """Aggregated validation outcome for one Zarr store."""
 
@@ -58,6 +74,8 @@ class ZarrNodeValidationResult:
     skipped: bool = False  # store was intentionally not validated (e.g., GEFF)
     subset_coverage: PlateSubsetInfo | None = None  # set on the plate-root result
     # of a partial (well/field-subset) HCS plate run; None otherwise
+    image_facts: ImageFacts | None = None  # set on image results; internal, for
+    # cross-store checks only (not serialized into reports)
 
     # For HCS plates, one result is produced per field image (parent_path = plate root).
     # For standalone images, parent_path is None.

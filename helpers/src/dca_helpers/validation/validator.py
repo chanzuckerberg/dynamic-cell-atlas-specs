@@ -38,6 +38,7 @@ from dca_helpers.validation.registry import (
     get_model,
 )
 from dca_helpers.validation.result import (
+    ImageFacts,
     Issue,
     PlateSubsetInfo,
     Severity,
@@ -47,6 +48,10 @@ from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     validate_dca_experimental_metadata_v0_2,
     validate_well_perturbation_v0_2,
 )
+from dca_helpers.validation.versions.v0_3.experimental_metadata import (
+    validate_dca_experimental_metadata_v0_3,
+)
+from dca_helpers.validation.versions.v0_3.models import check_projection_v0_3
 from dca_helpers.validation.zarr_node import ZarrNodeType, classify_group
 
 if TYPE_CHECKING:
@@ -723,8 +728,16 @@ _SHOULD_MARKER = "[SHOULD]"
 
 # Spec versions whose dca block mirrors the experimental-metadata required floor
 # (validated against the generated JSON Schema). v0.1 predates experimental
-# metadata, so it is excluded.
-_EXPERIMENTAL_SPEC_VERSIONS: frozenset[str] = frozenset({"0.2"})
+# metadata, so it is excluded. v0.3 changes only ImageData.processing_variant, so
+# its WellPerturbation rules are the v0.2 ones.
+_EXPERIMENTAL_VALIDATORS = {
+    "0.2": validate_dca_experimental_metadata_v0_2,
+    "0.3": validate_dca_experimental_metadata_v0_3,
+}
+_EXPERIMENTAL_SPEC_VERSIONS: frozenset[str] = frozenset(_EXPERIMENTAL_VALIDATORS)
+
+# Spec versions that define dca.projection (projections.rst, new in v0.3).
+PROJECTION_SPEC_VERSIONS: frozenset[str] = frozenset({"0.3"})
 
 
 def _convert_errors(exc: pydantic.ValidationError) -> list[Issue]:
@@ -795,10 +808,13 @@ def _run_dca_validation(
     spec_version: str,
     ModelClass: "type[BaseModel]",
     check_ontology: bool,
+    group_attrs: "dict | None" = None,
 ) -> list[Issue]:
     """Validate node_dict against ModelClass, plus dca's experimental-metadata
-    block for experimental spec versions. Shared by _validate_image and
-    _validate_field, which only differ in how node_dict is built."""
+    block for experimental spec versions, plus the projection rules for an image
+    group (group_attrs given) under a version that defines them. Shared by
+    _validate_image and _validate_field, which only differ in how node_dict is
+    built."""
     issues: list[Issue] = []
     try:
         ModelClass.model_validate(node_dict)
@@ -807,10 +823,32 @@ def _run_dca_validation(
 
     if isinstance(dca, dict) and spec_version in _EXPERIMENTAL_SPEC_VERSIONS:
         issues.extend(
-            validate_dca_experimental_metadata_v0_2(dca, check_ontology=check_ontology)
+            _EXPERIMENTAL_VALIDATORS[spec_version](dca, check_ontology=check_ontology)
         )
 
+    if group_attrs is not None and spec_version in PROJECTION_SPEC_VERSIONS:
+        issues.extend(check_projection_v0_3(node_dict, dca, group_attrs))
+
     return issues
+
+
+def _image_facts(node_dict: dict, dca: object) -> "ImageFacts | None":
+    """The level-0 facts the cross-store pairing pass compares (see ImageFacts)."""
+    levels = node_dict.get("levels") or []
+    level0 = levels[0] if levels else {}
+    # Partial node dicts (unit-test doubles) may lack these; no facts, no pairing.
+    if "shape" not in level0 or "dtype" not in level0 or "axes" not in node_dict:
+        return None
+    projection = dca.get("projection") if isinstance(dca, dict) else None
+    return ImageFacts(
+        axes=tuple(a.lower() for a in node_dict["axes"]),
+        level0_shape=tuple(level0["shape"]),
+        level0_dtype=level0["dtype"],
+        level0_scale={
+            k.lower(): v for k, v in (node_dict.get("axis_scales") or {}).items()
+        },
+        projection=projection if isinstance(projection, dict) else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -828,13 +866,17 @@ def _validate_image(
     dca: object,
     parent_path: str | None = None,
     check_ontology: bool = False,
+    group_attrs: "dict | None" = None,
 ) -> list[ZarrNodeValidationResult]:
     """
     Run DCA spec validation for one image or label image multiscale group.
 
     Used directly for IMAGE nodes and called per-field by _validate_hcs_plate.
     The caller supplies the appropriate ModelClass (image or label) and the
-    raw dca attrs dict to inject (None for label groups).
+    raw dca attrs dict to inject (None for label groups). group_attrs is the
+    group's full zarr.json attributes for an image group (None for label
+    groups); it enables the projection rules and the ImageFacts kept for
+    cross-store checks.
     """
     try:
         node_dict = _build_node_dict(ome_obj)
@@ -855,7 +897,7 @@ def _validate_image(
     node_dict["dca"] = dca
 
     issues = _run_dca_validation(
-        node_dict, dca, spec_version, ModelClass, check_ontology
+        node_dict, dca, spec_version, ModelClass, check_ontology, group_attrs
     )
 
     errors = [i for i in issues if i.severity == Severity.ERROR]
@@ -868,6 +910,9 @@ def _validate_image(
             ngff_version=ngff_version,
             multiscale_level_count=level_count,
             issues=issues,
+            image_facts=(
+                _image_facts(node_dict, dca) if group_attrs is not None else None
+            ),
         )
     ]
 
@@ -894,7 +939,8 @@ def _validate_field(
     full_path = f"{node_path}/{field_path}"
     try:
         field_zarr_group = open_zarr_group(full_path)
-        dca = dict(field_zarr_group.attrs).get("dca")
+        group_attrs = dict(field_zarr_group.attrs)
+        dca = group_attrs.get("dca")
         field_img = open_ome_zarr(field_zarr_group)
         node_dict = _build_node_dict(field_img)
     except _obs_exc.BaseError as exc:
@@ -937,7 +983,7 @@ def _validate_field(
     node_dict["dca"] = dca
 
     issues = _run_dca_validation(
-        node_dict, dca, spec_version, ModelClass, check_ontology
+        node_dict, dca, spec_version, ModelClass, check_ontology, group_attrs
     )
 
     errors = [i for i in issues if i.severity == Severity.ERROR]
@@ -952,6 +998,7 @@ def _validate_field(
             multiscale_level_count=level_count,
             issues=issues,
             node_type=ZarrNodeType.IMAGE,
+            image_facts=_image_facts(node_dict, dca),
         ),
         axes,
         chunk_shape,
@@ -1493,5 +1540,6 @@ def validate_zarr_node(
         ModelClass,
         dca=raw_dca_attrs,
         check_ontology=check_ontology,
+        group_attrs=raw_attrs,
     )
     return _tag_node_type(results, node_type)
