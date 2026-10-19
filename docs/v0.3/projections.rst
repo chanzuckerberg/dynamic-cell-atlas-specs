@@ -413,6 +413,23 @@ abridged):
      }
    }
 
+Reading this example:
+
+* The 3D source is in the DCA, so ``source_store`` names it, and the store is
+  ``plate_01_proj.ome.zarr`` next to ``plate_01.ome.zarr``. ``_mip`` does not apply,
+  because not every channel uses ``max``. Without the shared source, the same block
+  without ``source_store`` would describe a projection made before deposit.
+* The image has three timepoints, so ``nuclei``'s per-timepoint ``z_start`` / ``z_end``
+  and ``focus.z_per_t`` each have three entries.
+* All three output channels are projected, so all three are keys. An output channel
+  that was not a ``z`` projection, such as a reconstruction, would be left out of
+  ``channels``.
+* ``processing_variant`` lists one step per method used: ``max``, ``mean`` and ``slice``.
+* ``focus`` records that the ``nuclei`` window followed the in-focus planes 19, 18 and
+  20. It is provenance: the planes used are already in ``z_start`` / ``z_end``, and
+  removing ``focus`` would not change what the block says. ``Phase3D`` is a source
+  channel that the projection does not keep.
+
 An image projected before deposit, recording the known parameters for its two projected
 channels; its label-free channel, a reconstruction, is not a key (``dca`` only,
 abridged):
