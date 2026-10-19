@@ -59,7 +59,9 @@ itself; e.g. a projection of a deconvolved, registered stack lists
 ``["deconvolved", "registered", "maximum intensity projection"]``. An image lists
 ``"maximum intensity projection"`` exactly when it carries ``dca.projection``: each
 **MUST NOT** appear without the other. A projection of an unprocessed stack lists only
-``["maximum intensity projection"]``, since ``"raw"`` means no processing at all.
+``["maximum intensity projection"]``, since ``"raw"`` means no processing at all. A
+projection copies its source's ``image_data.processing_description`` unchanged, so the
+source's full description is available on the projection too.
 
 Projection block
 ~~~~~~~~~~~~~~~~
@@ -170,7 +172,8 @@ Example
            "z_dim_source": 50
          },
          "image_data": {
-           "processing_variant": ["deconvolved", "maximum intensity projection"]
+           "processing_variant": ["deconvolved", "maximum intensity projection"],
+           "processing_description": "deconvolved with a measured PSF"
          },
          "study": { "..." },
          "biosample": { "..." },

@@ -83,7 +83,7 @@ def _processing_variant_issues(obj: dict) -> list[Issue]:
                 message=(
                     f"processing_variant items {unknown} are not in the ProcessingStep "
                     f"vocabulary {sorted(PROCESSING_STEPS)}; items should be short step "
-                    "names, with any qualifying detail in additional_metadata"
+                    "names, with any qualifying detail in image_data.processing_description"
                 ),
                 severity=Severity.WARNING,
             )

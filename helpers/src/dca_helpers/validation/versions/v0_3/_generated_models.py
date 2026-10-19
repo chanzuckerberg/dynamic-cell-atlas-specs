@@ -157,7 +157,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'dca',
 
 class ProcessingStep(str, Enum):
     """
-    Recommended vocabulary for the items of ``ImageData.processing_variant``: one computational step applied to produce an image array. Items outside this list are allowed but SHOULD be avoided; prose that qualifies a step (a pipeline version, a frame range) belongs in ``additional_metadata``, not in the step name.
+    Recommended vocabulary for the items of ``ImageData.processing_variant``: one computational step applied to produce an image array. Items outside this list are allowed but SHOULD be avoided; prose that qualifies a step (a pipeline version, a frame range) belongs in ``ImageData.processing_description``, not in the step name.
     """
     raw = "raw"
     """
@@ -739,6 +739,7 @@ class ImageData(ConfiguredBaseModel):
                       {'value': '["deconvolved", "registered"]'},
                       {'value': '["deconvolved", "registered", "maximum intensity '
                                 'projection"]'}]} })
+    processing_description: Optional[str] = Field(default=None, description="""Free-text description of how this image array was processed, in the source's own words where it has them (e.g. ``\"deconvolved, then registered on the nuclear channel (pipeline v2)\"``). Carries the detail the ``processing_variant`` step names leave out: pipeline versions, frame ranges, how two acquisitions were joined. A derived image (e.g. a projection) carries its source's description, since its own step is recorded in ``processing_variant`` and its parameters elsewhere (``dca.projection``). DCA-native, new in v0.3.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['bioformats:Image.Description'], 'domain_of': ['ImageData']} })
 
 
 class AdditionalMetadataField(ConfiguredBaseModel):

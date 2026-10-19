@@ -471,7 +471,8 @@ Items **SHOULD** come from the ``ProcessingStep`` vocabulary in the LinkML schem
 ``flat-field corrected``, ``background subtracted``, ``maximum intensity projection``);
 an item outside it is a warning. ``raw`` means no processing and **MUST** be the only
 item when present. Qualifying detail (a pipeline version, a frame range) belongs in
-``additional_metadata``, not in the step name. In v0.2 this field was a single string;
+``image_data.processing_description`` (new in v0.3, free text in the source's own
+words), not in the step name. In v0.2 this field was a single string;
 in v0.3 it **MUST** be a non-empty list. The full derivation (parent dataset, algorithm,
 parameters) is a Scientific Dataset Catalog ``transformed_from`` Lineage Edge, not
 duplicated here. The remaining image-level fields

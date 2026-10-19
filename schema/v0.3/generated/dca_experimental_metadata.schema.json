@@ -699,6 +699,13 @@
             "additionalProperties": false,
             "description": "Image-level metadata (REMBI Image Data). For DCA this carries the processing variant that produced the array, i.e. REMBI's \"Type: primary / processed image\" plus the image processing method. The remaining REMBI Image Data fields (format, dimensions, pixel and voxel size, channel information) live in the OME-Zarr arrays and channel metadata, not here. The full derivation (parent dataset, algorithm, parameters) is a Scientific Dataset Catalog ``transformed_from`` Lineage Edge.",
             "properties": {
+                "processing_description": {
+                    "description": "Free-text description of how this image array was processed, in the source's own words where it has them (e.g. ``\"deconvolved, then registered on the nuclear channel (pipeline v2)\"``). Carries the detail the ``processing_variant`` step names leave out: pipeline versions, frame ranges, how two acquisitions were joined. A derived image (e.g. a projection) carries its source's description, since its own step is recorded in ``processing_variant`` and its parameters elsewhere (``dca.projection``). DCA-native, new in v0.3.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
                 "processing_variant": {
                     "description": "The computational processing steps applied to produce this image array, as an ordered list in the order they were applied (e.g. ``[\"deconvolved\", \"registered\", \"maximum intensity projection\"]``). Items SHOULD come from the ``ProcessingStep`` vocabulary; ``\"raw\"`` means no processing and MUST be the only item when present. DCA-native. Present when a single acquisition yields multiple differently-processed stores. A derived image (e.g. a projection) lists its source's steps followed by its own, so the full chain is readable without opening the source. Changed in v0.3 from a single string to a list. This is the zarr-local mirror of the Scientific Dataset Catalog ``dataset_type`` field (``raw`` / ``processed``); the full derivation relationship \u2014 parent dataset id, algorithm, pipeline version, and transformation parameters \u2014 is tracked as a catalog ``Lineage Edge`` of type ``transformed_from`` and SHOULD NOT be duplicated here. Bio-Formats / OME has no dedicated field for this concept; it would conventionally appear in ``Image.Name`` or ``Image.Description``.",
                     "items": {
@@ -1230,7 +1237,7 @@
             "type": "object"
         },
         "ProcessingStep": {
-            "description": "Recommended vocabulary for the items of ``ImageData.processing_variant``: one computational step applied to produce an image array. Items outside this list are allowed but SHOULD be avoided; prose that qualifies a step (a pipeline version, a frame range) belongs in ``additional_metadata``, not in the step name.",
+            "description": "Recommended vocabulary for the items of ``ImageData.processing_variant``: one computational step applied to produce an image array. Items outside this list are allowed but SHOULD be avoided; prose that qualifies a step (a pipeline version, a frame range) belongs in ``ImageData.processing_description``, not in the step name.",
             "enum": [
                 "raw",
                 "denoised",

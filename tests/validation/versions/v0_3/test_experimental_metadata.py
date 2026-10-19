@@ -68,6 +68,16 @@ class TestProcessingVariantList:
         assert [i.severity for i in issues] == [Severity.WARNING]
         assert "deconvolved (legacy pipeline)" in issues[0].message
 
+    def test_processing_description_alongside_steps_passes(self):
+        dca = _dca(["deconvolved", "registered", "maximum intensity projection"])
+        dca["image_data"][
+            "processing_description"
+        ] = "deconvolved, then registered on the label channel (current pipeline)"
+        dca["provenance"]["image_data.processing_description"] = {
+            "source_kind": "original_data"
+        }
+        assert validate_dca_experimental_metadata_v0_3(dca) == []
+
     def test_vocabulary_contains_mip_and_raw(self):
         assert {"raw", "maximum intensity projection"} <= PROCESSING_STEPS
 
