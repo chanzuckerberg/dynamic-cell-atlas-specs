@@ -46,8 +46,10 @@ Changes from v0.2
   carry. See :doc:`projections`.
 * ``dca.version`` is ``"0.3"``.
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
-  recommended step vocabulary, instead of a single string. It is the only change to the
-  experimental-metadata schema (``schema/v0.3/dca_experimental_metadata.yaml``).
+  recommended step vocabulary, instead of a single string, and a new free-text
+  ``image_data.processing_description`` holds the full processing text. These are the
+  only changes to the experimental-metadata schema
+  (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
   cross-store projection checks and an opt-in ``--require-projection`` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
