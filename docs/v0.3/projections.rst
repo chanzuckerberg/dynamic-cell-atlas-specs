@@ -4,9 +4,8 @@ Projections
 Overview
 --------
 
-A **projection** collapses one axis of an image array into a single plane. This page
-specifies how a projected image array is laid out and described. Maximum intensity
-projection (MIP) along ``z`` is the only projection this version defines.
+The DCA includes maximum intensity projections (MIPs) of 3D images along ``z``, for
+easier rendering and to provide additional input options for model training.
 
 A projection is a derived image, not a new acquisition. It carries the same
 experimental metadata as its source and **MUST** satisfy every image-array requirement
