@@ -1247,7 +1247,10 @@
                 "cropped",
                 "flat-field corrected",
                 "background subtracted",
-                "maximum intensity projection"
+                "maximum intensity projection",
+                "mean intensity projection",
+                "sum intensity projection",
+                "z slice"
             ],
             "title": "ProcessingStep",
             "type": "string"

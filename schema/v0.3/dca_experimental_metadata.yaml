@@ -108,9 +108,16 @@ enums:
         description: Background estimated and subtracted.
       maximum intensity projection:
         description: >-
-          Maximum intensity projection along ``z``. An image whose list contains this
-          item MUST carry ``dca.projection`` (see the projections page), and an image
-          carrying ``dca.projection`` MUST list it.
+          Maximum intensity projection along ``z`` (projection method ``max``). Like
+          every projection step, an image lists it only when it carries
+          ``dca.projection`` and uses that method (see the projections page).
+      mean intensity projection:
+        description: Mean intensity projection along ``z`` (projection method ``mean``).
+      sum intensity projection:
+        description: Sum intensity projection along ``z`` (projection method ``sum``).
+      z slice:
+        description: >-
+          A single plane selected from a ``z`` stack (projection method ``slice``).
 
   MicroscopeType:
     description: OME Microscope.Type vocabulary.

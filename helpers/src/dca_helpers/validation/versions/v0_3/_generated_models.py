@@ -193,7 +193,19 @@ class ProcessingStep(str, Enum):
     """
     maximum_intensity_projection = "maximum intensity projection"
     """
-    Maximum intensity projection along ``z``. An image whose list contains this item MUST carry ``dca.projection`` (see the projections page), and an image carrying ``dca.projection`` MUST list it.
+    Maximum intensity projection along ``z`` (projection method ``max``). Like every projection step, an image lists it only when it carries ``dca.projection`` and uses that method (see the projections page).
+    """
+    mean_intensity_projection = "mean intensity projection"
+    """
+    Mean intensity projection along ``z`` (projection method ``mean``).
+    """
+    sum_intensity_projection = "sum intensity projection"
+    """
+    Sum intensity projection along ``z`` (projection method ``sum``).
+    """
+    z_slice = "z slice"
+    """
+    A single plane selected from a ``z`` stack (projection method ``slice``).
     """
 
 

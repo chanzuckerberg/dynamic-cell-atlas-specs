@@ -19,8 +19,8 @@ For image groups it **MUST** additionally carry the experimental-metadata
 
 Two further keys are **conditionally required**:
 
-* ``projection`` — the parameters of a projected image (e.g. a maximum intensity
-  projection). **MUST** be present on every projection and
+* ``projection`` — the parameters of a projected image (e.g. a maximum or mean
+  intensity projection along ``z``). **MUST** be present on every projection and
   **MUST NOT** be present on an image that is not a projection. Like ``channels`` and
   ``normalization_statistics`` it describes the array and is not part of the
   experimental-metadata record. See :doc:`projections`.

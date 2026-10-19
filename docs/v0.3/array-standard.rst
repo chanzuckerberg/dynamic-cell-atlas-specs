@@ -40,7 +40,7 @@ Following `OME-ngff 0.5 image layout specification <https://ngff.openmicroscopy.
 Projections
 ~~~~~~~~~~~
 
-Projections (e.g. maximum intensity projections) **MUST** be stored in a separate sibling store that mirrors the source hierarchy. See :doc:`projections`.
+Projections (e.g. maximum or mean intensity projections along ``z``) **MUST** be stored in a separate sibling store that mirrors the source hierarchy. See :doc:`projections`.
 
 High Content Screening Datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

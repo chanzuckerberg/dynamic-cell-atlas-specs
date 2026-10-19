@@ -38,16 +38,18 @@ Throughout this document, conformance requirements are expressed with descriptiv
 Changes from v0.2
 -----------------
 
-* **Projections** (new): layout and metadata for maximum intensity projections,
-  including a ``dca.projection`` block for the projected range. Its fields keep the
-  names of the top-level ``mip`` attribute that v0.2-era projection stores carry.
-  See :doc:`projections`.
+* **Projections** (new): layout and metadata for 2D projections of 3D images
+  (maximum, mean or sum intensity, or a single plane), with a ``dca.projection`` block
+  that records the method and the planes actually used, uniformly or per channel. The
+  method vocabulary is shared with biahub's ``project`` command. Its uniform form keeps
+  the field names of the top-level ``mip`` attribute that v0.2-era projection stores
+  carry. See :doc:`projections`.
 * ``dca.version`` is ``"0.3"``.
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
   recommended step vocabulary, instead of a single string. It is the only change to the
   experimental-metadata schema (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
-  cross-store projection checks and an opt-in ``--require-mip`` (see the
+  cross-store projection checks and an opt-in ``--require-projection`` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
   spec version stays 0.2 until v0.3 is released.
 

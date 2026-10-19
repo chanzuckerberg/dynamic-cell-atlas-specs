@@ -320,41 +320,107 @@
     },
     "Projection": {
       "type": "object",
-      "description": "Parameters of a projected image (projections.rst, Projection block). Array metadata, zarr.json only; not part of the experimental-metadata record.",
+      "description": "Parameters of a projected image (projections.rst, Projection block): the method and the source planes actually used. Array metadata, zarr.json only; not part of the experimental-metadata record. Exactly one of `method` (uniform form) and `channels` (per-channel form).",
       "required": [
-        "method",
         "source_store"
       ],
       "properties": {
-        "method": {
-          "type": "string",
-          "const": "max"
-        },
-        "z_dim_source": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "z_start": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "First source z index projected (inclusive)."
-        },
-        "z_end": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Last source z index projected (exclusive)."
-        },
         "source_store": {
           "type": "string",
           "minLength": 1,
           "description": "Source store: its name (resolved as a sibling of this store; preferred) or its full URL / absolute path."
         },
+        "z_dim_source": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "method": {
+          "enum": [
+            "max",
+            "mean",
+            "sum",
+            "slice"
+          ]
+        },
+        "z_start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Uniform form: first source z index projected (inclusive)."
+        },
+        "z_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Uniform form: last source z index projected (exclusive)."
+        },
         "z_fraction": {
           "type": "number",
           "exclusiveMinimum": 0,
           "maximum": 1
+        },
+        "channels": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/ProjectionChannel"
+          },
+          "description": "Per-channel form, keyed by output channel name (dca.channels[].name)."
+        },
+        "focus": {
+          "$ref": "#/$defs/ProjectionFocus"
+        },
+        "z_step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Uniform form: every z_step-th plane of [z_start, z_end) was used."
         }
       },
+      "oneOf": [
+        {
+          "required": [
+            "method"
+          ],
+          "not": {
+            "required": [
+              "channels"
+            ]
+          }
+        },
+        {
+          "required": [
+            "channels"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ]
+              },
+              {
+                "required": [
+                  "z_start"
+                ]
+              },
+              {
+                "required": [
+                  "z_end"
+                ]
+              },
+              {
+                "required": [
+                  "z_step"
+                ]
+              },
+              {
+                "required": [
+                  "z_fraction"
+                ]
+              }
+            ]
+          }
+        }
+      ],
       "dependentRequired": {
         "z_start": [
           "z_end",
@@ -364,11 +430,184 @@
           "z_start",
           "z_dim_source"
         ],
-        "z_dim_source": [
+        "z_step": [
           "z_start",
           "z_end"
         ]
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "slice"
+              }
+            },
+            "required": [
+              "method"
+            ]
+          },
+          "then": {
+            "required": [
+              "z_start",
+              "z_end"
+            ]
+          }
+        }
+      ]
+    },
+    "ProjectionChannel": {
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "description": "How one output channel was projected (projections.rst, Per-channel form).",
+      "properties": {
+        "method": {
+          "enum": [
+            "max",
+            "mean",
+            "sum",
+            "slice"
+          ]
+        },
+        "source_channel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "z_start": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "First source plane used (inclusive); a list gives one per level-0 timepoint."
+        },
+        "z_end": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Last source plane used (exclusive); a list gives one per level-0 timepoint."
+        },
+        "z_step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "dependentRequired": {
+        "z_start": [
+          "z_end"
+        ],
+        "z_end": [
+          "z_start"
+        ],
+        "z_step": [
+          "z_start",
+          "z_end"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "slice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z_start",
+              "z_end"
+            ]
+          }
+        }
+      ]
+    },
+    "ProjectionFocus": {
+      "type": "object",
+      "required": [
+        "channel",
+        "per"
+      ],
+      "description": "How the in-focus plane used to choose planes was found (projections.rst, Focus). Provenance only.",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "per": {
+          "enum": [
+            "fov",
+            "timepoint"
+          ]
+        },
+        "z": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "z_per_t": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "parameters": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "per": {
+                "const": "fov"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "per": {
+                "const": "timepoint"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z_per_t"
+            ]
+          }
+        }
+      ]
     }
   }
 }
