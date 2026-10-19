@@ -5,6 +5,7 @@ Unit tests for validation.validator helpers.
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import obstore.exceptions as _obs_exc
 import pytest
 
 from dca_helpers.validation.result import Severity
@@ -269,6 +270,45 @@ class TestGatherPlateFields:
         assert len(issues) == 1
         assert issues[0].severity == Severity.ERROR
         assert issues[0].loc == ("plate", "wells", "A/1")
+        assert field_paths == []
+
+    def test_missing_well_via_file_not_found_is_still_missing(self, monkeypatch):
+        def _raise(*a, **kw):
+            raise FileNotFoundError("no such key")
+
+        monkeypatch.setattr("dca_helpers.validation.discovery.zarr.open_group", _raise)
+        issues, _, _, _ = _gather_plate_fields(
+            "/p", [{"path": "A/1"}], spec_version="0.2"
+        )
+        assert [i.loc for i in issues] == [("plate", "wells", "A/1")]
+
+    def test_s3_error_opening_well_is_s3_io_not_missing(self, monkeypatch):
+        def _raise(*a, **kw):
+            raise _obs_exc.GenericError("slow down")
+
+        monkeypatch.setattr("dca_helpers.validation.discovery.zarr.open_group", _raise)
+        issues, field_paths, _, perturbations = _gather_plate_fields(
+            "/p", [{"path": "A/1"}], spec_version="0.2"
+        )
+        assert [i.loc for i in issues] == [("s3_io",)]
+        assert "A/1" in issues[0].message
+        assert "no group on disk" not in issues[0].message
+        assert issues[0].severity == Severity.ERROR
+        assert field_paths == []
+        assert perturbations == {}
+
+    def test_s3_error_listing_well_is_s3_io_not_missing_fields(self, monkeypatch):
+        group = make_well_group(["0", "1"], [])
+        group.keys.side_effect = _obs_exc.GenericError("slow down")
+        monkeypatch.setattr(
+            "dca_helpers.validation.discovery.zarr.open_group",
+            lambda *a, **kw: group,
+        )
+        issues, field_paths, _, _ = _gather_plate_fields(
+            "/p", [{"path": "A/1"}], spec_version="0.2"
+        )
+        assert [i.loc for i in issues] == [("s3_io",)]
+        assert "A/1" in issues[0].message
         assert field_paths == []
 
     def test_missing_field_is_error(self, monkeypatch):
