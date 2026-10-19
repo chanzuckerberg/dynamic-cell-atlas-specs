@@ -43,9 +43,13 @@ Changes from v0.2
   names of the top-level ``mip`` attribute that v0.2-era projection stores carry.
   See :doc:`projections`.
 * ``dca.version`` is ``"0.3"``.
-* The experimental-metadata schema is unchanged from v0.2.
-* No v0.3 validator exists yet. Use the :doc:`v0.2 validator </v0.2/validator>` for the
-  parts that are unchanged.
+* ``image_data.processing_variant`` is an ordered list of processing steps, with a
+  recommended step vocabulary, instead of a single string. It is the only change to the
+  experimental-metadata schema (``schema/v0.3/dca_experimental_metadata.yaml``).
+* The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
+  cross-store projection checks and an opt-in ``--require-mip`` (see the
+  :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
+  spec version stays 0.2 until v0.3 is released.
 
 Contents
 --------

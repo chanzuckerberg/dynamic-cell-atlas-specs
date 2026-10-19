@@ -52,10 +52,14 @@ Metadata
 Processing variant
 ~~~~~~~~~~~~~~~~~~
 
-A projection **MUST** set ``dca.image_data.processing_variant`` to the name of the
-projection, replacing the source's value (e.g. ``"raw"``). For a maximum intensity
-projection the value **MUST** be ``"maximum intensity projection"``. This is the field
-a catalog query uses to separate projections from full-volume stores.
+``dca.image_data.processing_variant`` is an ordered list of processing steps (see
+:doc:`experimental-metadata`). A projection **MUST** list its source's steps followed by
+``"maximum intensity projection"``, so the full chain is readable on the projection
+itself; e.g. a projection of a deconvolved, registered stack lists
+``["deconvolved", "registered", "maximum intensity projection"]``. An image lists
+``"maximum intensity projection"`` exactly when it carries ``dca.projection``: each
+**MUST NOT** appear without the other. A projection of an unprocessed stack lists only
+``["maximum intensity projection"]``, since ``"raw"`` means no processing at all.
 
 Projection block
 ~~~~~~~~~~~~~~~~
@@ -102,8 +106,11 @@ belongs to catalog lineage, as described for ``processing_variant`` in
    * - ``source_store``
      - string
      - **MUST**
-     - Name of the source store (e.g. ``"plate_01.ome.zarr"``). The image group inside
-       it has the same path as this one (see `Store Layout`_).
+     - The source store, as either its name (e.g. ``"plate_01.ome.zarr"``), resolved
+       as a sibling of this store, or its full URL or absolute path (e.g.
+       ``"s3://bucket/datasets/plate_01.ome.zarr"``). The name form **SHOULD** be
+       preferred, since it stays valid when the stores are moved together. The image
+       group inside the source has the same path as this one (see `Store Layout`_).
    * - ``z_fraction``
      - number
      - MAY
@@ -163,7 +170,7 @@ Example
            "z_dim_source": 50
          },
          "image_data": {
-           "processing_variant": "maximum intensity projection"
+           "processing_variant": ["deconvolved", "maximum intensity projection"]
          },
          "study": { "..." },
          "biosample": { "..." },

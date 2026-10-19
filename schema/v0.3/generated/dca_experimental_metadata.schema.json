@@ -1,0 +1,1788 @@
+{
+    "$defs": {
+        "AcquisitionMetadata": {
+            "additionalProperties": false,
+            "description": "Image-acquisition metadata (REMBI Image Acquisition): instrument attributes (microscope / objective / detector / imaging environment) and acquisition parameters (acquisition date, time increment, \u2026), all OME-aligned. Optional apart from ``time_increment_s``, which is required for time-lapse data. The acquisition **modality** (FBbi ``imaging_method``) is not here: REMBI scopes it to the Study Component, so it lives on :class:`ExperimentalMetadata`. Populate what the source supports; omit the rest rather than guessing.",
+            "properties": {
+                "acquisition_date": {
+                    "description": "Acquisition timestamp (ISO 8601).",
+                    "format": "date-time",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "detector": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Detector"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "imaging_environment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ImagingEnvironment"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "microscope": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Microscope"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "objective": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Objective"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "plate_type": {
+                    "description": "Plate or imaging vessel used. SHOULD include well count, substrate, and catalog identifier (e.g. ``\"96-well glass-bottom (Cellvis P96-1.5H-N)\"``). Maps to OPS ``cellular.plate_type``.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "provenance": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Provenance"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Per-value provenance (see Provenance)."
+                },
+                "time_increment_s": {
+                    "description": "Time between successive timepoints, in seconds. Required for time-lapse data; the validator derives the time-lapse condition from the ``zarr.json`` array shape (time dimension T > 1) rather than from a metadata flag, so this is enforced by the validator, not a LinkML ``if/then`` rule. The **nominal** cadence: when ``time_sampling`` is ``variable`` this is the spacing the acquisition targeted, and ``timestamps`` is what the frames actually are.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "time_sampling": {
+                    "$ref": "#/$defs/TimeSampling",
+                    "description": "Whether the timepoints are evenly spaced. ``uniform`` (the default when absent) means the OME ``t``-axis scale describes the spacing. ``variable`` means it does not, and the per-frame ``timestamps`` are authoritative: acquisitions interrupted mid-run (a scope fault, a media change) or deliberately re-paced by experimental phase cannot be expressed by a single scale. Declaring ``variable`` relaxes the temporal-axis unit MUST (ome-zarr-metadata.rst \u00a7 Units) and REQUIRES ``timestamps``, so the claim is checkable rather than an escape hatch."
+                },
+                "timepoint_acquisition": {
+                    "description": "Acquisition timepoint (elapsed acquisition time).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "timestamps": {
+                    "description": "Per-frame acquisition times, one per timepoint of the level-0 array, as **seconds since the Unix epoch (UTC)**. One encoding rather than several, so a consumer can read the values without a companion unit field; an explicit unit / epoch is part of the general time-coordinate design and not in this version. REQUIRED when ``time_sampling`` is ``variable`` and OPTIONAL otherwise. Length MUST equal the array's ``T`` and the values MUST be non-decreasing, whichever mode is declared. This is the time coordinate the ``t`` axis cannot carry; treat the shape here as provisional.",
+                    "items": {
+                        "type": "number"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "title": "AcquisitionMetadata",
+            "type": "object"
+        },
+        "AdditionalMetadataField": {
+            "additionalProperties": false,
+            "description": "A single agent-minted or non-standard metadata value (``name`` + ``value``), used wherever a typed slot does not exist. Its provenance lives in the root ``ExperimentalMetadata.provenance`` map, keyed by ``<block>.additional_metadata.<name>`` (not inline), so all provenance has one home.",
+            "properties": {
+                "name": {
+                    "description": "Field name (SHOULD be namespaced if targeting a specific spec).",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "name",
+                "value"
+            ],
+            "title": "AdditionalMetadataField",
+            "type": "object"
+        },
+        "AssayTerm": {
+            "additionalProperties": false,
+            "description": "Assay / experiment-class ontology annotation (EFO only).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(EFO:\\d+|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "AssayTerm",
+            "type": "object"
+        },
+        "Biosample": {
+            "additionalProperties": false,
+            "description": "Sample-level descriptors. Sample context reuses the CZI cross-modality schema v1.1.0 (CELLxGENE-aligned) as ``ontology_term_id`` + label pairs; cell-line identity uses the CellPainting Gallery + Cellosaurus.",
+            "if": {
+                "properties": {
+                    "tissue_type": {
+                        "const": "cell line"
+                    }
+                },
+                "required": [
+                    "tissue_type"
+                ]
+            },
+            "properties": {
+                "additional_metadata": {
+                    "description": "Extra study-provided values not yet defined in this spec. Optional; promotable \u2014 once a field here stabilizes it can be elevated to a defined (ultimately required) slot in a future version.",
+                    "items": {
+                        "$ref": "#/$defs/AdditionalMetadataField"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "cell_line_id": {
+                    "description": "Cellosaurus accession as a colon CURIE (e.g. \"CVCL:0030\"), resolvable via the ``prefixes`` block. Convenience mirror of the **authoritative** ``tissue`` term when ``tissue_type`` is \"cell line\", and SHOULD hold the same CVCL accession; a mismatch is a SHOULD warning from the validator (the generated JSON Schema does not check it), and ``tissue`` wins on conflict. RECOMMENDED rather than required: iPSC and primary lines may have no accession, and SHOULD then record hPSCreg / donor id in ``additional_metadata``.",
+                    "pattern": "^CVCL:\\w+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "cell_line_modification": {
+                    "description": "Genetic / other modification (e.g. \"Cas9 polyclonal overexpression\").",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "cell_line_name": {
+                    "description": "Cell line name (CPG harmonized vocabulary). Required when ``tissue_type`` is \"cell line\". Repeats ``tissue``'s ``label`` for a cell-line sample; the duplication is deliberate, for CellPainting Gallery alignment.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "cell_line_type": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "development_stage": {
+                    "description": "Development stage as an ``ontology_term_id`` + ``label`` pair. Use the stage ontology for the organism \u2014 HsapDv (human), MmusDv (mouse), ZFS (zebrafish), FBdv (fly), WBls (worm) \u2014 or a UBERON life-cycle term for organisms with no dedicated stage ontology.",
+                    "items": {
+                        "$ref": "#/$defs/DevelopmentStageTerm"
+                    },
+                    "type": "array"
+                },
+                "disease": {
+                    "description": "Disease as an ``ontology_term_id`` + ``label`` pair; the id is a MONDO term, or PATO:0000461 for normal/healthy.",
+                    "items": {
+                        "$ref": "#/$defs/DiseaseTerm"
+                    },
+                    "type": "array"
+                },
+                "group_id": {
+                    "description": "Row key of the Parquet (``tables/obs``) table, and the key that links this sample's metadata to the image arrays it describes. There is one obs row per image group: a single-image store has one row; an HCS plate has one row per well (the well ``WellPerturbation.plate`` / ``well`` also key on). DCA-native \u2014 so sample metadata is not floating free of the data it annotates. Reuses the identifier the ingestor already writes to the obs table rather than minting a separate one.",
+                    "type": "string"
+                },
+                "organism": {
+                    "description": "Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:9606\").",
+                    "items": {
+                        "$ref": "#/$defs/OrganismTerm"
+                    },
+                    "type": "array"
+                },
+                "parent_cell_line_id": {
+                    "description": "Cellosaurus accession of the **parental** cell line from which the imaged line was derived, as a colon CURIE (e.g. ``\"CVCL:Y803\"`` for WTC-11 hiPSC). RECOMMENDED when ``tissue_type`` is \"cell line\" and the imaged line was created by gene editing or reprogramming from a registered parental line. ``cell_line_id`` identifies the engineered clone; ``parent_cell_line_id`` links it back to its origin. Use ``additional_metadata`` for donor / hPSCreg identifiers that have no Cellosaurus accession.",
+                    "pattern": "^CVCL:\\w+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "tissue": {
+                    "description": "Tissue as an ``ontology_term_id`` + ``label`` pair. The id is a UBERON term (or a ZFA term for zebrafish anatomy); a CL term when ``tissue_type`` is \"cell culture\"; a Cellosaurus ``CVCL:`` term when ``tissue_type`` is \"cell line\" (cross-modality v1.1.0). Cross-modality splits anatomy and cell type across two fields; DCA folds both into this one slot and keys the distinction off ``tissue_type``. For zebrafish that means: in the anatomy role (``tissue_type`` \"tissue\" or \"organoid\") use a descendant of ``ZFA:0100000`` outside the ``ZFA:0009000`` (\"cell\") branch, and in the cell-type role (``tissue_type`` \"cell culture\") use a CL term, or a descendant of ``ZFA:0009000`` where CL has no equivalent. ``ZFA:0001093`` (\"unspecified\") is never valid \u2014 use the ``unknown`` sentinel. When ``tissue_type`` is \"organoid\", use the UBERON term for the **tissue of origin** from which the organoid was derived (e.g. ``UBERON:0002108`` for small intestine organoids, ``UBERON:0000948`` for cardiac organoids). All ids are colon CURIEs that expand to a resolvable URL via the ``prefixes`` block. This is the **authoritative** slot for cell-line identity (cross-modality); ``cell_line_id`` is a convenience mirror.",
+                    "items": {
+                        "$ref": "#/$defs/TissueTerm"
+                    },
+                    "type": "array"
+                },
+                "tissue_type": {
+                    "$ref": "#/$defs/TissueType"
+                }
+            },
+            "required": [
+                "group_id",
+                "organism",
+                "tissue_type",
+                "tissue",
+                "disease",
+                "development_stage"
+            ],
+            "then": {
+                "properties": {
+                    "cell_line_name": {}
+                },
+                "required": [
+                    "cell_line_name"
+                ]
+            },
+            "title": "Biosample",
+            "type": "object"
+        },
+        "ChemicalPerturbation": {
+            "additionalProperties": false,
+            "description": "Chemical (small-molecule) perturbation identifiers.",
+            "properties": {
+                "chembl_id": {
+                    "description": "ChEMBL compound identifier (e.g. \"CHEMBL25\"). Self-identifying \u2014 ChEMBL accessions carry the ``CHEMBL`` prefix in the value itself.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "inchi": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "inchikey": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "pubchem_cid": {
+                    "description": "PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block \u2014 the value names its own database.",
+                    "pattern": "^PubChem:\\d+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "smiles": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "title": "ChemicalPerturbation",
+            "type": "object"
+        },
+        "Citation": {
+            "additionalProperties": false,
+            "description": "The supporting quote, the source page it was copied from, and the result of the agent's grounding gate that located it. When a citation is present, ``source_url`` and ``quote`` are both required \u2014 a half-empty citation is not allowed.",
+            "properties": {
+                "match_status": {
+                    "$ref": "#/$defs/MatchStatus",
+                    "description": "Outcome of the deterministic grounding gate for this quote (see MatchStatus). ``none`` means the quote did not ground in the cited page."
+                },
+                "quote": {
+                    "description": "Verbatim excerpt from the source supporting the value.",
+                    "type": "string"
+                },
+                "source_url": {
+                    "format": "uri",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "source_url",
+                "quote"
+            ],
+            "title": "Citation",
+            "type": "object"
+        },
+        "Concentration": {
+            "additionalProperties": false,
+            "description": "Perturbation concentration. Structured ``value`` + ``unit`` with a free-text ``text`` fallback for CellPainting Gallery's string ``Treatment_Concentration``.",
+            "properties": {
+                "text": {
+                    "description": "Free-text concentration as recorded (CPG fallback).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "unit": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "value": {
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "title": "Concentration",
+            "type": "object"
+        },
+        "Detector": {
+            "additionalProperties": false,
+            "description": "Detector / camera. Maps to OME Detector.",
+            "properties": {
+                "manufacturer": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "model": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "type": {
+                    "$ref": "#/$defs/DetectorType"
+                }
+            },
+            "title": "Detector",
+            "type": "object"
+        },
+        "DetectorType": {
+            "description": "OME Detector.Type vocabulary.",
+            "enum": [
+                "CCD",
+                "EMCCD",
+                "CMOS",
+                "PMT",
+                "Photodiode",
+                "Other"
+            ],
+            "title": "DetectorType",
+            "type": "string"
+        },
+        "DevelopmentStageTerm": {
+            "additionalProperties": false,
+            "description": "Development-stage ontology annotation. Uses the organism-specific stage ontology the CZI cross-modality schema names for that organism \u2014 HsapDv (human), MmusDv (mouse), ZFS (zebrafish), FBdv (fly), WBls (worm) \u2014 and a UBERON life-cycle term for organisms with no dedicated stage ontology.",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(HsapDv:\\d+|MmusDv:\\d+|ZFS:(?!0000000$)\\d+|FBdv:(?!00007012$)\\d+|WBls:\\d+|UBERON:\\d+|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "DevelopmentStageTerm",
+            "type": "object"
+        },
+        "DiseaseTerm": {
+            "additionalProperties": false,
+            "description": "Disease ontology annotation (MONDO, or PATO:0000461 for normal/healthy).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(MONDO:\\d+|PATO:0000461|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "DiseaseTerm",
+            "type": "object"
+        },
+        "ExperimentalMetadata": {
+            "additionalProperties": false,
+            "description": "Root container for one image group's experimental metadata (a flattened REMBI Study + Study Component): the study, the ``study_component`` (assay class + imaging method), the sample (``biosample`` + ``specimen``), acquisition, and image-data context, the ``perturbation`` assignment, plus the per-value ``provenance`` map. This is the object curated into a Parquet row (one per ``Biosample.group_id``) and mirrored into the ``zarr.json`` ``dca`` block. Arrayed HCS screens ALSO index the same assignment per well as :class:`WellPerturbation` (well-level), which is derived from this block.",
+            "properties": {
+                "acquisition": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/AcquisitionMetadata"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "biosample": {
+                    "$ref": "#/$defs/Biosample"
+                },
+                "image_data": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ImageData"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "perturbation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/PerturbationAssignment"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). CONDITIONALLY REQUIRED: present for every image group of a dataset that has perturbations, absent for a dataset that has none. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
+                },
+                "provenance": {
+                    "additionalProperties": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/$defs/FieldProvenance__identifier_optional"
+                            },
+                            {
+                                "$ref": "#/$defs/ProvenanceSourceKind",
+                                "description": "How the value was obtained. REQUIRED on every provenance entry \u2014 it is the discriminator that distinguishes an ``agent``-extracted value from a hand-entered (``human``) one from a value taken directly from the source's own metadata (``original_data``). The citation / grounding is what is optional (for ``human`` / ``original_data``); ``source_kind`` itself is always stated."
+                            }
+                        ]
+                    },
+                    "description": "Per-value provenance, as a map keyed by each value's dotted ``field_path`` (e.g. ``biosample.organism``). A parallel provenance layer, carried in the Parquet and the ``zarr.json`` mirror alike. REQUIRED for ``agent``-curated values, optional for ``human`` / ``original_data`` (see :class:`FieldProvenance` / :class:`Provenance`).",
+                    "type": "object"
+                },
+                "specimen": {
+                    "$ref": "#/$defs/Specimen"
+                },
+                "study": {
+                    "$ref": "#/$defs/Study"
+                },
+                "study_component": {
+                    "$ref": "#/$defs/StudyComponent"
+                }
+            },
+            "required": [
+                "study",
+                "biosample",
+                "specimen",
+                "study_component",
+                "provenance"
+            ],
+            "title": "ExperimentalMetadata",
+            "type": "object"
+        },
+        "Experimenter": {
+            "additionalProperties": false,
+            "description": "A person associated with the study. Anchored on OME ``Experimenter``.",
+            "properties": {
+                "email": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "first_name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "institution": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "last_name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "orcid": {
+                    "description": "ORCID iD. DCA-native (REMBI-derived).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "title": "Experimenter",
+            "type": "object"
+        },
+        "FieldProvenance": {
+            "additionalProperties": false,
+            "description": "One entry in the per-value provenance map (``ExperimentalMetadata.provenance``): the provenance of a single field, keyed by its dotted ``field_path``. Same shape as :class:`Provenance` (``source_kind`` / ``citation`` and its grounding rules) plus the path it applies to, so provenance can travel as a parallel layer keyed by field path rather than nested inside each value.",
+            "if": {
+                "properties": {
+                    "source_kind": {
+                        "const": "agent"
+                    }
+                },
+                "required": [
+                    "source_kind"
+                ]
+            },
+            "properties": {
+                "citation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Citation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "field_path": {
+                    "description": "Dotted path of the field this provenance applies to, relative to the experimental-metadata root (e.g. ``study.year_imaged``, ``biosample.tissue``). Keys this entry within the map.",
+                    "type": "string"
+                },
+                "source_kind": {
+                    "$ref": "#/$defs/ProvenanceSourceKind",
+                    "description": "How the value was obtained. REQUIRED on every provenance entry \u2014 it is the discriminator that distinguishes an ``agent``-extracted value from a hand-entered (``human``) one from a value taken directly from the source's own metadata (``original_data``). The citation / grounding is what is optional (for ``human`` / ``original_data``); ``source_kind`` itself is always stated."
+                }
+            },
+            "required": [
+                "field_path",
+                "source_kind"
+            ],
+            "then": {
+                "properties": {
+                    "citation": {}
+                },
+                "required": [
+                    "citation"
+                ]
+            },
+            "title": "FieldProvenance",
+            "type": "object"
+        },
+        "FieldProvenance__identifier_optional": {
+            "additionalProperties": false,
+            "description": "One entry in the per-value provenance map (``ExperimentalMetadata.provenance``): the provenance of a single field, keyed by its dotted ``field_path``. Same shape as :class:`Provenance` (``source_kind`` / ``citation`` and its grounding rules) plus the path it applies to, so provenance can travel as a parallel layer keyed by field path rather than nested inside each value.",
+            "if": {
+                "properties": {
+                    "source_kind": {
+                        "const": "agent"
+                    }
+                },
+                "required": [
+                    "source_kind"
+                ]
+            },
+            "properties": {
+                "citation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Citation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "field_path": {
+                    "description": "Dotted path of the field this provenance applies to, relative to the experimental-metadata root (e.g. ``study.year_imaged``, ``biosample.tissue``). Keys this entry within the map.",
+                    "type": "string"
+                },
+                "source_kind": {
+                    "$ref": "#/$defs/ProvenanceSourceKind",
+                    "description": "How the value was obtained. REQUIRED on every provenance entry \u2014 it is the discriminator that distinguishes an ``agent``-extracted value from a hand-entered (``human``) one from a value taken directly from the source's own metadata (``original_data``). The citation / grounding is what is optional (for ``human`` / ``original_data``); ``source_kind`` itself is always stated."
+                }
+            },
+            "required": [
+                "source_kind"
+            ],
+            "then": {
+                "properties": {
+                    "citation": {}
+                },
+                "required": [
+                    "citation"
+                ]
+            },
+            "title": "FieldProvenance",
+            "type": "object"
+        },
+        "GeneticPerturbation": {
+            "additionalProperties": false,
+            "description": "Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.",
+            "properties": {
+                "ensembl_gene_id": {
+                    "description": "Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\"); optional cross-map. Resolvable via the ``prefixes`` block.",
+                    "pattern": "^ensembl:ENSG\\d+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "gene_description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "gene_symbol": {
+                    "description": "HGNC gene symbol (e.g. \"TP53\") \u2014 the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "insert_length": {
+                    "description": "ORF insert length (bp).",
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "ncbi_gene_id": {
+                    "description": "NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") \u2014 the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.",
+                    "pattern": "^NCBIGene:\\d+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "transcript_refseq": {
+                    "description": "NCBI RefSeq transcript id (ORF).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "vector": {
+                    "description": "Expression / delivery vector (ORF; sgRNA vector).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "title": "GeneticPerturbation",
+            "type": "object"
+        },
+        "ImageData": {
+            "additionalProperties": false,
+            "description": "Image-level metadata (REMBI Image Data). For DCA this carries the processing variant that produced the array, i.e. REMBI's \"Type: primary / processed image\" plus the image processing method. The remaining REMBI Image Data fields (format, dimensions, pixel and voxel size, channel information) live in the OME-Zarr arrays and channel metadata, not here. The full derivation (parent dataset, algorithm, parameters) is a Scientific Dataset Catalog ``transformed_from`` Lineage Edge.",
+            "properties": {
+                "processing_variant": {
+                    "description": "The computational processing steps applied to produce this image array, as an ordered list in the order they were applied (e.g. ``[\"deconvolved\", \"registered\", \"maximum intensity projection\"]``). Items SHOULD come from the ``ProcessingStep`` vocabulary; ``\"raw\"`` means no processing and MUST be the only item when present. DCA-native. Present when a single acquisition yields multiple differently-processed stores. A derived image (e.g. a projection) lists its source's steps followed by its own, so the full chain is readable without opening the source. Changed in v0.3 from a single string to a list. This is the zarr-local mirror of the Scientific Dataset Catalog ``dataset_type`` field (``raw`` / ``processed``); the full derivation relationship \u2014 parent dataset id, algorithm, pipeline version, and transformation parameters \u2014 is tracked as a catalog ``Lineage Edge`` of type ``transformed_from`` and SHOULD NOT be duplicated here. Bio-Formats / OME has no dedicated field for this concept; it would conventionally appear in ``Image.Name`` or ``Image.Description``.",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                }
+            },
+            "title": "ImageData",
+            "type": "object"
+        },
+        "ImagingEnvironment": {
+            "additionalProperties": false,
+            "description": "Environmental conditions during acquisition. Maps to OME ImagingEnvironment. RECOMMENDED for live-cell datasets.",
+            "properties": {
+                "air_pressure": {
+                    "description": "Air pressure in millibar.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "co2_percent": {
+                    "description": "CO2 concentration, percent (0-100).",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "humidity_percent": {
+                    "description": "Relative humidity, percent (0-100).",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "temperature_c": {
+                    "description": "Temperature in degrees Celsius.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "title": "ImagingEnvironment",
+            "type": "object"
+        },
+        "ImagingMethodTerm": {
+            "additionalProperties": false,
+            "description": "Acquisition-modality ontology annotation (FBbi only).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(FBbi:\\d+|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "ImagingMethodTerm",
+            "type": "object"
+        },
+        "MatchStatus": {
+            "description": "Result of an agent's deterministic grounding gate locating a cited quote in its source page. Carried with the value so the grounding result stays auditable downstream, where the raw source corpus is unavailable.",
+            "enum": [
+                "exact",
+                "fuzzy",
+                "none"
+            ],
+            "title": "MatchStatus",
+            "type": "string"
+        },
+        "Microscope": {
+            "additionalProperties": false,
+            "description": "Imaging system make/model. Maps to OME Microscope.",
+            "properties": {
+                "binning": {
+                    "description": "Detector binning (e.g. \"2x2\").",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "manufacturer": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "modality": {
+                    "description": "Imaging modality (e.g. fluorescence, brightfield).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "model": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "type": {
+                    "$ref": "#/$defs/MicroscopeType"
+                }
+            },
+            "title": "Microscope",
+            "type": "object"
+        },
+        "MicroscopeType": {
+            "description": "OME Microscope.Type vocabulary.",
+            "enum": [
+                "Upright",
+                "Inverted",
+                "Dissection",
+                "Electrophysiology",
+                "Other"
+            ],
+            "title": "MicroscopeType",
+            "type": "string"
+        },
+        "Objective": {
+            "additionalProperties": false,
+            "description": "Objective lens. Maps to OME Objective.",
+            "properties": {
+                "correction": {
+                    "$ref": "#/$defs/ObjectiveCorrection"
+                },
+                "immersion": {
+                    "$ref": "#/$defs/ObjectiveImmersion"
+                },
+                "lens_na": {
+                    "description": "Numerical aperture of the objective.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "nominal_magnification": {
+                    "description": "Nominal (engraved) magnification, e.g. 63 for a 63x lens.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "working_distance_mm": {
+                    "description": "Working distance in millimeters.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "title": "Objective",
+            "type": "object"
+        },
+        "ObjectiveCorrection": {
+            "description": "OME Objective.Correction vocabulary.",
+            "enum": [
+                "UV",
+                "PlanApo",
+                "PlanFluor",
+                "SuperFluor",
+                "VioletCorrected",
+                "Achro",
+                "Achromat",
+                "Fluor",
+                "Fl",
+                "Neofluar",
+                "Apo",
+                "Other"
+            ],
+            "title": "ObjectiveCorrection",
+            "type": "string"
+        },
+        "ObjectiveImmersion": {
+            "description": "OME Objective.Immersion vocabulary.",
+            "enum": [
+                "Oil",
+                "Water",
+                "WaterDipping",
+                "Air",
+                "Multi",
+                "Glycerol",
+                "Other"
+            ],
+            "title": "ObjectiveImmersion",
+            "type": "string"
+        },
+        "OntologyTerm": {
+            "additionalProperties": false,
+            "description": "An ontology annotation as an ``ontology_term_id`` (CURIE) + human-readable ``label`` pair. The label is derivable from the term id but carried explicitly so a stored record is human-readable without an ontology lookup. Subclasses constrain ``ontology_term_id`` to a specific ontology. Three sentinels stand in for a CURIE, each permitted only where a subclass allows it: ``unknown`` means the value is not available to the curator (absent from the source data); ``na`` means the field does not apply to this experiment or use case; ``unavailable`` means the value is known but no ontology term exists for it. When ``ontology_term_id`` is ``unknown`` or ``na`` the ``label`` repeats the same sentinel; when it is ``unavailable`` the ``label`` carries the free-text value; for a real CURIE the ``label`` is the ontology label.",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "OntologyTerm",
+            "type": "object"
+        },
+        "OrganismTerm": {
+            "additionalProperties": false,
+            "description": "Organism ontology annotation (NCBITaxon).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(NCBITaxon:\\d+|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "OrganismTerm",
+            "type": "object"
+        },
+        "Perturbation": {
+            "additionalProperties": false,
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {
+                                "const": "compound"
+                            }
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "chemical": {}
+                        },
+                        "required": [
+                            "chemical"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {
+                                "anyOf": [
+                                    {
+                                        "const": "crispr"
+                                    },
+                                    {
+                                        "const": "orf"
+                                    },
+                                    {
+                                        "const": "shrna"
+                                    },
+                                    {
+                                        "const": "mirna"
+                                    },
+                                    {
+                                        "const": "sirna"
+                                    }
+                                ]
+                            }
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "genetic": {}
+                        },
+                        "required": [
+                            "genetic"
+                        ]
+                    }
+                }
+            ],
+            "description": "A perturbation definition (the \"codebook\" entry), reusable across wells. Modality-agnostic core (mapped to the OME ``Reagent`` entity) plus an optional chemical or genetic block selected by ``modality``.",
+            "properties": {
+                "chemical": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ChemicalPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Chemical identifiers \u2014 present when ``modality = compound``."
+                },
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "genetic": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/GeneticPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Genetic-target identifiers \u2014 present when ``modality`` is crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target)."
+                },
+                "mechanism": {
+                    "description": "Mechanism of action (free text).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "modality": {
+                    "$ref": "#/$defs/PerturbationModality"
+                },
+                "name": {
+                    "description": "Human-readable treatment / perturbation name.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "perturbation_id": {
+                    "description": "Stable identifier for this perturbation within the dataset.",
+                    "type": "string"
+                },
+                "perturbation_identifier": {
+                    "description": "External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database \u2014 e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``); this generic slot records the source's own catalog id.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "perturbation_id",
+                "modality"
+            ],
+            "title": "Perturbation",
+            "type": "object"
+        },
+        "PerturbationAssignment": {
+            "additionalProperties": false,
+            "description": "The ASSIGNMENT of a :class:`Perturbation` to imaged material \u2014 the dosing / control / timing that turns a reusable codebook entry into \"what was done to this sample\". The entry itself is the ``definition`` slot (plus an optional ``cotreatment``); everything else here is the assignment. Carries no plate / well key, so it is placement-agnostic: it is the ``perturbation`` block of :class:`ExperimentalMetadata` (image level, alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key. Required-when-present: a dataset with perturbations MUST carry the required fields below; a dataset with none simply has no ``perturbation`` block. (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)",
+            "if": {
+                "properties": {
+                    "control_class": {
+                        "not": {
+                            "anyOf": [
+                                {
+                                    "const": "empty"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "control_class"
+                ]
+            },
+            "properties": {
+                "concentration": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Concentration"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "control_class": {
+                    "$ref": "#/$defs/PerturbationControlClass"
+                },
+                "cotreatment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Perturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Optional second :class:`Perturbation` definition applied alongside ``definition`` (a cotreatment)."
+                },
+                "definition": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Perturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The :class:`Perturbation` definition this assignment applies \u2014 the reusable codebook entry (what the perturbagen IS), as distinct from the dosing / control / timing around it (what was DONE to this material), which are the sibling slots here. Required for treated and control material (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is ``empty``, which has nothing to record (enforced by the class rule above)."
+                },
+                "duration_h": {
+                    "description": "Perturbation duration in hours.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "provenance": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Provenance"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "solvent": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "timepoint_primary_h": {
+                    "description": "Time of primary treatment (CPG Timepoint_Primary_Treatment).",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "timepoint_secondary_h": {
+                    "description": "Time of secondary treatment.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "control_class"
+            ],
+            "then": {
+                "properties": {
+                    "definition": {}
+                },
+                "required": [
+                    "definition"
+                ]
+            },
+            "title": "PerturbationAssignment",
+            "type": "object"
+        },
+        "PerturbationControlClass": {
+            "description": "Control role of a well. Based on CellPainting Gallery ``Treatment_Control_Class`` ([Control, Treatment, NegCon, PosCon]). CPG's redundant \"Control\" is dropped in favor of the explicit negcon/poscon, and ``empty`` is added for untreated wells.",
+            "enum": [
+                "treatment",
+                "negcon",
+                "poscon",
+                "empty"
+            ],
+            "title": "PerturbationControlClass",
+            "type": "string"
+        },
+        "PerturbationModality": {
+            "description": "How the perturbation acts. Normalized superset of CellPainting Gallery ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), with values lowercased.",
+            "enum": [
+                "compound",
+                "orf",
+                "crispr",
+                "shrna",
+                "mirna",
+                "sirna",
+                "physical",
+                "biological",
+                "other",
+                "unknown"
+            ],
+            "title": "PerturbationModality",
+            "type": "string"
+        },
+        "PreparationMethodTerm": {
+            "additionalProperties": false,
+            "description": "Sample-preparation method ontology annotation (FBbi only).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(FBbi:\\d+|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "PreparationMethodTerm",
+            "type": "object"
+        },
+        "ProcessingStep": {
+            "description": "Recommended vocabulary for the items of ``ImageData.processing_variant``: one computational step applied to produce an image array. Items outside this list are allowed but SHOULD be avoided; prose that qualifies a step (a pipeline version, a frame range) belongs in ``additional_metadata``, not in the step name.",
+            "enum": [
+                "raw",
+                "denoised",
+                "deconvolved",
+                "registered",
+                "stitched",
+                "cropped",
+                "flat-field corrected",
+                "background subtracted",
+                "maximum intensity projection"
+            ],
+            "title": "ProcessingStep",
+            "type": "string"
+        },
+        "Provenance": {
+            "additionalProperties": false,
+            "description": "Per-value provenance kept as a parallel layer (keyed by field path) alongside the pure metadata; a deterministic post-ingest step folds it onto the corresponding values in ``zarr.json`` / the Parquet. Lets a downstream consumer decide how much to trust a field without re-reading the source. Blank for manually entered values (``source_kind: human``).",
+            "if": {
+                "properties": {
+                    "source_kind": {
+                        "const": "agent"
+                    }
+                },
+                "required": [
+                    "source_kind"
+                ]
+            },
+            "properties": {
+                "citation": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Citation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "source_kind": {
+                    "$ref": "#/$defs/ProvenanceSourceKind",
+                    "description": "How the value was obtained. REQUIRED on every provenance entry \u2014 it is the discriminator that distinguishes an ``agent``-extracted value from a hand-entered (``human``) one from a value taken directly from the source's own metadata (``original_data``). The citation / grounding is what is optional (for ``human`` / ``original_data``); ``source_kind`` itself is always stated."
+                }
+            },
+            "required": [
+                "source_kind"
+            ],
+            "then": {
+                "properties": {
+                    "citation": {}
+                },
+                "required": [
+                    "citation"
+                ]
+            },
+            "title": "Provenance",
+            "type": "object"
+        },
+        "ProvenanceSourceKind": {
+            "description": "How the value was obtained, which determines whether the provenance fields (citation + grounding) are **required**: required for ``agent`` values, optional for ``human`` and ``original_data``. DCA-defined.",
+            "enum": [
+                "agent",
+                "human",
+                "original_data"
+            ],
+            "title": "ProvenanceSourceKind",
+            "type": "string"
+        },
+        "Publication": {
+            "additionalProperties": false,
+            "description": "A related publication (the paper), within ``Study.related_publication``. A self-contained citation: ``doi`` (the machine-readable key) plus REMBI-derived title / authors / year.",
+            "properties": {
+                "authors_name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "doi": {
+                    "description": "DOI of this publication \u2014 the citable identifier. Omit within an entry only for a publication that genuinely has no DOI (e.g. a preprint without one).",
+                    "pattern": "^10\\.\\d{4,9}/.+$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "publication_year": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ]
+                },
+                "title": {
+                    "description": "Title of the related **publication** (the paper). Distinct from ``Study.dataset_name``, which is the dataset's own name.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "title": "Publication",
+            "type": "object"
+        },
+        "Specimen": {
+            "additionalProperties": false,
+            "description": "How the biosample was prepared for imaging (REMBI Specimen module): the preparation state, an optional FBbi sample-preparation method, and the growth conditions. The imaging modality lives on :class:`AcquisitionMetadata`.",
+            "properties": {
+                "growth_conditions": {
+                    "description": "Free-text description of growth media, supplements, and culture conditions. SHOULD include catalog numbers and concentrations for all reagents. Maps to OPS ``cellular.growth_conditions``.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "preparation_method": {
+                    "description": "Sample-preparation method(s) as ``{ontology_term_id, label}`` FBbi terms \u2014 descendants of ``FBbi:00000001`` (\"sample preparation method\"), e.g. ``FBbi:00000026`` (sectioned tissue), ``FBbi:00000024`` (whole mounted tissue), ``FBbi:00000025`` (living tissue), or a fixation term such as ``FBbi:00000010`` (formaldehyde fixed tissue). Multivalued: a store may stack methods (e.g. fixation + permeabilization). Use ``unavailable`` with a free-text ``label`` when no FBbi term fits (e.g. optical clearing, expansion microscopy); ``na`` when no preparation applies (e.g. a live sample); ``unknown`` when the source does not record it.",
+                    "items": {
+                        "$ref": "#/$defs/PreparationMethodTerm"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "specimen_state": {
+                    "$ref": "#/$defs/SpecimenState",
+                    "description": "Specimen state at imaging time \u2014 the coarse, mutually-exclusive live-vs-fixed axis (``live`` / ``fixed`` / ``unknown``). REQUIRED. DCA controlled vocabulary (REMBI-derived): no source ontology structures this state cleanly across specimen types. Specific preparation methods go in ``preparation_method``."
+                }
+            },
+            "required": [
+                "specimen_state"
+            ],
+            "title": "Specimen",
+            "type": "object"
+        },
+        "SpecimenState": {
+            "description": "Specimen state at imaging time \u2014 the coarse, mutually-exclusive live-vs-fixed axis. DCA controlled vocabulary (REMBI-derived); no source ontology structures this state cleanly across specimen types. Specific preparation methods (fixation subtype, permeabilization, sectioning, whole-mount, clearing, expansion) are recorded in ``Specimen.preparation_method``.",
+            "enum": [
+                "live",
+                "fixed",
+                "unknown"
+            ],
+            "title": "SpecimenState",
+            "type": "string"
+        },
+        "Study": {
+            "additionalProperties": false,
+            "description": "Study-level descriptors. Anchored on OME ``Experiment`` + the Broad CellPainting Gallery study fields + schema.org.",
+            "if": {
+                "properties": {
+                    "dataset_name": {
+                        "pattern": ".*[Jj][Uu][Mm][Pp][ _-]?[Cc][Pp].*"
+                    }
+                },
+                "required": [
+                    "dataset_name"
+                ]
+            },
+            "properties": {
+                "accession_id": {
+                    "description": "Repository accession, when the dataset was deposited in a public archive (e.g. BioImage Archive ``S-BIAD####``, IDR ``idr####``). RECOMMENDED \u2014 SHOULD be provided when the dataset is deposited; omitted for in-house data with no repository accession (such datasets are addressed by their store location instead).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "additional_metadata": {
+                    "description": "Extra study-provided values not yet defined in this spec. Optional; promotable \u2014 once a field here stabilizes it can be elevated to a defined (ultimately required) slot in a future version.",
+                    "items": {
+                        "$ref": "#/$defs/AdditionalMetadataField"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "cp_version": {
+                    "description": "CellProfiler version used to process the dataset. Conditional \u2014 required for JUMP-CP datasets, enforced by a schema ``if/then`` rule keyed on ``dataset_name`` (which names the JUMP-CP dataset); see the class rule above.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "dataset_name": {
+                    "description": "The dataset's **own** human-readable name \u2014 the title of the *data*, not of any paper (distinct from ``Publication.title``). Searchable; present even for unpublished datasets. schema.org ``sc:name`` / catalog ``Dataset.name``.",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "experimenter": {
+                    "items": {
+                        "$ref": "#/$defs/Experimenter"
+                    },
+                    "type": "array"
+                },
+                "license": {
+                    "description": "License URL or SPDX identifier. schema.org (``sc:license``).",
+                    "type": "string"
+                },
+                "protocol_url": {
+                    "description": "URL to the full experimental protocol (e.g. protocols.io).",
+                    "format": "uri",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "related_publication": {
+                    "description": "The dataset's publication(s), each a self-contained citation (``doi`` + title + authors + year). schema.org. **RECOMMENDED** \u2014 SHOULD be provided whenever the dataset has an associated publication; omitted when there is none.",
+                    "items": {
+                        "$ref": "#/$defs/Publication"
+                    },
+                    "type": [
+                        "array",
+                        "null"
+                    ]
+                },
+                "release_date": {
+                    "description": "schema.org (``sc:datePublished``).",
+                    "format": "date",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Data-generating center / source.",
+                    "type": "string"
+                },
+                "study_type": {
+                    "description": "The overall **study type** (REMBI \"Study type\"; OME ``Experiment.Type``): the experimental design / modes, from the OME ``Experiment.Type`` vocabulary (:class:`StudyType`). Multivalued, so a multimodal study lists several (e.g. ``FourDPlus`` + ``TimeLapse`` + ``SPIM`` + ``FP`` + ``Immunofluorescence``). Study-level and may span the study's components, distinct from the per-component acquisition **modality** (the FBbi ``StudyComponent.imaging_method``) and **assay class** (the EFO ``StudyComponent.assay``). Use ``Other`` and fill ``study_type_other`` only when the vocabulary is insufficient.",
+                    "items": {
+                        "$ref": "#/$defs/StudyType"
+                    },
+                    "type": "array"
+                },
+                "study_type_other": {
+                    "description": "Free-text study type, REQUIRED when ``study_type`` includes ``Other`` (the OME ``Experiment.Type`` vocabulary did not adequately describe the study); omit otherwise. The \"required-when-``Other``\" condition is enforced by the :doc:`validator <validator>`, not a LinkML ``if/then`` rule, because ``gen-json-schema`` cannot express an \"array contains a value\" precondition.",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "year_imaged": {
+                    "description": "Four-digit year the data were acquired. Required; use the ``unknown`` sentinel when the acquisition year cannot be determined. Stored as a string so the ``unknown`` / ``na`` sentinel is expressible \u2014 mirroring the cross-modality term-id fields, so a missing value is stated explicitly rather than silently dropped or invented.",
+                    "pattern": "^(\\d{4}|unknown|na)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "source",
+                "study_type",
+                "description",
+                "year_imaged",
+                "experimenter",
+                "dataset_name",
+                "release_date",
+                "license"
+            ],
+            "then": {
+                "properties": {
+                    "cp_version": {}
+                },
+                "required": [
+                    "cp_version"
+                ]
+            },
+            "title": "Study",
+            "type": "object"
+        },
+        "StudyComponent": {
+            "additionalProperties": false,
+            "description": "REMBI Study Component: the experiment-class descriptors that organise this image group, namely the assay / experiment class (EFO) and the acquisition modality (FBbi). Distinct from the instrument attributes in :class:`AcquisitionMetadata` and from the project-level :class:`Study`.",
+            "properties": {
+                "assay": {
+                    "description": "The **assay / experiment class** as an ``ontology_term_id`` + ``label`` pair, where the id is any EFO assay term, not limited to these examples: ``EFO:0009918`` (smFISH), ``EFO:0022955`` (imaging-based spatial transcriptomics), or ``EFO:0002909`` (microscopy assay) as the coarse fallback. **EFO only** (cross-modality / CELLxGENE-aligned). \"What kind of experiment\". The specific acquisition **modality** (confocal, light-sheet, \u2026) is *not* recorded here \u2014 it lives in ``imaging_method`` (FBbi). One ontology per field: EFO answers \"what kind of experiment\", FBbi \"how was it imaged\".",
+                    "items": {
+                        "$ref": "#/$defs/AssayTerm"
+                    },
+                    "type": "array"
+                },
+                "imaging_method": {
+                    "description": "Acquisition **modality** as an ``ontology_term_id`` + ``label`` pair, where the id is a Biological Imaging Methods Ontology (FBbi) term \u2014 e.g. ``FBbi:00000251`` (confocal microscopy), ``FBbi:00000369`` (light-sheet / selective plane illumination), ``FBbi:00000246`` (fluorescence microscopy). **FBbi only.** The technique used to acquire the image data, distinct from the EFO assay-class in ``assay`` (EFO gives the experiment class, this gives how it was imaged) and from the instrument attributes in :class:`AcquisitionMetadata`. REQUIRED for every imaging dataset; use the ``unavailable`` sentinel with a free-text ``label`` **only** when no FBbi term fits the modality. ``unknown`` and ``na`` are not permitted: the acquiring lab always knows the modality and it always applies, so a real FBbi term or ``unavailable`` is always determinable.",
+                    "items": {
+                        "$ref": "#/$defs/ImagingMethodTerm"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "imaging_method",
+                "assay"
+            ],
+            "title": "StudyComponent",
+            "type": "object"
+        },
+        "StudyType": {
+            "description": "OME ``Experiment.Type`` vocabulary for the study-level experiment type / mode, plus ``Other`` (which requires a free-text ``Study.study_type_other``).",
+            "enum": [
+                "FP",
+                "FRET",
+                "TimeLapse",
+                "FourDPlus",
+                "Screen",
+                "Immunocytochemistry",
+                "Immunofluorescence",
+                "FISH",
+                "Electrophysiology",
+                "IonImaging",
+                "Colocalization",
+                "PGIDocumentation",
+                "FluorescenceLifetime",
+                "SpectralImaging",
+                "Photobleaching",
+                "SPIM",
+                "Other"
+            ],
+            "title": "StudyType",
+            "type": "string"
+        },
+        "TimeSampling": {
+            "description": "Whether an image group's timepoints are evenly spaced in time. DCA controlled vocabulary: OME-NGFF v0.5 expresses spacing only as a uniform ``t``-axis scale, so a non-uniform acquisition has no way to say so without this.",
+            "enum": [
+                "uniform",
+                "variable"
+            ],
+            "title": "TimeSampling",
+            "type": "string"
+        },
+        "TissueTerm": {
+            "additionalProperties": false,
+            "description": "Tissue ontology annotation (UBERON / CL / ZFA / Cellosaurus CVCL).",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(UBERON:\\d+|CL:\\d+|CVCL:\\w+|ZFA:(?!0001093$)\\d+|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "TissueTerm",
+            "type": "object"
+        },
+        "TissueType": {
+            "description": "CZI cross-modality ``tissue_type`` (v1.1.0), plus ``unknown`` for sources that do not record what the sample was.",
+            "enum": [
+                "tissue",
+                "cell culture",
+                "cell line",
+                "organoid",
+                "unknown"
+            ],
+            "title": "TissueType",
+            "type": "string"
+        },
+        "WellPerturbation": {
+            "additionalProperties": false,
+            "description": "Per-well perturbation assignment for an ARRAYED HCS screen \u2014 one row per ``(plate, well)``, written to ``zarr.json`` (well level). A :class:`PerturbationAssignment` plus the ``(plate, well)`` key that resolves it to a well group. This form is DERIVED: ``ExperimentalMetadata.perturbation`` on the image group is authoritative, and this is a plate-shaped index over it that exists so a plate's design can be enumerated without opening every field of view. It is unavailable to a plateless ``image_collection`` store (see the ``perturbation`` block for those). The two MUST agree; because the direction is defined, a disagreement is repaired by re-deriving this row from the image groups, never the other way round. The validator checks this row's own contents when present (dispatched to ``validate_well_perturbation_v0_2``), and separately cross-checks it against the consensus ``perturbation`` value of its own well's field(s) of view, reporting a mismatch as an error (see validator.rst). The non-``empty`` \u21d2 ``definition`` rule is inherited from the parent.",
+            "if": {
+                "properties": {
+                    "control_class": {
+                        "not": {
+                            "anyOf": [
+                                {
+                                    "const": "empty"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "required": [
+                    "control_class"
+                ]
+            },
+            "properties": {
+                "concentration": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Concentration"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "control_class": {
+                    "$ref": "#/$defs/PerturbationControlClass"
+                },
+                "cotreatment": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Perturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "Optional second :class:`Perturbation` definition applied alongside ``definition`` (a cotreatment)."
+                },
+                "definition": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Perturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The :class:`Perturbation` definition this assignment applies \u2014 the reusable codebook entry (what the perturbagen IS), as distinct from the dosing / control / timing around it (what was DONE to this material), which are the sibling slots here. Required for treated and control material (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is ``empty``, which has nothing to record (enforced by the class rule above)."
+                },
+                "duration_h": {
+                    "description": "Perturbation duration in hours.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "plate": {
+                    "description": "Plate identifier. Together with ``well`` this is the link to the image arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in ``zarr.json``) so a row resolves to a well group in the store.",
+                    "type": "string"
+                },
+                "provenance": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/Provenance"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "solvent": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "timepoint_primary_h": {
+                    "description": "Time of primary treatment (CPG Timepoint_Primary_Treatment).",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "timepoint_secondary_h": {
+                    "description": "Time of secondary treatment.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "well": {
+                    "description": "Well identifier in row-letter + column-number form (e.g. \"A03\"), mapping to the OME-NGFF HCS ``row``/``column`` well-group path (``A/3``) under the plate. This is the key tying the assignment to the imaged well.",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "plate",
+                "well",
+                "control_class"
+            ],
+            "then": {
+                "properties": {
+                    "definition": {}
+                },
+                "required": [
+                    "definition"
+                ]
+            },
+            "title": "WellPerturbation",
+            "type": "object"
+        }
+    },
+    "$id": "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "additionalProperties": true,
+    "description": "Root container for one image group's experimental metadata (a flattened REMBI Study + Study Component): the study, the ``study_component`` (assay class + imaging method), the sample (``biosample`` + ``specimen``), acquisition, and image-data context, the ``perturbation`` assignment, plus the per-value ``provenance`` map. This is the object curated into a Parquet row (one per ``Biosample.group_id``) and mirrored into the ``zarr.json`` ``dca`` block. Arrayed HCS screens ALSO index the same assignment per well as :class:`WellPerturbation` (well-level), which is derived from this block.",
+    "metamodel_version": "1.11.0",
+    "properties": {
+        "acquisition": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/AcquisitionMetadata"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "biosample": {
+            "$ref": "#/$defs/Biosample"
+        },
+        "image_data": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/ImageData"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "perturbation": {
+            "anyOf": [
+                {
+                    "$ref": "#/$defs/PerturbationAssignment"
+                },
+                {
+                    "type": "null"
+                }
+            ],
+            "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). CONDITIONALLY REQUIRED: present for every image group of a dataset that has perturbations, absent for a dataset that has none. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
+        },
+        "provenance": {
+            "additionalProperties": {
+                "anyOf": [
+                    {
+                        "$ref": "#/$defs/FieldProvenance__identifier_optional"
+                    },
+                    {
+                        "$ref": "#/$defs/ProvenanceSourceKind",
+                        "description": "How the value was obtained. REQUIRED on every provenance entry \u2014 it is the discriminator that distinguishes an ``agent``-extracted value from a hand-entered (``human``) one from a value taken directly from the source's own metadata (``original_data``). The citation / grounding is what is optional (for ``human`` / ``original_data``); ``source_kind`` itself is always stated."
+                    }
+                ]
+            },
+            "description": "Per-value provenance, as a map keyed by each value's dotted ``field_path`` (e.g. ``biosample.organism``). A parallel provenance layer, carried in the Parquet and the ``zarr.json`` mirror alike. REQUIRED for ``agent``-curated values, optional for ``human`` / ``original_data`` (see :class:`FieldProvenance` / :class:`Provenance`).",
+            "type": "object"
+        },
+        "specimen": {
+            "$ref": "#/$defs/Specimen"
+        },
+        "study": {
+            "$ref": "#/$defs/Study"
+        },
+        "study_component": {
+            "$ref": "#/$defs/StudyComponent"
+        }
+    },
+    "required": [
+        "study",
+        "biosample",
+        "specimen",
+        "study_component",
+        "provenance"
+    ],
+    "title": "dca_experimental_metadata",
+    "type": "object",
+    "version": null
+}
+

@@ -346,7 +346,8 @@
         },
         "source_store": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Source store: its name (resolved as a sibling of this store; preferred) or its full URL / absolute path."
         },
         "z_fraction": {
           "type": "number",

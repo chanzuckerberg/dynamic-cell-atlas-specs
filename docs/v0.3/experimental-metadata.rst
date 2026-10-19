@@ -54,7 +54,7 @@ Within that, every
 field is anchored on a more specific established schema or ontology wherever one exists,
 and DCA-native fields are added **only** where no standard covers the concept. Each field records its source as an ``exact_mappings`` (or
 ``close_mappings``) entry in the :download:`LinkML schema
-<../../schema/v0.2/dca_experimental_metadata.yaml>`, which is the machine-readable record
+<../../schema/v0.3/dca_experimental_metadata.yaml>`, which is the machine-readable record
 of this table. The DCA spec is meant to be interoperable with the broader community.
 
 .. list-table::
@@ -218,7 +218,7 @@ defined fields before being promoted.
 The table below is the field reference by category. For nested blocks (``microscope`` /
 ``objective`` / ``detector`` / ``imaging_environment``, ``experimenter``,
 ``related_publication``) it names the block rather than each leaf; the
-:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` is the
+:download:`LinkML schema <../../schema/v0.3/dca_experimental_metadata.yaml>` is the
 exhaustive, authoritative list.
 
 .. list-table:: Experimental metadata fields
@@ -370,8 +370,8 @@ exhaustive, authoritative list.
    * - Image data
      - ``processing_variant``
      - Optional
-     - DCA-native · zarr-local mirror of the Scientific Dataset Catalog
-       ``dataset_type`` (``raw`` / ``processed``)
+     - DCA-native · ordered list of processing steps; zarr-local mirror of the
+       Scientific Dataset Catalog ``dataset_type`` (``raw`` / ``processed``)
    * - Acquisition
      - ``microscope`` / ``objective`` / ``detector`` / ``imaging_environment`` / ``acquisition_date``
      - Optional
@@ -445,7 +445,7 @@ used to avoid stating a cadence that is in fact uniform.
 
 A minimal, **optional** OME instrument set — ``microscope``, ``objective``,
 ``detector``, ``imaging_environment``, and ``acquisition_date`` — is defined in the
-:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` (with OME
+:download:`LinkML schema <../../schema/v0.3/dca_experimental_metadata.yaml>` (with OME
 ``exact_mappings``) but not enumerated here.
 
 **Z-calibration correction factors.** Some objectives introduce a refractive-index
@@ -463,10 +463,18 @@ Image Data
 ----------
 
 Image Data contains image-level metadata. The one structured field here is
-``ImageData.processing_variant``: the zarr-local tag for the computational variant that
-produced this array (e.g. ``raw`` / ``denoised`` / ``deconvolved``); the full derivation
-(parent dataset, algorithm, parameters) is a Scientific Dataset Catalog
-``transformed_from`` Lineage Edge, not duplicated here. The remaining image-level fields
+``ImageData.processing_variant``: the computational processing steps that produced this
+array, as an ordered list in the order they were applied (e.g. ``["raw"]``,
+``["deconvolved", "registered"]``, ``["deconvolved", "maximum intensity projection"]``).
+Items **SHOULD** come from the ``ProcessingStep`` vocabulary in the LinkML schema
+(``raw``, ``denoised``, ``deconvolved``, ``registered``, ``stitched``, ``cropped``,
+``flat-field corrected``, ``background subtracted``, ``maximum intensity projection``);
+an item outside it is a warning. ``raw`` means no processing and **MUST** be the only
+item when present. Qualifying detail (a pipeline version, a frame range) belongs in
+``additional_metadata``, not in the step name. In v0.2 this field was a single string;
+in v0.3 it **MUST** be a non-empty list. The full derivation (parent dataset, algorithm,
+parameters) is a Scientific Dataset Catalog ``transformed_from`` Lineage Edge, not
+duplicated here. The remaining image-level fields
 (format, dimensions, pixel and voxel size, channels) are not otherwise captured here:
 they live in the `OME-NGFF spec <https://ngff.openmicroscopy.org/0.5/>`_ arrays and the
 :doc:`Channel Metadata Spec <channel-metadata>`.
@@ -576,7 +584,7 @@ The sub-groups, and the standard each field draws on:
 See the field reference under :ref:`Conformance <v03-experimental-conformance>` for the
 full Study / Sample field list with required-vs-optional status, and the
 ``Study``, ``Experimenter``, ``Biosample``, ``Specimen`` classes in the
-:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` for the
+:download:`LinkML schema <../../schema/v0.3/dca_experimental_metadata.yaml>` for the
 authoritative field list.
 
 Perturbation Metadata
@@ -660,7 +668,7 @@ diverge.
 
 See the ``Perturbation``, ``ChemicalPerturbation``, ``GeneticPerturbation``,
 ``PerturbationAssignment``, and ``WellPerturbation`` classes in the
-:download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>`.
+:download:`LinkML schema <../../schema/v0.3/dca_experimental_metadata.yaml>`.
 
 .. list-table:: Cross-source field mapping (minimal set)
    :header-rows: 1
@@ -853,7 +861,7 @@ where the raw corpus is no longer available.
 Validation
 ----------
 
-The :download:`LinkML schema <../../schema/v0.2/dca_experimental_metadata.yaml>` is the
+The :download:`LinkML schema <../../schema/v0.3/dca_experimental_metadata.yaml>` is the
 authoring layer and single source of truth for all three groups; from it we generate
 **Pydantic models** (enforced by the :doc:`validator </v0.2/validator>`) and a committed
 **JSON Schema** (interop artifact and test-suite oracle cross-check).

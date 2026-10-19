@@ -123,7 +123,7 @@ confocal microscope), ``objective`` (63x, oil immersion), and ``imaging_environm
 steps to optimize segmentation, tracking, or other downstream outputs. This dataset
 contains raw, denoised, and deconvolved versions of the same Zarr stores; the store here
 is the deconvolved one, so its Parquet records ``ImageData.processing_variant`` =
-``"deconvolved"``. The full derivation relationship is tracked in the Scientific Dataset
+``["deconvolved"]``. The full derivation relationship is tracked in the Scientific Dataset
 Catalog as a Lineage Edge (``transformed_from``); ``processing_variant`` is the
 zarr-local label only.
 

@@ -60,7 +60,7 @@ The :download:`JSON Schema <schema.json>` is the authoritative definition of the
 ``version``, ``url``, ``channels``, ``normalization_statistics`` and ``projection``
 fields; the
 required floor is defined by a separate schema
-(``schema/v0.2/dca_experimental_metadata.yaml``, see :doc:`experimental-metadata`).
+(``schema/v0.3/dca_experimental_metadata.yaml``, see :doc:`experimental-metadata`).
 
 .. _v03-experimental-metadata-storage:
 
