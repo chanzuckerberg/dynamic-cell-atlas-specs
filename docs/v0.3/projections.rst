@@ -135,13 +135,6 @@ shifts every percentile upward. ``dca.normalization_statistics`` of a projection
 **MUST** be computed from the projected array. It **MUST NOT** be copied from the
 source.
 
-Provenance
-~~~~~~~~~~
-
-``dca.provenance`` is inherited from the source. If a provenance quote states that no
-projection was applied (true of the source, false of the projection), the projection
-**SHOULD** drop or annotate that quote rather than carry it unchanged.
-
 Example
 -------
 
