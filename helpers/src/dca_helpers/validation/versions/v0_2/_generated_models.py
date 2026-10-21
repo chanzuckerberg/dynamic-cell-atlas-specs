@@ -1149,7 +1149,7 @@ class Perturbation(ConfiguredBaseModel):
                             'cpg:Treatment_Primary_Treatment']} })
     description: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Study', 'Perturbation'],
          'exact_mappings': ['bioformats:Reagent.Description']} })
-    perturbation_identifier: Optional[str] = Field(default=None, description="""External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database — e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``); this generic slot records the source's own catalog id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'],
+    perturbation_identifier: Optional[str] = Field(default=None, description="""External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database — e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ensembl_gene_id``); this generic slot records the source's own catalog id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'],
          'exact_mappings': ['bioformats:Reagent.ReagentIdentifier',
                             'cpg:Treatment_Broad_Sample']} })
     modality: PerturbationModality = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation'],
@@ -1174,7 +1174,7 @@ class ChemicalPerturbation(ConfiguredBaseModel):
     pubchem_cid: Optional[str] = Field(default=None, description="""PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block — the value names its own database. Required when ``modality`` is ``compound``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['PubChem:0'],
          'domain_of': ['ChemicalPerturbation'],
          'exact_mappings': ['cpg:Treatment_PubChem_CID']} })
-    morgan_fingerprint: Optional[str] = Field(default=None, description="""Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the SMILES; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
+    morgan_fingerprint: Optional[str] = Field(default=None, description="""Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the ``smiles`` slot when present, else from the structure the PubChem CID names; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
     chembl_id: Optional[str] = Field(default=None, description="""ChEMBL compound identifier (e.g. \"CHEMBL25\"). Self-identifying — ChEMBL accessions carry the ``CHEMBL`` prefix in the value itself.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
 
     @field_validator('pubchem_cid')
@@ -1206,14 +1206,14 @@ class ChemicalPerturbation(ConfiguredBaseModel):
 
 class GeneticPerturbation(ConfiguredBaseModel):
     """
-    Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.
+    Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA / siRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
-    gene_symbol: Optional[str] = Field(default=None, description="""HGNC gene symbol (e.g. \"TP53\") — the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
+    gene_symbol: Optional[str] = Field(default=None, description="""Gene symbol (e.g. \"TP53\"), the human-readable label for ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_symbol', 'cpg:orf_symbol']} })
-    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") — the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
+    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to the required ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_ncbi_gene_id', 'cpg:orf_ncbi_gene_id']} })
     ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"). Required when ``modality`` is crispr / orf / shrna / mirna / sirna. Resolvable via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })

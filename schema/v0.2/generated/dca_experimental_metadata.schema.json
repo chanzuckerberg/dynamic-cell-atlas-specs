@@ -282,7 +282,7 @@
                     ]
                 },
                 "morgan_fingerprint": {
-                    "description": "Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the SMILES; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.",
+                    "description": "Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the ``smiles`` slot when present, else from the structure the PubChem CID names; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.",
                     "pattern": "^[0-9a-f]{512}$",
                     "type": [
                         "string",
@@ -647,7 +647,7 @@
         },
         "GeneticPerturbation": {
             "additionalProperties": false,
-            "description": "Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.",
+            "description": "Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA / siRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.",
             "properties": {
                 "ensembl_gene_id": {
                     "description": "Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"). Required when ``modality`` is crispr / orf / shrna / mirna / sirna. Resolvable via the ``prefixes`` block.",
@@ -664,7 +664,7 @@
                     ]
                 },
                 "gene_symbol": {
-                    "description": "HGNC gene symbol (e.g. \"TP53\") \u2014 the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.",
+                    "description": "Gene symbol (e.g. \"TP53\"), the human-readable label for ``ensembl_gene_id``.",
                     "type": [
                         "string",
                         "null"
@@ -678,7 +678,7 @@
                     ]
                 },
                 "ncbi_gene_id": {
-                    "description": "NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") \u2014 the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.",
+                    "description": "NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to the required ``ensembl_gene_id``.",
                     "pattern": "^NCBIGene:\\d+$",
                     "type": [
                         "string",
@@ -1086,7 +1086,7 @@
                     "type": "string"
                 },
                 "perturbation_identifier": {
-                    "description": "External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database \u2014 e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``); this generic slot records the source's own catalog id.",
+                    "description": "External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database \u2014 e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ensembl_gene_id``); this generic slot records the source's own catalog id.",
                     "type": [
                         "string",
                         "null"

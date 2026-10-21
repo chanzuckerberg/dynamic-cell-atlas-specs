@@ -34,8 +34,9 @@ Three things here are not obvious from the code:
 
     ``WellPerturbation`` remains a root object that this container never nests (it is
     the well-level *placement* of the same assignment), so its rules stay reachable
-    via the standalone ``validate_well_perturbation_v0_2`` — which the store walk
-    still does not call (see validator.rst). ``validate_perturbation_v0_2`` likewise
+    via the standalone ``validate_well_perturbation_v0_2``, which the store walk calls
+    on each well group's ``dca.well_perturbation`` block for the experimental spec
+    versions (``validator._process_one_well``). ``validate_perturbation_v0_2`` likewise
     stays for validating a bare codebook entry.
 
   * Why ``provenance`` map values need ``field_path`` injected before validation:
