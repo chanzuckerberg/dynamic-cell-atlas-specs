@@ -464,10 +464,8 @@ def resolve_dca(
         raise ValueError(
             f"{where}: [dca.channels] is declared but no channel order reached the "
             "resolver, so there is no way to know which catalogue entry is which plane. "
-            "The store is not enumerated by any [[batch]] carrying a "
-            "`channel_column_names`, and the config declares no top-level one either — "
-            "add a top-level `channel_column_names`, or enumerate the store in a "
-            "[[batch]] that has one."
+            "Pass `channel_keys`, the store's source channel keys in C order, or drop "
+            "the [dca.channels] catalogue from the config."
         )
     resolved["channels"] = _resolve_channels(catalogue, metadata, channel_keys)
     return resolved
@@ -654,11 +652,10 @@ def _normalising_model() -> type:
     anything that is not wholly SHOULD, so a MUST added to that same validator later is
     still fatal rather than silently swallowed.
 
-    Built lazily and cached: ``dca_helpers`` is an optional-at-import dependency
-    everywhere else in this module, and the subclass costs a few hundred microseconds
-    once per process. If ``_BiosampleV0_2`` ever disappears upstream this raises
-    ``ImportError`` at manifest build — loudly, naming the symbol, which is the right
-    failure for a coupling this deliberate.
+    Built lazily and cached, so the subclass costs a few hundred microseconds once per
+    process. If ``_BiosampleV0_2`` ever disappears from the validation package, importing
+    this module raises ``ImportError`` naming the symbol, which is the right failure for a
+    coupling this deliberate.
     """
 
     class _NormalisingBiosample(_BiosampleV0_2):  # type: ignore[misc, valid-type]
