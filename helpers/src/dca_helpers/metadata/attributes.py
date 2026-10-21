@@ -9,20 +9,24 @@ provenance keys a caller passes to :func:`merge_dca_attributes` as ``run_attrs``
 import logging
 import math
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, get_args
 
-from dca_helpers import CURRENT_SPEC_VERSION
 from dca_helpers.validation.versions.v0_2.models import (
     DCAChannelNormalization,
+    DCAGroupMetadataV0_2,
     DCANormalizationStatistics,
 )
 
 logger = logging.getLogger(__name__)
 
-#: The ``dca.url`` written on every node: the JSON Schema of the current spec version.
+#: The ``dca.version`` written on every node. Read from the ``version`` literal of the
+#: v0.2 models that resolve and validate against, so the stamp cannot drift from them.
+(SPEC_VERSION,) = get_args(DCAGroupMetadataV0_2.model_fields["version"].annotation)
+
+#: The ``dca.url`` written on every node: the JSON Schema of :data:`SPEC_VERSION`.
 DCA_SCHEMA_URL = (
     "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/"
-    f"v{CURRENT_SPEC_VERSION}/schema.json"
+    f"v{SPEC_VERSION}/schema.json"
 )
 
 
@@ -63,7 +67,7 @@ def merge_dca_attributes(
     if channels is None and not payload:
         return
     dca = attrs.setdefault("dca", {})
-    dca["version"] = CURRENT_SPEC_VERSION
+    dca["version"] = SPEC_VERSION
     dca["url"] = DCA_SCHEMA_URL
     if channels is not None:
         dca["channels"] = [
