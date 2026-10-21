@@ -1,6 +1,7 @@
-"""Proposals for DCA fields a pipeline's finalize step could not resolve.
+"""Taxonomy proposals for DCA fields a pipeline's finalize step could not resolve.
 
-A proposal is a suggestion for a human to confirm. Nothing here writes to a store.
+Rules look a hinted name or term up in Cellosaurus, NCBITaxon or OLS. A proposal is
+a suggestion for a human to confirm. Nothing here writes to a store.
 """
 
 import logging
@@ -10,7 +11,6 @@ from typing import Any
 
 import requests
 
-from dca_helpers.metadata.store_facts import name_date
 from dca_helpers.validation import ontology_lookup
 from dca_helpers.validation.ontology_lookup import (
     CELLOSAURUS_BASE_URL,
@@ -29,13 +29,8 @@ _LOOKUP_ERRORS = (
     ontology_lookup._TransientHTTPError,
     ontology_lookup._RegistryRecentlyUnreachable,
 )
-_VIRTUAL_STAIN_TARGETS = {
-    "nuclei_prediction": "nucleus",
-    "membrane_prediction": "plasma membrane",
-}
 _MAX_CANDIDATES = 5
 _SEARCH_ROWS = 100
-_LABELFREE_PREFIXES = ("Phase", "BF", "Brightfield")
 
 
 @dataclass(frozen=True)
@@ -139,69 +134,11 @@ def _lookup(
     return None, candidates
 
 
-def _channel_index(field: str) -> int:
-    return int(field.split(".")[1])
-
-
-def _channel_name(field: str, channel_names: Sequence[str]) -> str | None:
-    index = _channel_index(field)
-    return channel_names[index] if index < len(channel_names) else None
-
-
-def _channel_type(name: str) -> str:
-    if name.endswith("_prediction"):
-        return "predicted"
-    if name.startswith(_LABELFREE_PREFIXES):
-        return "labelfree"
-    return "fluorescence"
-
-
-def _is_channel_field(field: str, leaf: str) -> bool:
-    parts = field.split(".")
-    return (
-        len(parts) >= 3
-        and parts[0] == "channels"
-        and parts[1].isdigit()
-        and (".".join(parts[2:]) == leaf)
-    )
-
-
 def _propose_one(
     field: str,
-    dataset_name: str,
-    channel_names: Sequence[str],
     hints: Mapping[str, str],
     online: bool,
 ) -> Proposal | None:
-    if field in (
-        "study.release_date",
-        "acquisition.acquisition_date",
-        "study.year_imaged",
-    ):
-        date = name_date(dataset_name)
-        if date is None:
-            return Proposal(field, None, "no date in dataset name", "name_date")
-        value = date[:4] if field == "study.year_imaged" else date
-        return Proposal(field, value, "dataset name", "name_date")
-
-    if _is_channel_field(field, "channel_type"):
-        name = _channel_name(field, channel_names)
-        if name is None:
-            return Proposal(field, None, "no channel name", "channel_type_from_name")
-        return Proposal(
-            field, _channel_type(name), "channel name", "channel_type_from_name"
-        )
-
-    if _is_channel_field(field, "biological_annotation.biological_target"):
-        name = _channel_name(field, channel_names)
-        if name is None:
-            return Proposal(field, None, "no channel name", "virtual_stain_target")
-        if name not in _VIRTUAL_STAIN_TARGETS:
-            return None
-        return Proposal(
-            field, _VIRTUAL_STAIN_TARGETS[name], "channel name", "virtual_stain_target"
-        )
-
     if field in ("biosample.cell_line_id", "biosample.tissue"):
         failed, found = _lookup(
             field,
@@ -259,8 +196,6 @@ def _propose_one(
 def propose(
     unresolved: Sequence[str],
     *,
-    dataset_name: str,
-    channel_names: Sequence[str],
     hints: Mapping[str, str],
     online: bool = True,
 ) -> list[Proposal]:
@@ -271,8 +206,5 @@ def propose(
     ``value=None`` and the reason in ``source``. This function does not raise on
     lookup failure.
     """
-    proposals = (
-        _propose_one(field, dataset_name, channel_names, hints, online)
-        for field in unresolved
-    )
+    proposals = (_propose_one(field, hints, online) for field in unresolved)
     return [p for p in proposals if p is not None]

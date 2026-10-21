@@ -1,10 +1,10 @@
 """
-CLI entry point for DCA field proposals.
+CLI entry point for DCA taxonomy proposals (Cellosaurus, NCBITaxon, OLS labels).
 
 Usage
 -----
-    dca-propose --dataset-name NAME [--channel NAME ...] --field PATH [--field PATH ...]
-                [--hint KEY=VALUE ...] [--offline] [--output {text,json}]
+    dca-propose --field PATH [--field PATH ...] [--hint KEY=VALUE ...]
+                [--offline] [--output {text,json}]
 """
 
 import json
@@ -41,12 +41,6 @@ def _print_text(proposals: list[Proposal]) -> None:
 
 @click.command()
 @click.option(
-    "--dataset-name", required=True, help="Dataset name, used for date rules."
-)
-@click.option(
-    "--channel", "channels", multiple=True, help="Channel name, in index order."
-)
-@click.option(
     "--field", "fields", multiple=True, required=True, help="Unresolved field path."
 )
 @click.option(
@@ -65,8 +59,6 @@ def _print_text(proposals: list[Proposal]) -> None:
     help="Output format.",
 )
 def main(
-    dataset_name: str,
-    channels: tuple[str, ...],
     fields: tuple[str, ...],
     hints: dict[str, str],
     offline: bool,
@@ -75,8 +67,6 @@ def main(
     """Propose values for unresolved DCA fields. Proposals are never written."""
     proposals = propose(
         fields,
-        dataset_name=dataset_name,
-        channel_names=channels,
         hints=hints,
         online=not offline,
     )
