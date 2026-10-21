@@ -640,7 +640,7 @@ compared bit for bit:
    * - Chirality
      - not included
    * - Input
-     - the compound's SMILES
+     - the ``smiles`` slot when present, else the structure the PubChem CID names
    * - Encoding
      - FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``),
        512 lowercase hex characters (pattern ``^[0-9a-f]{512}$``)
@@ -748,8 +748,8 @@ Known gaps and contradictions:
 * **Concentration type** — CPG records free text; DCA uses
   ``{value, unit}``. The schema keeps structured ``value``/``unit`` with a
   free-text ``text`` fallback.
-* **Gene identifier** — NCBI Gene ID is the canonical key; HGNC
-  symbol is the label. The Ensembl gene id is required for the genetic modalities.
+* **Gene identifier** — the Ensembl gene id is the required key for the genetic
+  modalities; NCBI Gene ID is an optional cross-reference and the symbol is the label.
 
 .. _experimental-deferred-pooled:
 
