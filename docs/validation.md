@@ -166,10 +166,9 @@ plate.ome.zarr/
 
 Label groups are reached from `validate_zarr_node`, not from discovery: discovery still returns only outermost store roots, so no label store is validated twice. `_validate_labels_of` reads `<image>/labels`, validates each name in `ome.labels` once, and never looks for a label's own `labels/`. Details:
 
-- A missing `labels/` group is not an error. A name in `ome.labels` with no group on disk, a name that is empty or contains a path separator or `..`, and a listed group without `ome.image-label` are errors on the label row.
-- Child groups of `labels/` that `ome.labels` does not list produce one WARNING row (`LABELS_LIST`).
+- Each label listed in `ome.labels` is checked against the same rules as `ome-zarr-models` (missing group, non-integer dtype, level-count mismatch). These defects fail the parent with `ngff_validation` and skip its DCA checks, because ome-zarr-models loads `labels/` when it opens the image. The label rows still carry the DCA findings.
+- DCA adds three checks. A listed group without `ome.image-label` is an error. An empty name, a name with a path separator, or `..` is an error. Groups under `labels/` that `ome.labels` does not list give one WARNING row (`LABELS_LIST`). Duplicate names are validated once. A missing `labels/` group is not an error.
 - `--wells`, `--field-offset` and `--field-limit` apply to labels: only the labels of selected fields are validated.
-- NGFF-level label defects (for example a non-integer dtype or a level-count mismatch) already make `open_ome_zarr` fail on the parent, because ome-zarr-models loads `labels/` eagerly. The parent then reports `ngff_validation` and skips its DCA checks, while the label rows still carry the DCA findings.
 - A store whose only defect is in a label has a passing root row, as with HCS fields. Query child rows by `parent_path`.
 - **No v0.1 label model.** v0.1 has no registered label model — `get_label_model` raises `UnsupportedSpecVersionError`, which becomes `passed=True` with a WARNING per label. v0.2 registers `DCALabelStoreSpecV0_2`.
 ---
