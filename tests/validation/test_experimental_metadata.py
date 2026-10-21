@@ -19,6 +19,11 @@ import importlib.util
 import pytest
 
 from dca_helpers.validation.result import Severity
+from tests.conftest import (
+    ASPIRIN_MORGAN_FINGERPRINT,
+    ASPIRIN_PUBCHEM_CID,
+    TP53_ENSEMBL_GENE_ID,
+)
 from tests.validation.json_schema_oracle import (
     ROOT_CLASS,
     experimental_block_keys,
@@ -58,6 +63,40 @@ def test_compound_modality_requires_chemical_block():
 def test_genetic_modality_requires_genetic_block():
     for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
         assert _requires({"modality": modality}, "Perturbation", "genetic"), modality
+
+
+def test_compound_modality_requires_cid_and_fingerprint():
+    obj = {"modality": "compound", "chemical": {"inchikey": "X"}}
+    assert _requires(obj, "Perturbation", "pubchem_cid")
+    assert _requires(obj, "Perturbation", "morgan_fingerprint")
+    complete = {
+        "modality": "compound",
+        "chemical": {
+            "pubchem_cid": ASPIRIN_PUBCHEM_CID,
+            "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+        },
+    }
+    assert not _requires(complete, "Perturbation", "pubchem_cid")
+    assert not _requires(complete, "Perturbation", "morgan_fingerprint")
+
+
+def test_genetic_modality_requires_ensembl_gene_id():
+    for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
+        obj = {"modality": modality, "genetic": {"gene_symbol": "TP53"}}
+        assert _requires(obj, "Perturbation", "ensembl_gene_id"), modality
+    complete = {
+        "modality": "crispr",
+        "genetic": {"ensembl_gene_id": TP53_ENSEMBL_GENE_ID},
+    }
+    assert not _requires(complete, "Perturbation", "ensembl_gene_id")
+
+
+def test_typed_ids_not_required_outside_their_modality():
+    # A chemical block on a non-compound perturbation carries no id requirement.
+    obj = {"modality": "biological", "chemical": {"inchikey": "X"}}
+    msgs = _messages(obj, "Perturbation")
+    assert "'pubchem_cid' is a required property" not in msgs
+    assert "'morgan_fingerprint' is a required property" not in msgs
 
 
 def test_physical_modality_requires_neither_reagent_block():

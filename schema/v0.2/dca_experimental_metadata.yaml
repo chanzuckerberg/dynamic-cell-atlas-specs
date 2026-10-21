@@ -1147,7 +1147,9 @@ classes:
       chemical or genetic block selected by ``modality``.
     class_uri: OME:Reagent
     rules:
-      - description: A compound perturbation must carry the chemical identifier block.
+      - description: >-
+          A compound perturbation must carry the chemical identifier block, with
+          its PubChem CID and Morgan fingerprint.
         preconditions:
           slot_conditions:
             modality:
@@ -1156,9 +1158,15 @@ classes:
           slot_conditions:
             chemical:
               required: true
+              range_expression:
+                slot_conditions:
+                  pubchem_cid:
+                    required: true
+                  morgan_fingerprint:
+                    required: true
       - description: >-
           A genetic perturbation (crispr / orf / shrna / mirna / sirna) must carry
-          the genetic-target block.
+          the genetic-target block, with its Ensembl gene id.
         preconditions:
           slot_conditions:
             modality:
@@ -1172,6 +1180,10 @@ classes:
           slot_conditions:
             genetic:
               required: true
+              range_expression:
+                slot_conditions:
+                  ensembl_gene_id:
+                    required: true
     attributes:
       perturbation_id:
         description: Stable identifier for this perturbation within the dataset.
@@ -1227,9 +1239,19 @@ classes:
         description: >-
           PubChem Compound ID as a colon CURIE (e.g. "PubChem:2244"), resolvable via
           the ``prefixes`` block — the value names its own database.
+          Required when ``modality`` is ``compound``.
         pattern: "^PubChem:\\d+$"
         exact_mappings: [cpg:Treatment_PubChem_CID]
         close_mappings: [PubChem:0]
+      morgan_fingerprint:
+        description: >-
+          Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan
+          generator, radius 2, 2048 bits, chirality not included, computed from the
+          SMILES; encoded as the FPS hex string of the bit vector (RDKit
+          ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so
+          values are comparable across datasets. Required when ``modality`` is
+          ``compound``.
+        pattern: "^[0-9a-f]{512}$"
       chembl_id:
         description: >-
           ChEMBL compound identifier (e.g. "CHEMBL25"). Self-identifying — ChEMBL
@@ -1257,9 +1279,11 @@ classes:
         close_mappings: [NCBIGene:0]
       ensembl_gene_id:
         description: >-
-          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510"); optional
-          cross-map. Resolvable via the ``prefixes`` block.
-        pattern: "^ensembl:ENSG\\d+$"
+          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510", or a
+          species-prefixed id such as mouse "ensembl:ENSMUSG00000059552"). Required
+          when ``modality`` is crispr / orf / shrna / mirna / sirna. Resolvable via
+          the ``prefixes`` block.
+        pattern: "^ensembl:ENS([A-Z]{3})?G\\d{11}$"
         close_mappings: [ensembl:0]
       transcript_refseq:
         description: NCBI RefSeq transcript id (ORF).

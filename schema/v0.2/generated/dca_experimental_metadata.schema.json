@@ -281,8 +281,16 @@
                         "null"
                     ]
                 },
+                "morgan_fingerprint": {
+                    "description": "Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the SMILES; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.",
+                    "pattern": "^[0-9a-f]{512}$",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
                 "pubchem_cid": {
-                    "description": "PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block \u2014 the value names its own database.",
+                    "description": "PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block \u2014 the value names its own database. Required when ``modality`` is ``compound``.",
                     "pattern": "^PubChem:\\d+$",
                     "type": [
                         "string",
@@ -642,8 +650,8 @@
             "description": "Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.",
             "properties": {
                 "ensembl_gene_id": {
-                    "description": "Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\"); optional cross-map. Resolvable via the ``prefixes`` block.",
-                    "pattern": "^ensembl:ENSG\\d+$",
+                    "description": "Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"). Required when ``modality`` is crispr / orf / shrna / mirna / sirna. Resolvable via the ``prefixes`` block.",
+                    "pattern": "^ensembl:ENS([A-Z]{3})?G\\d{11}$",
                     "type": [
                         "string",
                         "null"
@@ -958,7 +966,20 @@
                     },
                     "then": {
                         "properties": {
-                            "chemical": {}
+                            "chemical": {
+                                "allOf": [
+                                    {
+                                        "properties": {
+                                            "morgan_fingerprint": {},
+                                            "pubchem_cid": {}
+                                        },
+                                        "required": [
+                                            "pubchem_cid",
+                                            "morgan_fingerprint"
+                                        ]
+                                    }
+                                ]
+                            }
                         },
                         "required": [
                             "chemical"
@@ -994,7 +1015,18 @@
                     },
                     "then": {
                         "properties": {
-                            "genetic": {}
+                            "genetic": {
+                                "allOf": [
+                                    {
+                                        "properties": {
+                                            "ensembl_gene_id": {}
+                                        },
+                                        "required": [
+                                            "ensembl_gene_id"
+                                        ]
+                                    }
+                                ]
+                            }
                         },
                         "required": [
                             "genetic"

@@ -95,6 +95,11 @@ _GENETIC_MODALITIES: frozenset[str] = frozenset(
     {"crispr", "orf", "shrna", "mirna", "sirna"}
 )
 
+# Identifiers the same rules require inside each typed block (the nested
+# ``range_expression`` postconditions in the YAML).
+_COMPOUND_REQUIRED_IDS: tuple[str, ...] = ("pubchem_cid", "morgan_fingerprint")
+_GENETIC_REQUIRED_IDS: tuple[str, ...] = ("ensembl_gene_id",)
+
 # Cross-modality v1.1.0 keys the development-stage ontology to the organism. It names a
 # stage ontology for exactly these five; every other organism falls back to a UBERON
 # life-cycle term. The schema pattern is a flat union (a regex cannot reach across
@@ -366,30 +371,54 @@ class _FieldProvenanceV0_2(_FieldProvenanceBase):  # type: ignore[misc, valid-ty
 class _PerturbationV0_2(_PerturbationBase):  # type: ignore[misc, valid-type]
     """``Perturbation`` with the ``modality`` ⇒ typed-block rules enforced.
 
-    ``modality: compound`` requires the ``chemical`` block; a genetic modality
-    (``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna``) requires the
-    ``genetic`` block. The remaining modalities (``physical`` / ``biological`` /
-    ``other`` / ``unknown``) require neither.
+    ``modality: compound`` requires the ``chemical`` block with its
+    ``pubchem_cid`` and ``morgan_fingerprint``; a genetic modality (``crispr`` /
+    ``orf`` / ``shrna`` / ``mirna`` / ``sirna``) requires the ``genetic`` block with
+    its ``ensembl_gene_id``. The remaining modalities (``physical`` /
+    ``biological`` / ``other`` / ``unknown``) require neither.
+
+    A missing block is one error; the identifiers inside it are only checked once
+    the block is present, and every missing identifier is reported in one raise.
     """
 
     @model_validator(mode="after")
     def _require_modality_block(self):
         modality = _enum_value(getattr(self, "modality", None))
-        if modality == "compound" and not _is_populated(
-            getattr(self, "chemical", None)
-        ):
-            raise ValueError(
-                "chemical is required when modality is 'compound' "
-                "(a compound perturbation must carry the chemical identifier block)"
+        if modality == "compound":
+            chemical = getattr(self, "chemical", None)
+            if not _is_populated(chemical):
+                raise ValueError(
+                    "chemical is required when modality is 'compound' "
+                    "(a compound perturbation must carry the chemical identifier block)"
+                )
+            _require_block_ids(
+                chemical, "chemical", _COMPOUND_REQUIRED_IDS, "'compound'"
             )
-        if modality in _GENETIC_MODALITIES and not _is_populated(
-            getattr(self, "genetic", None)
-        ):
-            raise ValueError(
-                "genetic is required when modality is a genetic kind "
-                f"(crispr / orf / shrna / mirna / sirna; got modality='{modality}')"
+        if modality in _GENETIC_MODALITIES:
+            genetic = getattr(self, "genetic", None)
+            if not _is_populated(genetic):
+                raise ValueError(
+                    "genetic is required when modality is a genetic kind "
+                    f"(crispr / orf / shrna / mirna / sirna; got modality='{modality}')"
+                )
+            _require_block_ids(
+                genetic, "genetic", _GENETIC_REQUIRED_IDS, f"'{modality}'"
             )
         return self
+
+
+def _require_block_ids(
+    block: object, block_name: str, fields: tuple[str, ...], modality: str
+) -> None:
+    """Raise one ``ValueError`` naming every unpopulated identifier in ``block``."""
+    missing = [f for f in fields if not _is_populated(getattr(block, f, None))]
+    if missing:
+        raise ValueError(
+            "\n".join(
+                f"{block_name}.{field} is required when modality is {modality}"
+                for field in missing
+            )
+        )
 
 
 class _PerturbationAssignmentV0_2(_PerturbationAssignmentBase):  # type: ignore[misc, valid-type]
@@ -689,8 +718,9 @@ def validate_dca_experimental_metadata_v0_2(
 def validate_perturbation_v0_2(obj: dict) -> list[Issue]:
     """Validate one ``Perturbation`` definition, returning ``Issue`` objects.
 
-    Enforces the ``modality`` ⇒ typed-block rules (``compound`` ⇒ ``chemical``,
-    genetic ⇒ ``genetic``) on top of the generated model's type / enum / required
+    Enforces the ``modality`` ⇒ typed-block rules (``compound`` ⇒ ``chemical``
+    with ``pubchem_cid`` and ``morgan_fingerprint``, genetic ⇒ ``genetic`` with
+    ``ensembl_gene_id``) on top of the generated model's type / enum / required
     checks. Empty list when the object fully conforms. For a bare codebook entry:
     a ``Perturbation`` reached through ``ExperimentalMetadata.perturbation`` is
     already checked by ``validate_experimental_metadata_v0_2``.

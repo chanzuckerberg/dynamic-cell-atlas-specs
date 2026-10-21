@@ -17,6 +17,7 @@ from dca_helpers.metadata.resolve import (
     resolve_dca,
     validate_dca,
 )
+from tests.conftest import ASPIRIN_MORGAN_FINGERPRINT, ASPIRIN_PUBCHEM_CID
 from tests.metadata.conftest import min_dca_block
 
 METADATA = {
@@ -843,7 +844,11 @@ _PERT = {
     "definition": {
         "perturbation_id": {"column": "pid"},
         "modality": "compound",
-        "chemical": {"inchikey": "KYRVNWMVYQXFEU-UHFFFAOYSA-N"},
+        "chemical": {
+            "inchikey": "KYRVNWMVYQXFEU-UHFFFAOYSA-N",
+            "pubchem_cid": ASPIRIN_PUBCHEM_CID,
+            "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+        },
     },
     "solvent": {"column": "solv"},
 }
