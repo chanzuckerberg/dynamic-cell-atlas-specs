@@ -76,6 +76,15 @@ OLS_BASE_URL = "https://www.ebi.ac.uk/ols4/api"
 # recommended name and synonyms in ``Cellosaurus.cell-line-list[].name-list``.
 CELLOSAURUS_BASE_URL = "https://api.cellosaurus.org"
 
+# Ensembl REST API. ``/xrefs/symbol/<species>/<name>`` maps a gene symbol, or an
+# external id such as an NCBI Gene id with ``external_db=EntrezGene``, to Ensembl
+# gene ids. Used by ``dca_helpers.metadata.perturbation_ids``, not by this guard.
+ENSEMBL_BASE_URL = "https://rest.ensembl.org"
+
+# PubChem PUG REST. ``/compound/<namespace>/cids/JSON`` maps a name, SMILES or
+# InChIKey to compound ids. Used by ``dca_helpers.metadata.perturbation_ids``.
+PUBCHEM_BASE_URL = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
+
 # Seconds to wait on a single request before treating the source as unreachable.
 _REQUEST_TIMEOUT = 30
 

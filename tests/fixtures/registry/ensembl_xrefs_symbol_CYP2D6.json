@@ -1,0 +1,44 @@
+{
+ "body": [
+  {
+   "id": "ENSG00000100197",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000272532",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000275211",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000272000",
+   "type": "gene"
+  },
+  {
+   "id": "LRG_303",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000282966",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000280905",
+   "type": "gene"
+  },
+  {
+   "id": "ENSG00000283284",
+   "type": "gene"
+  }
+ ],
+ "request": {
+  "params": {
+   "content-type": "application/json",
+   "object_type": "gene"
+  },
+  "url": "https://rest.ensembl.org/xrefs/symbol/homo_sapiens/CYP2D6"
+ },
+ "status_code": 200
+}

@@ -1,7 +1,8 @@
-"""Taxonomy proposals for DCA fields a pipeline's finalize step could not resolve.
+"""Proposals for DCA fields a pipeline's finalize step could not resolve.
 
-Rules look a hinted name or term up in Cellosaurus, NCBITaxon or OLS. A proposal is
-a suggestion for a human to confirm. Nothing here writes to a store.
+Rules look a hinted name or term up in Cellosaurus, NCBITaxon, OLS, Ensembl or
+PubChem, or compute a compound's Morgan fingerprint from a hinted SMILES. A
+proposal is a suggestion for a human to confirm. Nothing here writes to a store.
 """
 
 import logging
@@ -11,10 +12,18 @@ from typing import Any
 
 import requests
 
+from dca_helpers.metadata.perturbation_ids import (
+    ensembl_from_ncbi_gene,
+    morgan_fingerprint,
+    search_ensembl,
+    search_pubchem,
+)
 from dca_helpers.validation import ontology_lookup
 from dca_helpers.validation.ontology_lookup import (
     CELLOSAURUS_BASE_URL,
+    ENSEMBL_BASE_URL,
     OLS_BASE_URL,
+    PUBCHEM_BASE_URL,
     _get_with_retry,
     _registry_of,
     lookup_ols,
@@ -31,6 +40,18 @@ _LOOKUP_ERRORS = (
 )
 _MAX_CANDIDATES = 5
 _SEARCH_ROWS = 100
+
+_GENETIC = "perturbation.definition.genetic."
+_CHEMICAL = "perturbation.definition.chemical."
+_SMILES_HINT = _CHEMICAL + "smiles"
+#: PubChem namespace per hint, in the order the ``pubchem`` rule tries them.
+_PUBCHEM_HINTS = {
+    _CHEMICAL + "inchikey": "inchikey",
+    _SMILES_HINT: "smiles",
+    "perturbation.definition.name": "name",
+}
+
+Search = Callable[[str], list[tuple[str, str]]]
 
 
 @dataclass(frozen=True)
@@ -106,29 +127,61 @@ def _with_alternatives(label: str, candidates: Sequence[tuple[str, str]]) -> str
     curie = candidates[0][0]
     source = f"{label} {curie}"
     if len(candidates) > 1:
-        source += " (also: " + ", ".join(f"{c} {n}" for c, n in candidates[1:]) + ")"
+        source += (
+            " (also: " + ", ".join(f"{c} {n}".rstrip() for c, n in candidates[1:]) + ")"
+        )
     return source
+
+
+def _unlabelled(curies: list[str]) -> list[tuple[str, str]]:
+    return [(curie, "") for curie in curies[:_MAX_CANDIDATES]]
+
+
+def _ensembl_searches(hints: Mapping[str, str]) -> dict[str, Search]:
+    """Searches for the ``ensembl`` rule: NCBI Gene id first, then gene symbol."""
+    species = hints.get("species", "homo_sapiens")
+
+    def from_ncbi_gene(value: str) -> list[tuple[str, str]]:
+        return _unlabelled(ensembl_from_ncbi_gene(value, species=species))
+
+    def from_symbol(value: str) -> list[tuple[str, str]]:
+        return _unlabelled(search_ensembl(value, species=species))
+
+    return {
+        _GENETIC + "ncbi_gene_id": from_ncbi_gene,
+        _GENETIC + "gene_symbol": from_symbol,
+    }
+
+
+def _pubchem_search(namespace: str) -> Search:
+    return lambda value: _unlabelled(search_pubchem(**{namespace: value}))
 
 
 def _lookup(
     field: str,
     rule: str,
-    hint_key: str,
     host: str,
     hints: Mapping[str, str],
     online: bool,
-    search: Callable[[str], list[tuple[str, str]]],
+    searches: Mapping[str, Search],
 ) -> tuple[Proposal | None, list[tuple[str, str]]]:
-    """Run ``search`` on a hint. Returns a degraded Proposal, or None plus the candidates."""
-    if hint_key not in hints:
-        return Proposal(field, None, f"no hint: {hint_key}", rule), []
+    """Run the search for the first hint key in ``searches`` that ``hints`` has.
+
+    Returns a degraded Proposal, or None plus the candidates.
+    """
+    hint_key = next((key for key in searches if key in hints), None)
+    if hint_key is None:
+        return Proposal(field, None, "no hint: " + " or ".join(searches), rule), []
     if not online:
         return Proposal(field, None, "lookup skipped (offline)", rule), []
     try:
-        candidates = search(hints[hint_key])
+        candidates = searches[hint_key](hints[hint_key])
     except _LOOKUP_ERRORS as error:
         logger.warning("%s lookup for %s failed: %s", host, field, error)
         return Proposal(field, None, f"lookup failed: {host}", rule), []
+    except ValueError as error:
+        logger.warning("hint %s for %s is invalid: %s", hint_key, field, error)
+        return Proposal(field, None, f"invalid hint: {hint_key}", rule), []
     if not candidates:
         return Proposal(field, None, "no match", rule), []
     return None, candidates
@@ -143,11 +196,10 @@ def _propose_one(
         failed, found = _lookup(
             field,
             "cellosaurus",
-            "biosample.cell_line_name",
             _registry_of(CELLOSAURUS_BASE_URL),
             hints,
             online,
-            search_cellosaurus,
+            {"biosample.cell_line_name": search_cellosaurus},
         )
         if failed:
             return failed
@@ -166,11 +218,10 @@ def _propose_one(
         failed, found = _lookup(
             field,
             "ols_label",
-            hint_key,
             _registry_of(OLS_BASE_URL),
             hints,
             online,
-            _ols_names,
+            {hint_key: _ols_names},
         )
         return failed or Proposal(field, found[0][1], f"OLS {found[0][0]}", "ols_label")
 
@@ -178,11 +229,10 @@ def _propose_one(
         failed, found = _lookup(
             field,
             "ncbitaxon",
-            "perturbation.definition.name",
             _registry_of(OLS_BASE_URL),
             hints,
             online,
-            search_ncbitaxon,
+            {"perturbation.definition.name": search_ncbitaxon},
         )
         if failed:
             return failed
@@ -190,7 +240,60 @@ def _propose_one(
             field, found[0][0], _with_alternatives("NCBITaxon", found), "ncbitaxon"
         )
 
+    if field == _GENETIC + "ensembl_gene_id":
+        failed, found = _lookup(
+            field,
+            "ensembl",
+            _registry_of(ENSEMBL_BASE_URL),
+            hints,
+            online,
+            _ensembl_searches(hints),
+        )
+        if failed:
+            return failed
+        return Proposal(
+            field, found[0][0], _with_alternatives("Ensembl", found), "ensembl"
+        )
+
+    if field == _CHEMICAL + "pubchem_cid":
+        failed, found = _lookup(
+            field,
+            "pubchem",
+            _registry_of(PUBCHEM_BASE_URL),
+            hints,
+            online,
+            {key: _pubchem_search(ns) for key, ns in _PUBCHEM_HINTS.items()},
+        )
+        if failed:
+            return failed
+        return Proposal(
+            field, found[0][0], _with_alternatives("PubChem", found), "pubchem"
+        )
+
+    if field == _CHEMICAL + "morgan_fingerprint":
+        return _propose_morgan(field, hints)
+
     return None
+
+
+def _propose_morgan(field: str, hints: Mapping[str, str]) -> Proposal:
+    """Fingerprint the hinted SMILES. Offline, so it runs even when ``online`` is False."""
+    if _SMILES_HINT not in hints:
+        return Proposal(field, None, f"no hint: {_SMILES_HINT}", "morgan")
+    try:
+        value = morgan_fingerprint(hints[_SMILES_HINT])
+    except ImportError:
+        return Proposal(
+            field, None, "rdkit not installed (dca_helpers[chem])", "morgan"
+        )
+    except ValueError:
+        return Proposal(field, None, "invalid SMILES", "morgan")
+    return Proposal(
+        field,
+        value,
+        f"RDKit Morgan radius 2, 2048 bits, from {_SMILES_HINT}",
+        "morgan",
+    )
 
 
 def propose(
@@ -202,9 +305,11 @@ def propose(
     """Propose a value for each unresolved field a rule covers.
 
     Fields no rule covers get no proposal. A lookup rule that cannot answer (hint
-    missing, offline, registry error, no candidates) returns a ``Proposal`` with
-    ``value=None`` and the reason in ``source``. This function does not raise on
-    lookup failure.
+    missing or invalid, offline, registry error, no candidates) returns a
+    ``Proposal`` with ``value=None`` and the reason in ``source``. The ``morgan``
+    rule needs no network and runs offline; it degrades the same way when the
+    SMILES hint is missing or invalid or RDKit is not installed. This function does
+    not raise on lookup failure.
     """
     proposals = (_propose_one(field, hints, online) for field in unresolved)
     return [p for p in proposals if p is not None]

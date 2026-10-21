@@ -6,6 +6,12 @@ from dca_helpers.metadata.attributes import (
     write_normalization_statistics,
 )
 from dca_helpers.metadata.config import load_dca_config
+from dca_helpers.metadata.perturbation_ids import (
+    ensembl_from_ncbi_gene,
+    morgan_fingerprint,
+    search_ensembl,
+    search_pubchem,
+)
 from dca_helpers.metadata.propose import (
     Proposal,
     propose,
@@ -31,13 +37,17 @@ __all__ = [
     "DcaValidationError",
     "Proposal",
     "dca_read_columns",
+    "ensembl_from_ncbi_gene",
     "load_dca_config",
     "merge_dca_attributes",
+    "morgan_fingerprint",
     "propose",
     "resolve",
     "resolve_dca",
     "search_cellosaurus",
+    "search_ensembl",
     "search_ncbitaxon",
+    "search_pubchem",
     "validate_dca",
     "write_normalization_statistics",
 ]

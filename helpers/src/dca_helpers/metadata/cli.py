@@ -1,10 +1,19 @@
 """
-CLI entry point for DCA taxonomy proposals (Cellosaurus, NCBITaxon, OLS labels).
+CLI entry point for DCA proposals.
+
+Lookups: Cellosaurus, NCBITaxon and OLS labels for taxonomy fields, Ensembl gene
+ids and PubChem CIDs for perturbations. The Morgan fingerprint of a compound is
+computed from a SMILES hint with RDKit and works with ``--offline``.
 
 Usage
 -----
     dca-propose --field PATH [--field PATH ...] [--hint KEY=VALUE ...]
                 [--offline] [--output {text,json}]
+
+Example
+-------
+    dca-propose --field perturbation.definition.chemical.morgan_fingerprint \
+        --hint perturbation.definition.chemical.smiles='CC(=O)Oc1ccccc1C(=O)O'
 """
 
 import json
@@ -64,7 +73,13 @@ def main(
     offline: bool,
     output: Literal["text", "json"],
 ) -> None:
-    """Propose values for unresolved DCA fields. Proposals are never written."""
+    """Propose values for unresolved DCA fields. Proposals are never written.
+
+    Each rule reads its inputs from hints named by DCA field path, e.g.
+    perturbation.definition.genetic.gene_symbol=TP53 (or .ncbi_gene_id, plus an
+    optional species=mus_musculus), perturbation.definition.chemical.smiles,
+    .inchikey, or perturbation.definition.name.
+    """
     proposals = propose(
         fields,
         hints=hints,
