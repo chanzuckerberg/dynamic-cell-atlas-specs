@@ -1,4 +1,6 @@
 import importlib
+import subprocess
+import sys
 
 import pytest
 import requests
@@ -14,6 +16,8 @@ from tests.conftest import (
     ASPIRIN_PUBCHEM_CID,
     TP53_ENSEMBL_GENE_ID,
 )
+
+from ._registry import UnrecordedRequest
 
 perturbation_ids = importlib.import_module("dca_helpers.metadata.perturbation_ids")
 
@@ -36,6 +40,21 @@ def test_search_ensembl_returns_every_gene_id_in_registry_order(replay_registry)
     assert len(ids) == 7
     assert len(set(ids)) == len(ids)
     assert all(i.startswith("ensembl:ENSG") for i in ids)
+
+
+def test_search_ensembl_unknown_symbol_is_an_empty_list(replay_registry):
+    assert search_ensembl("NOTAREALGENEXYZ") == []
+
+
+def test_ensembl_path_segments_are_percent_encoded(replay_registry):
+    with pytest.raises(UnrecordedRequest):
+        search_ensembl("A/B C", species="homo sapiens")
+    with pytest.raises(UnrecordedRequest):
+        ensembl_from_ncbi_gene("7157", species="mus/musculus")
+    assert [url for url, _ in replay_registry.requests] == [
+        "https://rest.ensembl.org/xrefs/symbol/homo%20sapiens/A%2FB%20C",
+        "https://rest.ensembl.org/xrefs/symbol/mus%2Fmusculus/7157",
+    ]
 
 
 @pytest.mark.parametrize("ncbi_gene_id", ["NCBIGene:7157", "7157"])
@@ -120,3 +139,17 @@ def test_morgan_fingerprint_rejects_invalid_smiles(smiles):
 def test_morgan_fingerprint_without_rdkit_names_the_extra(hide_rdkit):
     with pytest.raises(ImportError, match=r"dca_helpers\[chem\]"):
         morgan_fingerprint(ASPIRIN_SMILES)
+
+
+def test_metadata_package_imports_without_rdkit():
+    code = (
+        "import sys\n"
+        "sys.modules['rdkit'] = None\n"
+        "import dca_helpers.metadata as m\n"
+        "assert callable(m.morgan_fingerprint)\n"
+        "assert 'rdkit.Chem' not in sys.modules\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

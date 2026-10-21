@@ -8,6 +8,7 @@ ontology lookups do. ``morgan_fingerprint`` is offline and needs the optional
 """
 
 import re
+from urllib.parse import quote
 
 from dca_helpers.validation.ontology_lookup import (
     ENSEMBL_BASE_URL,
@@ -41,10 +42,14 @@ def search_ensembl(symbol: str, *, species: str = "homo_sapiens") -> list[str]:
     Calls ``/xrefs/symbol/<species>/<symbol>`` with ``object_type=gene``. Only
     Ensembl gene ids are kept (LRG records are dropped), de-duplicated, in the
     order Ensembl returns them. A symbol with genes on alternate haplotypes
-    returns several ids. An unknown symbol returns an empty list.
+    returns several ids. An unknown symbol returns an empty list (Ensembl answers
+    200 with ``[]``). ``species`` and ``symbol`` are percent-encoded as path
+    segments; Ensembl still answers 404 to an encoded ``/``, which raises
+    ``requests.HTTPError``.
     """
     return _ensembl_gene_ids(
-        f"{ENSEMBL_BASE_URL}/xrefs/symbol/{species}/{symbol}",
+        f"{ENSEMBL_BASE_URL}/xrefs/symbol/{quote(species, safe='')}/"
+        f"{quote(symbol, safe='')}",
         {"object_type": "gene", **_ENSEMBL_JSON},
     )
 
@@ -63,7 +68,7 @@ def ensembl_from_ncbi_gene(
     if not match:
         raise ValueError(f"not an NCBI Gene id: {ncbi_gene_id!r}")
     return _ensembl_gene_ids(
-        f"{ENSEMBL_BASE_URL}/xrefs/symbol/{species}/{match.group(1)}",
+        f"{ENSEMBL_BASE_URL}/xrefs/symbol/{quote(species, safe='')}/{match.group(1)}",
         {"object_type": "gene", "external_db": "EntrezGene", **_ENSEMBL_JSON},
     )
 

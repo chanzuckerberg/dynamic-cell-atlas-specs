@@ -46,6 +46,11 @@ def test_ensembl_lists_alternative_gene_ids(replay_registry):
     assert p.source.startswith("Ensembl ensembl:ENSG00000100197 (also: ensembl:ENSG")
 
 
+def test_ensembl_unknown_symbol_is_no_match(replay_registry):
+    p = _one(ENSEMBL, hints={GENETIC + "gene_symbol": "NOTAREALGENEXYZ"})
+    assert (p.value, p.source) == (None, "no match")
+
+
 def test_ensembl_invalid_ncbi_hint_degrades():
     p = _one(ENSEMBL, hints={GENETIC + "ncbi_gene_id": "TP53"})
     assert (p.value, p.source) == (None, f"invalid hint: {GENETIC}ncbi_gene_id")
