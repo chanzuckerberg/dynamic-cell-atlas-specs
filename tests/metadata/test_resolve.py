@@ -606,6 +606,33 @@ def test_a_should_severity_finding_warns_and_the_build_proceeds(
     assert out["provenance"]["study.license"]["field_path"] == "study.license"
 
 
+def _block_with_a_should_finding() -> dict:
+    """A resolved block whose ``tissue`` is not a CVCL term, a SHOULD finding."""
+    tissue = {"ontology_term_id": "UBERON:0000955", "label": "brain"}
+    block = {**DCA_BLOCK, "biosample": {**DCA_BLOCK["biosample"], "tissue": [tissue]}}
+    return resolve(block, METADATA_FOR_BLOCK)
+
+
+def test_a_warnings_list_collects_should_findings_and_logs_nothing(caplog):
+    collected: list[str] = []
+    with caplog.at_level("WARNING"):
+        out = validate_dca(
+            _block_with_a_should_finding(), where="group A9_s1", warnings=collected
+        )
+
+    assert out["biosample"]["tissue"][0]["ontology_term_id"] == "UBERON:0000955"
+    cvcl = [w for w in collected if "CVCL" in w]
+    assert len(cvcl) == 1 and cvcl[0].startswith("biosample: "), collected
+    assert caplog.records == []
+
+
+def test_without_a_warnings_list_should_findings_are_logged(caplog):
+    with caplog.at_level("WARNING"):
+        validate_dca(_block_with_a_should_finding(), where="group A9_s1")
+
+    assert "CVCL" in caplog.text and "group A9_s1" in caplog.text, caplog.text
+
+
 def test_a_must_raised_alongside_a_should_is_still_fatal():
     """The tolerance is per-message, not per-validator.
 

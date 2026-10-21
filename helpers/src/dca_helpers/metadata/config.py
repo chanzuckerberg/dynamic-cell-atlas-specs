@@ -26,9 +26,16 @@ def _merge(base: Any, over: Any) -> Any:
 
 
 def _read_dca(path: Path) -> dict[str, Any]:
-    """Return the ``[dca]`` table of *path* with its provenance keyed by dotted path."""
+    """Return the ``[dca]`` table of *path* with its provenance keyed by dotted path.
+
+    A TOML syntax error is re-raised as ``ValueError`` prefixed with *path*, so a run that
+    layers several config files says which one is broken.
+    """
     with path.open("rb") as handle:
-        data = tomllib.load(handle)
+        try:
+            data = tomllib.load(handle)
+        except tomllib.TOMLDecodeError as error:
+            raise ValueError(f"{path}: {error}") from error
     if "dca" not in data:
         raise ValueError(f"{path} has no [dca] table")
     block = data["dca"]

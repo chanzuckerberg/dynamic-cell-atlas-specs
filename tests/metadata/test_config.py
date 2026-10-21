@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -163,3 +164,10 @@ def test_one_path_spelled_both_ways_in_one_file_is_still_an_error(tmp_path):
     )
     with pytest.raises(ValueError, match="authored twice"):
         load_dca_config(path)
+
+
+def test_a_toml_syntax_error_names_the_file(tmp_path):
+    bad = _write(tmp_path, "broken.toml", '[dca.study]\nlicense = "CC0-1.0\n')
+    with pytest.raises(ValueError, match="broken.toml") as excinfo:
+        load_dca_config(bad)
+    assert isinstance(excinfo.value.__cause__, tomllib.TOMLDecodeError)

@@ -1,4 +1,14 @@
-"""Shared DCA metadata engine: resolve a ``[dca.*]`` config block per group."""
+"""Shared DCA metadata engine that resolves a ``[dca.*]`` config block per group.
+
+:func:`validate_dca` checks the experimental block only, not ``channels`` or the
+normalization statistics. After writing a store, gate it with
+``dca_helpers.validation.runner.validate(<store>, spec_version="0.2")``, which checks the
+full ``dca`` block, channels and statistics included.
+
+Pass ``warnings=`` a list to collect SHOULD findings from :func:`validate_dca` instead of
+logging them, and ``run_attrs=`` to have :func:`merge_dca_attributes` record the writing
+tool's version and git sha beside the ``dca`` block.
+"""
 
 from dca_helpers.metadata.attributes import (
     DCA_SCHEMA_URL,
