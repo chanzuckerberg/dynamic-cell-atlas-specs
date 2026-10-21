@@ -41,3 +41,23 @@ def test_cli_rejects_a_malformed_hint():
         ["--field", "biosample.cell_line_id", "--hint", "nokey"],
     )
     assert r.exit_code == 2 and "KEY=VALUE" in r.output
+
+
+def test_cli_replays_a_recorded_lookup(replay_registry):
+    r = CliRunner().invoke(
+        main,
+        [
+            "--field", "biosample.cell_line_id",
+            "--hint", "biosample.cell_line_name=A549",
+            "--output", "json",
+        ],
+    )  # fmt: skip
+    assert r.exit_code == 0
+    assert json.loads(r.output) == [
+        {
+            "field": "biosample.cell_line_id",
+            "value": "CVCL:0023",
+            "source": "Cellosaurus CVCL:0023",
+            "rule": "cellosaurus",
+        },
+    ]
