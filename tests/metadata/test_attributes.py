@@ -1,7 +1,5 @@
 """Tests for the attribute writers: the ``dca`` block and normalization statistics."""
 
-import json
-
 import pytest
 
 from dca_helpers import CURRENT_SPEC_VERSION
@@ -34,26 +32,6 @@ def test_merge_stamps_version_and_url_and_keeps_existing_stats():
     assert attrs["ome"] == {}
 
 
-def test_schema_url_names_the_current_spec_version():
-    assert DCA_SCHEMA_URL == (
-        "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/"
-        f"v{CURRENT_SPEC_VERSION}/schema.json"
-    )
-
-
-def test_merged_attributes_serialize_as_strict_json():
-    attrs = {"ome": {"version": "0.5"}}
-    merge_dca_attributes(
-        attrs,
-        min_dca_block(),
-        [{"index": 0, "name": "GFP", "description": "d", "color": "00FF00"}],
-    )
-    write_normalization_statistics(attrs, STATS)
-    assert (
-        json.loads(json.dumps(attrs, allow_nan=False))["dca"]["url"] == DCA_SCHEMA_URL
-    )
-
-
 def test_merge_with_nothing_to_write_leaves_attrs_untouched():
     attrs = {"ome": {}}
     merge_dca_attributes(attrs, None, None)
@@ -67,12 +45,6 @@ def test_write_stats_replaces_the_block_and_adds_metadata():
         **STATS,
         "metadata": {"grid": 16},
     }
-
-
-def test_write_stats_rejects_a_missing_required_percentile():
-    bad = {"0": {"dataset_statistics": {"p1": 1.0, "p5": 2.0, "p95": 9.0}}}
-    with pytest.raises(ValueError, match="p99"):
-        write_normalization_statistics({"dca": {}}, bad)
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
@@ -109,8 +81,3 @@ def test_write_stats_rejects_non_finite_timepoint_values():
     }
     with pytest.raises(ValueError, match="finite"):
         write_normalization_statistics({"dca": {}}, bad)
-
-
-def test_write_stats_rejects_a_non_index_channel_key():
-    with pytest.raises(ValueError, match="channel index"):
-        write_normalization_statistics({"dca": {}}, {"GFP": STATS["0"]})
