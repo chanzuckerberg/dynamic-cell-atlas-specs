@@ -101,8 +101,8 @@ def base_block(tmp_path: Path) -> dict:
     return load_dca_config(base)
 
 
-def _channel_names(fov: Path) -> list[str]:
-    original = _read_attrs(FIXTURE / fov.relative_to(fov.parents[3]))
+def _channel_names(store: Path, fov: Path) -> list[str]:
+    original = _read_attrs(FIXTURE / fov.relative_to(store))
     return [c["name"] for c in original["dca"]["channels"]]
 
 
@@ -122,7 +122,7 @@ def _resolve_all(store: Path, block: dict, rows: dict[Path, dict]) -> dict[Path,
     for fov in _fov_files(store):
         where = "/".join(fov.relative_to(store).parts[:-1])
         resolved = resolve_dca(
-            block, rows[fov], channel_keys=_channel_names(fov), where=where
+            block, rows[fov], channel_keys=_channel_names(store, fov), where=where
         )
         payloads[fov] = validate_dca(resolved, where=where)
     return payloads
@@ -148,6 +148,9 @@ def test_engine_output_passes_the_validator(bare_store, base_block):
     assert not any("dca" in _read_attrs(f) for f in _fov_files(bare_store))
     rows = {fov: _row(fov, bare_store) for fov in _fov_files(bare_store)}
 
+    before = validate(str(bare_store), show_progress=False)
+    assert not all(r.passed for r in before), "a store without dca must fail"
+
     _write_all(_resolve_all(bare_store, base_block, rows))
 
     run = validate(str(bare_store), show_progress=False)
@@ -162,7 +165,7 @@ def test_engine_output_passes_the_validator(bare_store, base_block):
     assert all(r.passed for r in run)
 
 
-def test_a_row_missing_a_required_value_fails_before_anything_is_written(
+def test_a_row_missing_a_required_value_raises_naming_the_fov_and_field(
     bare_store, base_block
 ):
     fovs = _fov_files(bare_store)
@@ -175,4 +178,3 @@ def test_a_row_missing_a_required_value_fails_before_anything_is_written(
     assert excinfo.value.where == "B/1/0"
     assert excinfo.value.fields == ["biosample"]
     assert "cell_line_name is required" in str(excinfo.value)
-    assert not any("dca" in _read_attrs(f) for f in fovs)

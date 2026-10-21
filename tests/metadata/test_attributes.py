@@ -81,3 +81,13 @@ def test_write_stats_rejects_non_finite_timepoint_values():
     }
     with pytest.raises(ValueError, match="finite"):
         write_normalization_statistics({"dca": {}}, bad)
+
+
+def test_schema_url_names_the_spec_version_and_the_schema_file():
+    assert f"/v{CURRENT_SPEC_VERSION}/" in DCA_SCHEMA_URL
+    assert DCA_SCHEMA_URL.endswith("schema.json")
+
+
+def test_write_stats_rejects_a_non_index_channel_key():
+    with pytest.raises(ValueError, match="channel index"):
+        write_normalization_statistics({"dca": {}}, {"GFP": STATS["0"]})
