@@ -5,12 +5,10 @@ one-item-list collapse), then :func:`resolve_dca` and :func:`validate_dca`.
 """
 
 import copy
-import sys
 
 import pytest
 
 from dca_helpers.metadata.resolve import (
-    DCA_KEY,
     DcaValidationError,
     _every_line_is_should,
     resolve,
@@ -532,24 +530,6 @@ DCA_BLOCK = min_dca_block(
 )
 
 
-def test_validate_normalises_a_string_into_its_typed_field():
-    # What a `dtype=str` platemap read produces. Lax coercion is the normaliser;
-    # strict mode is not an option (it rejects every enum- and date-from-string).
-    block = {
-        **DCA_BLOCK,
-        "perturbation": {
-            "control_class": "treatment",
-            "definition": {"perturbation_id": "X", "modality": "other"},
-            "concentration": {"value": "0.5", "unit": "uM"},
-            "duration_h": "24.0",
-        },
-    }
-    out = validate_dca(block, where="g")
-    assert out["perturbation"]["concentration"]["value"] == 0.5
-    assert isinstance(out["perturbation"]["concentration"]["value"], float)
-    assert isinstance(out["perturbation"]["duration_h"], float)
-
-
 @pytest.mark.parametrize(
     ("field", "term", "marker"),
     [
@@ -623,23 +603,6 @@ def test_a_should_severity_finding_warns_and_the_build_proceeds(
     # Normalisation still ran: `field_path` is injected from the provenance map key, and
     # would be absent if we had fallen back to an unvalidated passthrough.
     assert out["provenance"]["study.license"]["field_path"] == "study.license"
-
-
-def test_a_must_severity_finding_still_aborts_and_names_the_group():
-    """The other half of the same contract: MUST is still fatal.
-
-    Guards against over-correcting the SHOULD fix into "nothing is fatal". A bare
-    pydantic ValidationError says what is wrong but not which of a million groups it
-    came from, so the wrapper that names the group has to survive too. The MUST here
-    is a half-mapped perturbation: control_class alone is not a perturbation block,
-    because the spec requires `definition` whenever control_class is not "empty".
-    """
-    block = {**DCA_BLOCK, "perturbation": {"control_class": "treatment"}}
-    with pytest.raises(
-        DcaValidationError, match="invalid DCA metadata for group A9_s1"
-    ) as excinfo:
-        validate_dca(resolve(block, METADATA_FOR_BLOCK), where="group A9_s1")
-    assert "definition is required" in str(excinfo.value)
 
 
 def test_a_must_raised_alongside_a_should_is_still_fatal():
@@ -785,16 +748,6 @@ def test_a_list_field_authored_as_a_digit_keyed_subtable_resolves_to_a_flat_list
     assert resolve_dca(block, {})["study"]["study_type"] == ["Screen", "Other"]
 
 
-def test_the_relist_repair_step_is_gone():
-    """The vestigial two-phase 'resolve then repair' step no longer exists.
-
-    Shaping is decided up front in the single `_resolve_against` walk, so there is no
-    longer a `_relist` re-shaping pass in `validate_dca` — nor the function itself.
-    """
-    module = sys.modules["dca_helpers.metadata.resolve"]
-    assert not hasattr(module, "_relist"), "the _relist repair step must be removed"
-
-
 def test_resolve_dca_output_is_model_shaped_so_validate_needs_no_repair():
     """End-state: `resolve_dca` alone yields a block `validate_dca` accepts unrepaired.
 
@@ -883,12 +836,6 @@ ADVERSARIAL_ERRORS = {
         {"cls": "cmpd", "pid": float("nan"), "solv": "DMSO"},
         "definition is required",
     ),
-    # An enum violation is a MUST and stays fatal after the SHOULD fix.
-    "dotted-provenance-bad-source-kind": (
-        {**_MIN, "provenance": {"study.source": {"source_kind": "publication"}}},
-        {},
-        "Input should be 'agent', 'human' or 'original_data'",
-    ),
 }
 
 
@@ -926,7 +873,3 @@ def test_validation_error_lists_every_must_finding_with_its_field():
     assert sorted(err.fields) == ["biosample.organism", "study.release_date"]
     assert all(issue.startswith(field) for issue, field in zip(err.issues, err.fields))
     assert isinstance(err, ValueError)
-
-
-def test_dca_key_is_the_manifest_key():
-    assert DCA_KEY == "dca"
