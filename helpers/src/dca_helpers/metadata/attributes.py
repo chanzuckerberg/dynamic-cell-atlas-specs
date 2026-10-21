@@ -2,7 +2,8 @@
 
 :func:`merge_dca_attributes` puts a resolved payload on a node's ``attributes.dca``.
 :func:`write_normalization_statistics` replaces ``attributes.dca.normalization_statistics``.
-Both mutate the attributes dict in place and leave every other key alone.
+Both mutate the attributes dict in place and leave every other key alone, except the run
+provenance keys a caller passes to :func:`merge_dca_attributes` as ``run_attrs``.
 """
 
 import logging
@@ -22,10 +23,16 @@ DCA_SCHEMA_URL = (
 )
 
 
+#: Top-level attribute keys that run provenance may not claim.
+_RESERVED_ATTRS = frozenset({"dca", "ome"})
+
+
 def merge_dca_attributes(
     attrs: dict[str, Any],
     payload: Mapping[str, Any] | None,
     channels: Sequence[Mapping[str, Any]] | None,
+    *,
+    run_attrs: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     """Merge a resolved DCA payload into *attrs* in place.
 
@@ -35,7 +42,21 @@ def merge_dca_attributes(
 
     ``color`` is an omero field, not a DCA one; it rides in the same channel entry so a
     config declares each channel once, and is dropped on the way into ``dca``.
+
+    *run_attrs* records which code wrote the block. Its shape is
+    ``{"<tool>": {"version": ..., "code_git_sha": ..., ...}}``, and each key is set as a
+    top-level sibling of ``dca``, never inside it, because the DCA models would reject
+    the extra keys. A key is replaced wholesale, not merged, so a re-run without a git
+    sha cannot inherit the previous run's. ``None`` (the default) leaves any existing
+    sibling untouched. A key of ``"dca"`` or ``"ome"`` raises ``ValueError`` before
+    anything is written.
     """
+    if run_attrs is not None:
+        reserved = sorted(_RESERVED_ATTRS.intersection(run_attrs))
+        if reserved:
+            raise ValueError(f"run_attrs cannot use the reserved keys {reserved}")
+        for key, value in run_attrs.items():
+            attrs[key] = dict(value)
     if channels is None and not payload:
         return
     dca = attrs.setdefault("dca", {})

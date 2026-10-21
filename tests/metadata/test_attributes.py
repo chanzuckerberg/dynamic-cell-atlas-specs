@@ -38,6 +38,38 @@ def test_merge_with_nothing_to_write_leaves_attrs_untouched():
     assert attrs == {"ome": {}}
 
 
+RUN = {"version": "1.2.0", "code_git_sha": "abc123"}
+
+
+def test_run_attrs_are_written_beside_dca_not_inside_it():
+    attrs = {"ome": {}}
+    merge_dca_attributes(attrs, min_dca_block(), None, run_attrs={"mytool": RUN})
+    assert attrs["mytool"] == RUN
+    assert "mytool" not in attrs["dca"]
+    assert attrs["dca"]["study"] == min_dca_block()["study"]
+
+
+def test_run_attrs_replace_a_previous_run_wholesale():
+    attrs = {"mytool": {"version": "1.0.0", "code_git_sha": "old"}, "dca": {"x": 1}}
+    merge_dca_attributes(attrs, None, None, run_attrs={"mytool": {"version": "1.1.0"}})
+    assert attrs["mytool"] == {"version": "1.1.0"}
+    assert attrs["dca"] == {"x": 1}
+
+
+def test_without_run_attrs_an_existing_sibling_is_kept():
+    attrs = {"mytool": RUN}
+    merge_dca_attributes(attrs, min_dca_block(), None)
+    assert attrs["mytool"] == RUN
+
+
+@pytest.mark.parametrize("key", ["dca", "ome"])
+def test_run_attrs_cannot_name_a_reserved_key(key):
+    attrs = {"ome": {"keep": 1}}
+    with pytest.raises(ValueError, match=key):
+        merge_dca_attributes(attrs, min_dca_block(), None, run_attrs={key: RUN})
+    assert attrs == {"ome": {"keep": 1}}
+
+
 def test_write_stats_replaces_the_block_and_adds_metadata():
     attrs = {"dca": {"normalization_statistics": {"old": 1}}}
     write_normalization_statistics(attrs, STATS, metadata={"grid": 16})
