@@ -1,6 +1,7 @@
 """Shared DCA metadata engine: resolve a ``[dca.*]`` config block per group."""
 
 from dca_helpers.metadata.attributes import (
+    DCA_SCHEMA_URL,
     merge_dca_attributes,
     write_normalization_statistics,
 )
@@ -18,6 +19,7 @@ from dca_helpers.metadata.store_facts import STORE_COLUMNS, name_date
 
 __all__ = [
     "DCA_KEY",
+    "DCA_SCHEMA_URL",
     "MISSING",
     "STORE_COLUMNS",
     "DcaValidationError",

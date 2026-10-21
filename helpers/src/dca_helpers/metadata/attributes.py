@@ -11,14 +11,15 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from dca_helpers import CURRENT_SPEC_VERSION
-from dca_helpers.validation.versions.v0_2.models import (
-    DCAChannelNormalization,
-    DCAGroupMetadataV0_2,
-)
+from dca_helpers.validation.versions.v0_2.models import DCAChannelNormalization
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_URL = DCAGroupMetadataV0_2.model_fields["url"].default
+#: The ``dca.url`` written on every node: the JSON Schema of the current spec version.
+DCA_SCHEMA_URL = (
+    "https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/tree/main/docs/"
+    f"v{CURRENT_SPEC_VERSION}/schema.json"
+)
 
 
 def merge_dca_attributes(
@@ -39,7 +40,7 @@ def merge_dca_attributes(
         return
     dca = attrs.setdefault("dca", {})
     dca["version"] = CURRENT_SPEC_VERSION
-    dca["url"] = _SCHEMA_URL
+    dca["url"] = DCA_SCHEMA_URL
     if channels is not None:
         dca["channels"] = [
             {k: v for k, v in entry.items() if k != "color"} for entry in channels
