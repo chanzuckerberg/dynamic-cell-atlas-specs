@@ -162,31 +162,50 @@ def test_unknown_field_gets_no_proposal():
     )
 
 
-def test_search_cellosaurus_ranks_an_exact_synonym_first(monkeypatch):
-    payload = {
-        "Cellosaurus": {
-            "cell-line-list": [
-                {
-                    "accession-list": [{"value": "CVCL_DX70"}],
-                    "name-list": [{"value": "A549 Cas9"}],
-                },
-                {
-                    "accession-list": [{"value": "CVCL_0023"}],
-                    "name-list": [{"value": "A-549"}, {"value": "A549"}],
-                },
-            ]
-        }
-    }
-
+def _fake_cellosaurus(monkeypatch, lines):
     class Resp:
         def raise_for_status(self):
             pass
 
         def json(self):
-            return payload
+            return {"Cellosaurus": {"cell-line-list": lines}}
 
     monkeypatch.setattr(propose_module, "_get_with_retry", lambda url, params: Resp())
-    assert propose_module.search_cellosaurus("a549") == [
-        ("CVCL:0023", "A549"),
-        ("CVCL:DX70", "A549 Cas9"),
-    ]
+
+
+def test_search_cellosaurus_keeps_only_exact_names(monkeypatch):
+    _fake_cellosaurus(
+        monkeypatch,
+        [
+            {
+                "accession-list": [{"value": "CVCL_DX70"}],
+                "name-list": [{"value": "A549 Cas9"}],
+            },
+            {
+                "accession-list": [{"value": "CVCL_0023"}],
+                "name-list": [{"value": "A-549"}, {"value": "A549"}],
+            },
+        ],
+    )
+    assert propose_module.search_cellosaurus("a549") == [("CVCL:0023", "A549")]
+
+
+def test_fuzzy_only_cellosaurus_result_is_no_match(monkeypatch):
+    _fake_cellosaurus(
+        monkeypatch,
+        [
+            {
+                "accession-list": [{"value": "CVCL_YJ67"}],
+                "name-list": [{"value": "VAMPIRO HEK293"}],
+            }
+        ],
+    )
+    p = _one("biosample.cell_line_id", hints={"biosample.cell_line_name": "HEK293"})
+    assert (p.value, p.source) == (None, "no match")
+
+
+def test_virtual_stain_target_out_of_range_channel_is_reasoned_none():
+    p = _one(
+        "channels.3.biological_annotation.biological_target", channel_names=["GFP"]
+    )
+    assert (p.value, p.source) == (None, "no channel name")

@@ -34,6 +34,7 @@ _VIRTUAL_STAIN_TARGETS = {
     "membrane_prediction": "plasma membrane",
 }
 _MAX_CANDIDATES = 5
+_SEARCH_ROWS = 100
 _LABELFREE_PREFIXES = ("Phase", "BF", "Brightfield")
 
 
@@ -48,39 +49,43 @@ class Proposal:
 
 
 def search_cellosaurus(name: str) -> list[tuple[str, str]]:
-    """Return ``(curie, label)`` Cellosaurus candidates for a cell line name, best first.
+    """Return ``(curie, label)`` for Cellosaurus lines named exactly ``name``.
 
-    Cellosaurus identifiers and synonyms differ (A549 is the synonym of the
-    identifier ``A-549``), so the query covers both. Lines with a name equal to
-    ``name`` (case-insensitive) come first and carry that name as the label; the
-    rest follow in registry order with their identifier.
+    A line matches when its identifier or a synonym equals ``name``
+    (case-insensitive). The identifier and synonym fields are searched in two
+    requests, because Cellosaurus identifiers and synonyms differ (A549 is a
+    synonym of the identifier ``A-549``). The label is the matching name.
+    Derivatives that only contain ``name`` are never returned.
     """
-    resp = _get_with_retry(
-        f"{CELLOSAURUS_BASE_URL}/search/cell-line",
-        {
-            "q": f'idsy:"{name}"',
-            "format": "json",
-            "fld": ["ac", "id", "sy"],
-            "rows": 1000,
-        },
-    )
-    resp.raise_for_status()
     target = name.strip().lower()
-    exact, other = [], []
-    for line in resp.json().get("Cellosaurus", {}).get("cell-line-list", []):
-        accession = next(
-            (a["value"] for a in line.get("accession-list", []) if "value" in a), None
+    found: dict[str, str] = {}
+    for search_field in ("id", "sy"):
+        resp = _get_with_retry(
+            f"{CELLOSAURUS_BASE_URL}/search/cell-line",
+            {
+                "q": f'{search_field}:"{name}"',
+                "format": "json",
+                "fld": ["ac", "id", "sy"],
+                "rows": _SEARCH_ROWS,
+            },
         )
-        names = [n["value"] for n in line.get("name-list", []) if "value" in n]
-        if not accession or not names:
-            continue
-        curie = accession.replace("_", ":", 1)
-        match = next((n for n in names if n.strip().lower() == target), None)
-        if match:
-            exact.append((curie, match))
-        else:
-            other.append((curie, names[0]))
-    return (exact + other)[:_MAX_CANDIDATES]
+        resp.raise_for_status()
+        for line in resp.json().get("Cellosaurus", {}).get("cell-line-list", []):
+            accession = next(
+                (a["value"] for a in line.get("accession-list", []) if "value" in a),
+                None,
+            )
+            label = next(
+                (
+                    n["value"]
+                    for n in line.get("name-list", [])
+                    if "value" in n and n["value"].strip().lower() == target
+                ),
+                None,
+            )
+            if accession and label:
+                found.setdefault(accession.replace("_", ":", 1), label)
+    return list(found.items())[:_MAX_CANDIDATES]
 
 
 def search_ncbitaxon(name: str) -> list[tuple[str, str]]:
@@ -189,6 +194,8 @@ def _propose_one(
 
     if _is_channel_field(field, "biological_annotation.biological_target"):
         name = _channel_name(field, channel_names)
+        if name is None:
+            return Proposal(field, None, "no channel name", "virtual_stain_target")
         if name not in _VIRTUAL_STAIN_TARGETS:
             return None
         return Proposal(

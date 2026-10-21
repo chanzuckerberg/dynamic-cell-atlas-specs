@@ -30,7 +30,12 @@ def _parse_hint(
 
 def _print_text(proposals: list[Proposal]) -> None:
     for p in proposals:
-        value = "-" if p.value is None else json.dumps(p.value)
+        if p.value is None:
+            value = "-"
+        elif isinstance(p.value, str):
+            value = p.value
+        else:
+            value = json.dumps(p.value)
         click.echo(f"{p.field}\t{value}\t{p.source}")
 
 

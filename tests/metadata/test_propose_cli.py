@@ -47,7 +47,7 @@ def test_cli_text_output_is_tab_separated():
         ],
     )
     assert r.exit_code == 0
-    assert r.output == 'channels.0.channel_type\t"labelfree"\tchannel name\n'
+    assert r.output == "channels.0.channel_type\tlabelfree\tchannel name\n"
 
 
 def test_cli_rejects_a_malformed_hint():
