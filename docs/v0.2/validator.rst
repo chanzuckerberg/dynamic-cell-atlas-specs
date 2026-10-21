@@ -426,7 +426,7 @@ provenance-coverage (see below). Label images are exempt.
      - CURIE shape on ontology-id fields (e.g. ``^NCBITaxon:\d+$``, ``^EFO:\d+$``; the ``unknown`` / ``na`` / ``unavailable`` sentinels are permitted where the slot allows them). A few "no value" ontology terms are rejected so each sentinel has one spelling: ``ZFS:0000000``, ``FBdv:00007012`` and ``ZFA:0001093``
      - experimental-metadata.rst § Conformance
    * - MUST
-     - ``modality: compound`` requires the ``chemical`` block; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require the ``genetic`` block
+     - ``modality: compound`` requires the ``chemical`` block with ``pubchem_cid`` and ``morgan_fingerprint``; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require the ``genetic`` block with ``ensembl_gene_id``
      - experimental-metadata.rst § Conformance
    * - MUST
      - ``tissue_type: "cell line"`` requires ``cell_line_name``
