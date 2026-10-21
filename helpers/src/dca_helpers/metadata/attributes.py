@@ -12,7 +12,10 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from dca_helpers import CURRENT_SPEC_VERSION
-from dca_helpers.validation.versions.v0_2.models import DCAChannelNormalization
+from dca_helpers.validation.versions.v0_2.models import (
+    DCAChannelNormalization,
+    DCANormalizationStatistics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,27 +95,36 @@ def write_normalization_statistics(
 ) -> None:
     """Replace ``attrs["dca"]["normalization_statistics"]`` with validated *stats*.
 
-    *stats* maps a channel index string (``"0"``, ``"1"``) to a channel entry. Each entry
-    must validate as ``DCAChannelNormalization`` (required ``dataset_statistics`` with
-    ``p1``, ``p5``, ``p95``, ``p99``) and hold only finite numbers after validation, so a
-    ``"nan"`` string that pydantic coerces to a float is rejected too. The block is replaced
-    wholesale, not merged, so a re-run cannot keep a stale channel. *metadata*, when given,
-    must hold only finite numbers and is stored under the ``"metadata"`` key.
+    *stats* maps a channel index string (``"0"``, ``"1"``) to a channel entry, and
+    *metadata*, when given, is stored under the ``"metadata"`` key. The assembled block
+    is validated once with ``DCANormalizationStatistics``, which rejects any other key,
+    any channel entry that is not a ``DCAChannelNormalization`` (required
+    ``dataset_statistics`` with ``p1``, ``p5``, ``p95``, ``p99``) and a ``metadata.grid``
+    below 1. Other ``metadata`` keys are free form.
+
+    Each channel entry is written as its model dump, so numeric strings become floats.
+    The input and the written block must hold only finite numbers, because JSON cannot
+    hold NaN or infinity; checking after the dump catches a ``"nan"`` string that
+    pydantic coerces to a float. The block is replaced wholesale, not merged, so a re-run
+    cannot keep a stale channel.
     """
-    block: dict[str, Any] = {}
-    for key, entry in stats.items():
-        if not str(key).isdigit():
-            raise ValueError(
-                f"normalization statistics key {key!r} is not a channel index "
-                "(a decimal string such as '0')"
-            )
-        dumped = DCAChannelNormalization.model_validate(entry).model_dump(
-            exclude_none=True
+    _assert_finite(stats, "normalization statistics")
+    block: dict[str, Any] = {str(key): entry for key, entry in stats.items()}
+    if "metadata" in block:
+        raise ValueError(
+            "normalization statistics key 'metadata' is not a channel index; "
+            "pass it as metadata="
         )
-        _assert_finite(dumped, f"normalization statistics for channel {key}")
-        block[str(key)] = dumped
     if metadata is not None:
         _assert_finite(metadata, "normalization statistics metadata")
         block["metadata"] = dict(metadata)
-    attrs.setdefault("dca", {})["normalization_statistics"] = block
+    model = DCANormalizationStatistics.model_validate(block)
+    written: dict[str, Any] = {
+        key: DCAChannelNormalization.model_validate(entry).model_dump(exclude_none=True)
+        for key, entry in (model.model_extra or {}).items()
+    }
+    if model.metadata is not None:
+        written["metadata"] = model.metadata.model_dump(exclude_unset=True)
+    _assert_finite(written, "normalization statistics")
+    attrs.setdefault("dca", {})["normalization_statistics"] = written
     logger.debug("wrote normalization statistics for %d channels", len(stats))

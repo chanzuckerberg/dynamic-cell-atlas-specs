@@ -121,5 +121,33 @@ def test_schema_url_names_the_spec_version_and_the_schema_file():
 
 
 def test_write_stats_rejects_a_non_index_channel_key():
-    with pytest.raises(ValueError, match="channel index"):
+    with pytest.raises(ValueError, match="Unexpected key 'GFP'"):
         write_normalization_statistics({"dca": {}}, {"GFP": STATS["0"]})
+
+
+def test_write_stats_rejects_a_grid_below_one():
+    with pytest.raises(ValueError, match="grid"):
+        write_normalization_statistics({"dca": {}}, STATS, metadata={"grid": 0})
+
+
+def test_write_stats_keeps_free_form_metadata_keys():
+    attrs = {"dca": {}}
+    metadata = {"grid": 16, "source": "fov sample", "dataset_statistics": True}
+    write_normalization_statistics(attrs, STATS, metadata=metadata)
+    assert attrs["dca"]["normalization_statistics"]["metadata"] == metadata
+
+
+def test_write_stats_rejects_metadata_passed_as_a_channel_key():
+    with pytest.raises(ValueError, match="metadata="):
+        write_normalization_statistics({"dca": {}}, {**STATS, "metadata": {"grid": 4}})
+
+
+def test_write_stats_coerces_numeric_strings_in_channel_entries():
+    stats = {
+        "0": {"dataset_statistics": {"p1": "1", "p5": 2.0, "p95": 9.0, "p99": 10.0}}
+    }
+    attrs = {"dca": {}}
+    write_normalization_statistics(attrs, stats)
+    assert (
+        attrs["dca"]["normalization_statistics"]["0"]["dataset_statistics"]["p1"] == 1.0
+    )
