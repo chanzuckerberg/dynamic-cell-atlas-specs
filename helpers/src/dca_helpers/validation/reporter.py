@@ -129,6 +129,7 @@ def _completion_timestamp(timestamp: datetime | None = None) -> str:
 _NODE_RESULT_EXCLUDED_FIELDS = frozenset(
     {
         "spec_version",  # redundant per node -- see the run-level dca_spec_version
+        "image_facts",  # internal input to the cross-store pairing pass, not a finding
     }
 )
 

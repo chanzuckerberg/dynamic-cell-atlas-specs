@@ -1,0 +1,611 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chanzuckerberg/dynamic-cell-atlas-specs/main/docs/v0.3/schema.json",
+  "title": "DCA Metadata Schema",
+  "description": "Schema for the DCA namespace in zarr.json: per-channel metadata, normalization statistics and projection parameters on image groups.",
+  "type": "object",
+  "properties": {
+    "dca": {
+      "type": "object",
+      "description": "Top-level DCA namespace in zarr.json, mirroring the OME-Zarr 'ome' key.",
+      "required": [
+        "version",
+        "url",
+        "channels",
+        "normalization_statistics"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Version of the DCA specification.",
+          "const": "0.3"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL pointing to the version of the specification in the GitHub repository."
+        },
+        "channels": {
+          "type": "array",
+          "description": "Per-channel metadata array. Each element corresponds to one channel by index in the C axis. Distinct from omero.channels (position-level display hints).",
+          "items": {
+            "$ref": "#/$defs/ChannelMetadata"
+          }
+        },
+        "normalization_statistics": {
+          "$ref": "#/$defs/NormalizationStatistics"
+        },
+        "projection": {
+          "$ref": "#/$defs/Projection"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ChannelMetadata": {
+      "type": "object",
+      "description": "Metadata for a single image channel. See channel-metadata.rst.",
+      "required": [
+        "name",
+        "index",
+        "description"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Short channel name of a few words. Should match a potential OME-NGFF omero.channels label.",
+          "examples": [
+            "GFP",
+            "mCherry",
+            "Phase2D",
+            "Focus3D",
+            "nuclei_prediction",
+            "membrane_prediction"
+          ]
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based channel index in the C axis."
+        },
+        "channel_type": {
+          "type": "string",
+          "enum": [
+            "fluorescence",
+            "chromogenic",
+            "labelfree",
+            "predicted"
+          ],
+          "description": "Broad classification of channel acquisition type."
+        },
+        "description": {
+          "type": "string",
+          "description": "Rich natural language description suitable for text embedding. Recommended format \u2014 fluorescent: '{biological_target} visualized via {marker}'; labelfree: '{reconstruction_type} label-free imaging'; predicted: '{biological_target} predicted by virtual staining'."
+        },
+        "biological_annotation": {
+          "$ref": "#/$defs/BiologicalAnnotation"
+        }
+      },
+      "examples": [
+        {
+          "name": "Phase2D",
+          "index": 0,
+          "channel_type": "labelfree",
+          "description": "Projected 2D reconstruction of label-free brightfield imaging"
+        },
+        {
+          "name": "GFP",
+          "index": 2,
+          "channel_type": "fluorescence",
+          "biological_annotation": {
+            "biological_target": "chaperones",
+            "marker": "HSPA1B",
+            "marker_type": "endogenous_tag"
+          },
+          "description": "Max projected chaperones visualized via HSPA1B"
+        },
+        {
+          "name": "mCherry",
+          "index": 3,
+          "channel_type": "fluorescence",
+          "biological_annotation": {
+            "biological_target": "actin filament",
+            "marker": "FastAct_SPY555 Live Cell Dye",
+            "marker_type": "live_cell_dye"
+          },
+          "description": "Max projected actin filament visualized via FastAct_SPY555 Live Cell Dye"
+        },
+        {
+          "name": "nuclei_prediction",
+          "index": 4,
+          "channel_type": "predicted",
+          "biological_annotation": {
+            "biological_target": "nuclei"
+          },
+          "description": "Nuclei predicted by virtual staining"
+        },
+        {
+          "name": "membrane_prediction",
+          "index": 5,
+          "channel_type": "predicted",
+          "biological_annotation": {
+            "biological_target": "membrane"
+          },
+          "description": "Membrane predicted by virtual staining"
+        }
+      ]
+    },
+    "IntensityStatistics": {
+      "type": "object",
+      "description": "Summary intensity statistics for a channel over a given scope (dataset or single timepoint).",
+      "required": [
+        "p1",
+        "p5",
+        "p95",
+        "p99"
+      ],
+      "properties": {
+        "p1": {
+          "type": "number",
+          "description": "1st percentile of pixel intensities."
+        },
+        "p5": {
+          "type": "number",
+          "description": "5th percentile of pixel intensities."
+        },
+        "p95": {
+          "type": "number",
+          "description": "95th percentile of pixel intensities."
+        },
+        "p99": {
+          "type": "number",
+          "description": "99th percentile of pixel intensities."
+        },
+        "p95_p5": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Robust range: 95th percentile minus 5th percentile."
+        },
+        "p99_p1": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wide robust range: 99th percentile minus 1st percentile."
+        },
+        "mean": {
+          "type": "number",
+          "description": "Arithmetic mean of pixel intensities."
+        },
+        "std": {
+          "type": "number",
+          "description": "Standard deviation of pixel intensities."
+        },
+        "median": {
+          "type": "number",
+          "description": "Median (50th percentile) of pixel intensities."
+        },
+        "iqr": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Interquartile range (75th percentile minus 25th percentile)."
+        }
+      }
+    },
+    "NormalizationMetadata": {
+      "type": "object",
+      "description": "Parameters recorded when computing normalization statistics, for reproducibility.",
+      "properties": {
+        "grid": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Spatial downsampling factor used when computing statistics (e.g. 16 means every 16th pixel was sampled)."
+        }
+      }
+    },
+    "ChannelNormalization": {
+      "type": "object",
+      "description": "Normalization statistics for a single channel. See normalization-statistics.rst.",
+      "required": [
+        "dataset_statistics"
+      ],
+      "properties": {
+        "dataset_statistics": {
+          "$ref": "#/$defs/IntensityStatistics",
+          "description": "Statistics computed over all spatial dimensions and timepoints for this channel."
+        },
+        "timepoint_statistics": {
+          "type": "object",
+          "description": "Per-timepoint statistics keyed by zero-based timepoint index.",
+          "patternProperties": {
+            "^[0-9]+$": {
+              "$ref": "#/$defs/IntensityStatistics"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "NormalizationStatistics": {
+      "type": "object",
+      "description": "Per-channel normalization statistics keyed by zero-based channel index. See normalization-statistics.rst.",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/NormalizationMetadata",
+          "description": "Optional parameters recorded when computing normalization statistics."
+        }
+      },
+      "patternProperties": {
+        "^[0-9]+$": {
+          "$ref": "#/$defs/ChannelNormalization"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BiologicalAnnotation": {
+      "type": "object",
+      "description": "Categorical metadata describing the biological target of the channel. All fields are optional.",
+      "properties": {
+        "biological_target": {
+          "type": "string",
+          "description": "Target organelle, structure, or protein class visualized.",
+          "examples": [
+            "chaperones",
+            "actin filament",
+            "nuclei",
+            "membrane",
+            "mitochondria",
+            "endoplasmic reticulum",
+            "Golgi",
+            "nucleus"
+          ]
+        },
+        "marker": {
+          "type": "string",
+          "description": "Specific reagent, protein, or dye used.",
+          "examples": [
+            "HSPA1B",
+            "FastAct_SPY555 Live Cell Dye",
+            "Hoechst",
+            "Mitotracker",
+            "virtual stain"
+          ]
+        },
+        "marker_type": {
+          "type": "string",
+          "enum": [
+            "endogenous_tag",
+            "live_cell_dye",
+            "fixed_dye",
+            "antibody"
+          ],
+          "description": "Mechanism of labeling."
+        },
+        "cpg_labeled_structure": {
+          "type": "string",
+          "enum": [
+            "\u03b2-tubulin",
+            "Endoplasmic Reticulum",
+            "f-Actin",
+            "Golgi, Plasma Membrane",
+            "Golgi, Plasma Membrane, f-Actin",
+            "Lysosomes",
+            "Lysosomes, Endosomes",
+            "Mitochondria",
+            "Nucleus",
+            "Nucleolus, Cytoplasmic RNA",
+            "Nucleus, Nucleolus, Cytoplasmic RNA",
+            "None",
+            "Unknown"
+          ],
+          "description": "Optional. CellPainting Gallery harmonized cellular structure made visible."
+        },
+        "cpg_labeled_molecule": {
+          "type": "string",
+          "enum": [
+            "Acidic Compartments",
+            "\u03b2-tubulin",
+            "DNA",
+            "DNA, RNA",
+            "f-Actin",
+            "f-Actin, N-acetyl-D-glucosamine",
+            "Glycoproteins",
+            "Mitochondria",
+            "N-acetyl-D-glucosamine",
+            "RNA",
+            "None",
+            "Unknown"
+          ],
+          "description": "Optional. CellPainting Gallery harmonized molecular target the reagent binds."
+        }
+      }
+    },
+    "Projection": {
+      "type": "object",
+      "description": "Parameters of a projected image (projections.rst, Projection block): the method and the source planes actually used. Array metadata, zarr.json only; not part of the experimental-metadata record. Exactly one of `method` (uniform form) and `channels` (per-channel form).",
+      "required": [],
+      "properties": {
+        "source_store": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source store: its name (resolved as a sibling of this store; preferred) or its full URL / absolute path. Required when the 3D source is in the DCA (checked across stores); omitted for a projection made before deposit."
+        },
+        "z_dim_source": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "method": {
+          "enum": [
+            "max",
+            "mean",
+            "sum",
+            "slice"
+          ]
+        },
+        "z_start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Uniform form: first source z index projected (inclusive)."
+        },
+        "z_end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Uniform form: last source z index projected (exclusive)."
+        },
+        "z_fraction": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "channels": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/ProjectionChannel"
+          },
+          "description": "Per-channel form, keyed by projected output channel name (a subset of dca.channels[].name)."
+        },
+        "focus": {
+          "$ref": "#/$defs/ProjectionFocus"
+        },
+        "z_step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Uniform form: every z_step-th plane of [z_start, z_end) was used."
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "method"
+          ],
+          "not": {
+            "required": [
+              "channels"
+            ]
+          }
+        },
+        {
+          "required": [
+            "channels"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "method"
+                ]
+              },
+              {
+                "required": [
+                  "z_start"
+                ]
+              },
+              {
+                "required": [
+                  "z_end"
+                ]
+              },
+              {
+                "required": [
+                  "z_step"
+                ]
+              },
+              {
+                "required": [
+                  "z_fraction"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "dependentRequired": {
+        "z_start": [
+          "z_end",
+          "z_dim_source"
+        ],
+        "z_end": [
+          "z_start",
+          "z_dim_source"
+        ],
+        "z_step": [
+          "z_start",
+          "z_end"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "slice"
+              }
+            },
+            "required": [
+              "method"
+            ]
+          },
+          "then": {
+            "required": [
+              "z_start",
+              "z_end"
+            ]
+          }
+        }
+      ]
+    },
+    "ProjectionChannel": {
+      "type": "object",
+      "required": [
+        "method"
+      ],
+      "description": "How one output channel was projected (projections.rst, Per-channel form).",
+      "properties": {
+        "method": {
+          "enum": [
+            "max",
+            "mean",
+            "sum",
+            "slice"
+          ]
+        },
+        "source_channel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "z_start": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "First source plane used (inclusive); a list gives one per level-0 timepoint."
+        },
+        "z_end": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Last source plane used (exclusive); a list gives one per level-0 timepoint."
+        },
+        "z_step": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "dependentRequired": {
+        "z_start": [
+          "z_end"
+        ],
+        "z_end": [
+          "z_start"
+        ],
+        "z_step": [
+          "z_start",
+          "z_end"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "slice"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z_start",
+              "z_end"
+            ]
+          }
+        }
+      ]
+    },
+    "ProjectionFocus": {
+      "type": "object",
+      "required": [
+        "channel",
+        "per"
+      ],
+      "description": "How the in-focus plane used to choose planes was found (projections.rst, Focus). Provenance only.",
+      "properties": {
+        "channel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "per": {
+          "enum": [
+            "fov",
+            "timepoint"
+          ]
+        },
+        "z": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "z_per_t": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "parameters": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "per": {
+                "const": "fov"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "per": {
+                "const": "timepoint"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z_per_t"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
