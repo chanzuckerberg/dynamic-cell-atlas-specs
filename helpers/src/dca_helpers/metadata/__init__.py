@@ -21,7 +21,7 @@ from dca_helpers.metadata.resolve import (
     resolve_dca,
     validate_dca,
 )
-from dca_helpers.metadata.store_facts import STORE_COLUMNS, name_date
+from dca_helpers.metadata.store_facts import STORE_COLUMNS
 
 __all__ = [
     "DCA_KEY",
@@ -33,7 +33,6 @@ __all__ = [
     "dca_read_columns",
     "load_dca_config",
     "merge_dca_attributes",
-    "name_date",
     "propose",
     "resolve",
     "resolve_dca",
