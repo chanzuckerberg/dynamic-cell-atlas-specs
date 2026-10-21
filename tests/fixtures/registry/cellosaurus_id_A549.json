@@ -1,0 +1,1566 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_DX70"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YZ46"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 DHODH-/-"
+      },
+      {
+       "type": "synonym",
+       "value": "DHODH-/- A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3C5"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 HIF1A -/-/-"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 HIF1a -/-/-"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_LB65"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 MX10"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XY99"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 OS8"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-OS8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3C4"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 SMAD4 -/-"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7IZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549(Cas9)"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A1ZW"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE67"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-5Fu"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_D1JI"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-AC"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0Q5"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-ACE2"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-Ace2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A0VZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-CBG"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_IP03"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-CR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9AT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-deltaSTAT1"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 STAT1-/-"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_5I73"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Dual"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XB31"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-EGFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XI06"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-ESM"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-MSB"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E9DR"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-hrGFP"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-GFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C7GS"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-IR3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C7GT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-IR6"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_UR31"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Luc2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XB30"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-mCherry"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A1ZX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-R0"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E8FG"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-RepTor"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9AW"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-SunTag"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_W218"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Taxol"
+      },
+      {
+       "type": "synonym",
+       "value": "A549/Taxol"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XB27"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-tdT"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_4Z15"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549.EpoB40"
+      },
+      {
+       "type": "synonym",
+       "value": "EpoB40"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_IY87"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C5RT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/CDDP"
+      },
+      {
+       "type": "synonym",
+       "value": "A549/cDDP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E9XL"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/cis"
+      },
+      {
+       "type": "synonym",
+       "value": "A549/Cis"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C5RZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/CisR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H268"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/CPT"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0W4"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/DDP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_JY87"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/GFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_UJ49"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/SF"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C5S0"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B7N5"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TS1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B7N6"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TS2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_W190"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TXL10"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_W191"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TXL20"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_W192"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/TXL5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YJ75"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "LINTERNA A549"
+      },
+      {
+       "type": "synonym",
+       "value": "LINTERNA-A549"
+      },
+      {
+       "type": "synonym",
+       "value": "TurboGFP A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5NW"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE A549-Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5Z6"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE A549-CopGFP"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-CopGFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5RN"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE A549-FLUC"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-FLUC"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_UJ32"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 ATGL-KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3CC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 B2M KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_VR73"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 dCas9-KRAB"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_DX71"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 dCas9-VPR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3ET"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EGFR Biosensor"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 EGFR SH2 Biosensor"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3DD"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EGFR High"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3DB"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EGFR Knockout"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 EGFR-/-"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3DC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EGFR Low"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3EU"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EGFRvIII High"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_JK07"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EML4-ALK"
+      },
+      {
+       "type": "synonym",
+       "value": "EML4-ALK Fusion-A549 Isogenic Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6ZC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 fat-1"
+      },
+      {
+       "type": "synonym",
+       "value": "f-A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_RT13"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 GFP-EGFR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3C6"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 GFP-SMAD4"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_RQ89"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 GFP-STAT1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3IT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 MIR1343 KO"
+      },
+      {
+       "type": "synonym",
+       "value": "miR-1343Delta A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F0RJ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 MMP7 KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F0RK"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 NR3C1 KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_DF39"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 NucLight Green"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_DF40"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 NucLight Red"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_D3VW"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 PIP4P1 KO"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 TMEM55B KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C8YV"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 PPM1H-BromoTag"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 PPM1H-BromoTag CRISPR/Cas9 knock-in"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3C8"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 RFP-STAT3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_LI35"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 VIM RFP"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 Vim RFP"
+      },
+      {
+       "type": "synonym",
+       "value": "A-549 VIM RFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6IP"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 VPS13C KO"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-VPS13C knockout"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_4V06"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549(VM)28"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_4V07"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549(VP)28"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A0WA"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-A2-ESO"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-NY-ESO-1-A2-CBG"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE68"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Cas9-538"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A9MB"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Cas9-860"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A9MC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Cas9-861"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A9MD"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Cas9-862"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A9ME"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Cas9-863"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0DZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-CEACAM1-4L"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9AU"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-deltaSTAT1-SunTag"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_QZ76"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-eGFP-Puro"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_QZ79"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Fluc-Puro"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A5KA"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-hACE2 [Invivogen]"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A5KB"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-hACE2-TMPRSS2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_QZ80"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-hNIS-Neo"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_QZ84"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-iRFP-Neo"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_QZ85"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-iRFP-Puro"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_J242"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Luc [JCRB]"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C8WF"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Luc [Ubigene]"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_5J13"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-luc-C8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_5I86"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Red-FLuc"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 Red-FLuc"
+      },
+      {
+       "type": "synonym",
+       "value": "Bioware Brite A549 Red-FLuc"
+      },
+      {
+       "type": "synonym",
+       "value": "IVISbrite A549 Red F-luc"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9AX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-SunTag ACE2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YA87"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/Asc-1"
+      },
+      {
+       "type": "synonym",
+       "value": "A549/ASC-1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9BK"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/Cas9 AAVS1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_KS36"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549/NFkB-luc"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_VR66"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 EML4-ALK-Luc2"
+      },
+      {
+       "type": "synonym",
+       "value": "EML4-ALK Fusion-A549 Isogenic-Luc2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B0A6"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 IFITM2/3-KO"
+      },
+      {
+       "type": "synonym",
+       "value": "C1-3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0DV"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 rho-0#1a"
+      },
+      {
+       "type": "synonym",
+       "value": "A549rho0#1a"
+      },
+      {
+       "type": "synonym",
+       "value": "A549p0#1a"
+      },
+      {
+       "type": "synonym",
+       "value": "A549p0#1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9AV"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-deltaSTAT1-SunTag ACE2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A7ZQ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549-Dual hACE2-TMPRSS2"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "id:\"A549\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}

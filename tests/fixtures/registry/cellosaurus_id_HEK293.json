@@ -1,0 +1,2018 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0045"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "Hek293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK/293"
+      },
+      {
+       "type": "synonym",
+       "value": "(HEK)293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK;293"
+      },
+      {
+       "type": "synonym",
+       "value": "293"
+      },
+      {
+       "type": "synonym",
+       "value": "293 HEK"
+      },
+      {
+       "type": "synonym",
+       "value": "293 Ad5"
+      },
+      {
+       "type": "synonym",
+       "value": "Graham 293"
+      },
+      {
+       "type": "synonym",
+       "value": "Graham-293"
+      },
+      {
+       "type": "synonym",
+       "value": "Human Embryonic Kidney 293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0296"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 482R"
+      },
+      {
+       "type": "synonym",
+       "value": "482R-HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 482R"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 482R"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_5I97"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 AequoScreen"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A5CZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 APPswe"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293-APPswe"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293/APPswe"
+      },
+      {
+       "type": "synonym",
+       "value": "20E2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A3KR"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 C9orf72+/-"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 C9ORF72 heterozygous"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_UR28"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "293 Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "293[HEK-293] Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_HC62"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Cav3.1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 Cav3.1a"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 Cav3.1c"
+      },
+      {
+       "type": "synonym",
+       "value": "Q-31"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_HC63"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Cav3.2"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 Cav3.2a"
+      },
+      {
+       "type": "synonym",
+       "value": "Hh8-5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_HC64"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Cav3.3"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 Cav3.3b"
+      },
+      {
+       "type": "synonym",
+       "value": "LT9-8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E4JX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 CCR1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 CC CKR1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E4JZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 CCR3"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 CC CKR3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B6SF"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 CHI3L1"
+      },
+      {
+       "type": "synonym",
+       "value": "293-CHI3L1"
+      },
+      {
+       "type": "synonym",
+       "value": "293_CHI3L1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E1GS"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 D1"
+      },
+      {
+       "type": "synonym",
+       "value": "D1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_D4C4"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 FRT"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C3MN"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 H5M2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A5IP"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 HADH-/-"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 SCHAD KO"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7HL"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 hD4.4"
+      },
+      {
+       "type": "synonym",
+       "value": "hD4.4/293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7I7"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 HL10"
+      },
+      {
+       "type": "synonym",
+       "value": "HL10"
+      },
+      {
+       "type": "synonym",
+       "value": "Human PRLR-Luciferase clone 10"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7I8"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 HL21"
+      },
+      {
+       "type": "synonym",
+       "value": "HL21"
+      },
+      {
+       "type": "synonym",
+       "value": "Human PRLR-Luciferase clone 21"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7I6"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 HL5"
+      },
+      {
+       "type": "synonym",
+       "value": "HL5"
+      },
+      {
+       "type": "synonym",
+       "value": "Human PRLR-Luciferase clone 5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JH"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Kv1.4"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JI"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Kv1.5"
+      },
+      {
+       "type": "synonym",
+       "value": "Kv1.5-HEK"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JF"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Kv10.1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JG"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Kv11.1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JN"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Kv4.3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZW92"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 Nav1.7"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK Nav1.7"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_D6U3"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 P2RX3"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 P2X3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_RY69"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 rLN10"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN10"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN-10"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN10-293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_VN83"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 rLN10_hEcad"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN10_hEcad"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_RY70"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 rLN10_hNid1"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN10_hNid1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_RY71"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 rLN8"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN8"
+      },
+      {
+       "type": "synonym",
+       "value": "rLN-8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6910"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-A"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293A"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293A"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293A"
+      },
+      {
+       "type": "synonym",
+       "value": "293A"
+      },
+      {
+       "type": "synonym",
+       "value": "QBI-HEK 293A"
+      },
+      {
+       "type": "synonym",
+       "value": "QBI-293A"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E149"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-A7"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 A7"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293-A7 RheoSwitch"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZD63"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CAGA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 (CAGA)12"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YJ21"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CB1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-CB1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CCR8"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0RU"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CNG"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293-CNG"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293/CNG"
+      },
+      {
+       "type": "synonym",
+       "value": "CNG-HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK CNG"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK oCNG-NC-5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CTLA4"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AR"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CXCR4"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AN"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-CXCR7"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6974"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293 c18"
+      },
+      {
+       "type": "synonym",
+       "value": "293c18"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 c18"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 c18"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293-EBNA1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293-EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293-EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293 EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293-EBNA1"
+      },
+      {
+       "type": "synonym",
+       "value": "293-EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293/EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "EBNA-293"
+      },
+      {
+       "type": "synonym",
+       "value": "EBNA293"
+      },
+      {
+       "type": "synonym",
+       "value": "293E"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293E"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK/EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK.EBNA"
+      },
+      {
+       "type": "synonym",
+       "value": "293/EBNA-1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9C9"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-EGFP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E8AY"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-EGFR"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_EP72"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Ephb1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK Ephrin-B1+"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E8B0"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Ephb1DeltaIC"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK Ephrin-B1DeltaIC+"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_EP73"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Ephb2"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK EphB2+"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E8B1"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Ephb2DeltaIC"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK EphB2DeltaIC+"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6996"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-ET"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293ET"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293ET"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293 ET"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 ET"
+      },
+      {
+       "type": "synonym",
+       "value": "293ET"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6642"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-F"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293-F"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293-F"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293F"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293F"
+      },
+      {
+       "type": "synonym",
+       "value": "293-F"
+      },
+      {
+       "type": "synonym",
+       "value": "293 F"
+      },
+      {
+       "type": "synonym",
+       "value": "293F"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AD"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-FAP"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AK"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-FOLR1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6911"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-FT"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293FT"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293FT"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293-FT"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293FT"
+      },
+      {
+       "type": "synonym",
+       "value": "293-FT"
+      },
+      {
+       "type": "synonym",
+       "value": "293FT"
+      },
+      {
+       "type": "synonym",
+       "value": "FT-293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_6643"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-H"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293-H"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293-H"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293H"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293H"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293H"
+      },
+      {
+       "type": "synonym",
+       "value": "293-H"
+      },
+      {
+       "type": "synonym",
+       "value": "293 H"
+      },
+      {
+       "type": "synonym",
+       "value": "293H"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7VQ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hCHT"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC53"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hCNR1"
+      },
+      {
+       "type": "synonym",
+       "value": "Human CB1 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC54"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hCNR2"
+      },
+      {
+       "type": "synonym",
+       "value": "Human CB2 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AI"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-HER2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0RT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hERG"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC15"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hGPR55"
+      },
+      {
+       "type": "synonym",
+       "value": "hGPR55-HEK293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_VP06"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-HM3"
+      },
+      {
+       "type": "synonym",
+       "value": "HM3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_WI13"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hNOTCH1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-hN1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_WI14"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-hNOTCH2"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-hN2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_VP07"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-HR1"
+      },
+      {
+       "type": "synonym",
+       "value": "HR1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0N2"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-IRF3"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293-IRF-3"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293-VenusC1-IRF-3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C0NM"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-KL"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C9C7"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Luc"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC55"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-mCnr1"
+      },
+      {
+       "type": "synonym",
+       "value": "Mouse CB1 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC56"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-mCnr2"
+      },
+      {
+       "type": "synonym",
+       "value": "Mouse CB2 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC16"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-mGpr55"
+      },
+      {
+       "type": "synonym",
+       "value": "mGPR55-HEK293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B3N0"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-mir122"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B3Q1"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-MRP7"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293/MRP7"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A0GH"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-mST2L"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5E3"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-NAV1.5"
+      },
+      {
+       "type": "synonym",
+       "value": "NAV1.5-HEK293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_D4ZL"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-NOD2"
+      },
+      {
+       "type": "synonym",
+       "value": "FLP-IN HEK 293-NOD2wt"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E3FR"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-OX40"
+      },
+      {
+       "type": "synonym",
+       "value": "OX40-HEK293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC57"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-rCnr1"
+      },
+      {
+       "type": "synonym",
+       "value": "Rat CB1 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_ZC58"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-rCnr2"
+      },
+      {
+       "type": "synonym",
+       "value": "Rat CB2 Cannabinoid Receptor Expressing HEK293 Cell Line"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0P75"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-RyR1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-RyR1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E8BM"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-SLAM"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293/SLAM"
+      },
+      {
+       "type": "synonym",
+       "value": "293/SLAM"
+      },
+      {
+       "type": "synonym",
+       "value": "293SLAM"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C5TT"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-SLC1A5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_A8UL"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-Survivin"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-S"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E6AF"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-TACD2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_B5W5"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293-UGT2B9"
+      },
+      {
+       "type": "synonym",
+       "value": "HK293-UGT2B9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5IX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/ACE2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H514"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/AT1"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293/AT1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5J2"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/CLDN18.2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_KA11"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/Galpha15"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_LN32"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hABCC6"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H516"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hERG"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H517"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hKv1.5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H518"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hKv4.2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H519"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hNav1.5"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_H520"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/hNav1.7"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JB"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/P2X1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JC"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/P2X3"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_LN33"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/rABCC6"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JA"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/rKv4.2"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK293/Kv4.2"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JD"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/TRPA1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E5JE"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293/TRPV1"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YJ80"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "LINTERNA HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "LINTERNA-HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "tGFP-HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "tGFP-HEK/293"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "id:\"HEK293\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}
