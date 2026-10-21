@@ -72,10 +72,11 @@ def write_normalization_statistics(
     """Replace ``attrs["dca"]["normalization_statistics"]`` with validated *stats*.
 
     *stats* maps a channel index string (``"0"``, ``"1"``) to a channel entry. Each entry
-    must hold finite numbers and validate as ``DCAChannelNormalization`` (required
-    ``dataset_statistics`` with ``p1``, ``p5``, ``p95``, ``p99``). The block is replaced
+    must validate as ``DCAChannelNormalization`` (required ``dataset_statistics`` with
+    ``p1``, ``p5``, ``p95``, ``p99``) and hold only finite numbers after validation, so a
+    ``"nan"`` string that pydantic coerces to a float is rejected too. The block is replaced
     wholesale, not merged, so a re-run cannot keep a stale channel. *metadata*, when given,
-    is stored under the ``"metadata"`` key.
+    must hold only finite numbers and is stored under the ``"metadata"`` key.
     """
     block: dict[str, Any] = {}
     for key, entry in stats.items():
@@ -84,11 +85,13 @@ def write_normalization_statistics(
                 f"normalization statistics key {key!r} is not a channel index "
                 "(a decimal string such as '0')"
             )
-        _assert_finite(entry, f"normalization statistics for channel {key}")
-        block[str(key)] = DCAChannelNormalization.model_validate(entry).model_dump(
+        dumped = DCAChannelNormalization.model_validate(entry).model_dump(
             exclude_none=True
         )
+        _assert_finite(dumped, f"normalization statistics for channel {key}")
+        block[str(key)] = dumped
     if metadata is not None:
+        _assert_finite(metadata, "normalization statistics metadata")
         block["metadata"] = dict(metadata)
     attrs.setdefault("dca", {})["normalization_statistics"] = block
     logger.debug("wrote normalization statistics for %d channels", len(stats))

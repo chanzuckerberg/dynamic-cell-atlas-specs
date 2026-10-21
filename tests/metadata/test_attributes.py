@@ -84,6 +84,21 @@ def test_write_stats_rejects_non_finite_values(value):
         write_normalization_statistics({"dca": {}}, bad)
 
 
+@pytest.mark.parametrize("value", ["nan", "inf", "-Infinity"])
+def test_write_stats_rejects_a_non_finite_string_pydantic_would_coerce(value):
+    bad = {
+        "0": {"dataset_statistics": {"p1": value, "p5": 2.0, "p95": 9.0, "p99": 10.0}}
+    }
+    with pytest.raises(ValueError, match="finite"):
+        write_normalization_statistics({"dca": {}}, bad)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf")])
+def test_write_stats_rejects_non_finite_metadata(value):
+    with pytest.raises(ValueError, match="finite"):
+        write_normalization_statistics({"dca": {}}, STATS, metadata={"scale": value})
+
+
 def test_write_stats_rejects_non_finite_timepoint_values():
     stat = {"p1": 1.0, "p5": 2.0, "p95": 9.0, "p99": float("nan")}
     bad = {
