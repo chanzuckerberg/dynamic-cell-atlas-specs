@@ -17,6 +17,7 @@ from rich.tree import Tree
 
 from dca_helpers.validation.discovery import well_of_field
 from dca_helpers.validation.result import ZarrNodeValidationResult
+from dca_helpers.validation.zarr_node import ZarrNodeType
 
 
 def _store_label(path: str) -> str:
@@ -159,7 +160,13 @@ class _TreeDisplay:
         passed = all(r.passed for r in store_results)
         n_errors = sum(len(r.errors) for r in store_results)
         n_warnings = sum(len(r.warnings) for r in store_results)
-        n_fields = sum(1 for r in store_results if r.parent_path is not None)
+        label_types = (ZarrNodeType.IMAGE_LABEL, ZarrNodeType.LABELS_LIST)
+        n_labels = sum(1 for r in store_results if r.node_type in label_types)
+        n_fields = sum(
+            1
+            for r in store_results
+            if r.parent_path is not None and r.node_type not in label_types
+        )
 
         if is_skipped:
             parts: list[tuple[str, str]] = [
@@ -171,6 +178,8 @@ class _TreeDisplay:
             parts = [("✓  ", "bold green"), (label, "bold")]
             if n_fields:
                 parts.append((f"  {n_fields} fields", "dim"))
+            if n_labels:
+                parts.append((f"  {n_labels} labels", "dim"))
             if n_warnings:
                 parts.append((f"  {n_warnings} warning(s)", "yellow"))
         else:

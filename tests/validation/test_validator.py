@@ -64,6 +64,17 @@ def make_well_group_with_perturbation(well_perturbation):
     return mock
 
 
+def _group_lookup(mocks_by_path):
+    """open_group stand-in: unknown paths (e.g. an absent labels/) raise like zarr."""
+
+    def lookup(path, *a, **kw):
+        if path not in mocks_by_path:
+            raise FileNotFoundError(path)
+        return mocks_by_path[path]
+
+    return lookup
+
+
 _UNSET = object()
 
 
@@ -1035,7 +1046,7 @@ class TestValidateHcsPlateCrossPlacementAgreementWiring:
 
         monkeypatch.setattr(
             "dca_helpers.validation.discovery.zarr.open_group",
-            lambda path, *a, **kw: mocks_by_path[path],
+            _group_lookup(mocks_by_path),
         )
         monkeypatch.setattr(
             "dca_helpers.validation.validator.open_ome_zarr",
@@ -1126,7 +1137,7 @@ class TestValidateHcsPlateSubsetting:
 
         monkeypatch.setattr(
             "dca_helpers.validation.discovery.zarr.open_group",
-            lambda path, *a, **kw: mocks_by_path[path],
+            _group_lookup(mocks_by_path),
         )
         monkeypatch.setattr(
             "dca_helpers.validation.validator.open_ome_zarr",
@@ -1259,7 +1270,7 @@ class TestValidateHcsPlateSubsetting:
         }
         monkeypatch.setattr(
             "dca_helpers.validation.discovery.zarr.open_group",
-            lambda path, *a, **kw: mocks_by_path[path],
+            _group_lookup(mocks_by_path),
         )
         monkeypatch.setattr(
             "dca_helpers.validation.validator.open_ome_zarr",
@@ -2017,7 +2028,7 @@ class TestHcsFastPathFieldNodeType:
         }
         monkeypatch.setattr(
             "dca_helpers.validation.discovery.zarr.open_group",
-            lambda path, *a, **kw: mocks_by_path[path],
+            _group_lookup(mocks_by_path),
         )
         monkeypatch.setattr(
             "dca_helpers.validation.validator.open_ome_zarr",
