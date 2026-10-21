@@ -704,7 +704,7 @@ def dca_read_columns(block: Any) -> frozenset[str]:
     return frozenset(out)
 
 
-def validate_dca(block: dict, *, where: str) -> dict:
+def validate_dca(block: dict, *, where: str, warnings: list[str] | None = None) -> dict:
     """Validate *block* and return it normalised, or raise.
 
     Two jobs, and keeping them apart is the whole point of this function's shape:
@@ -743,14 +743,19 @@ def validate_dca(block: dict, *, where: str) -> dict:
     :func:`_resolve_experimental` wraps every list field against the schema by
     construction, so this function does **no** structural repair of its own; the block is
     validated and normalised as it arrives.
+
+    *warnings* lets the caller decide how SHOULD findings surface. When a list is passed,
+    each finding is appended to it as ``"<field path>: <message>"`` and nothing is logged,
+    so a pipeline that validates once per field of view can deduplicate and report them
+    once. When it is ``None``, the findings are logged as one warning naming *where*.
     """
     experimental = {k: v for k, v in block.items() if k != "channels"}
 
     errors: list[Any] = []
-    warnings: list[Any] = []
+    shoulds: list[Any] = []
     for issue in validate_experimental_metadata_v0_2(experimental):
         severity = getattr(issue.severity, "value", issue.severity)
-        (errors if severity == "error" else warnings).append(issue)
+        (errors if severity == "error" else shoulds).append(issue)
 
     def locate(issue: Any) -> str:
         return ".".join(map(str, issue.loc))
@@ -764,11 +769,10 @@ def validate_dca(block: dict, *, where: str) -> dict:
             [f"{locate(issue)}: {issue.message}" for issue in errors],
             [locate(issue) for issue in errors],
         )
-    if warnings:
-        # Once per DISTINCT block, not once per group: `apply_metadata` memoises this
-        # call by fingerprint, so a dataset with millions of groups and a handful of
-        # distinct blocks logs a handful of lines.
-        logger.warning("DCA metadata warnings for %s: %s", where, render(warnings))
+    if warnings is not None:
+        warnings.extend(f"{locate(issue)}: {issue.message}" for issue in shoulds)
+    elif shoulds:
+        logger.warning("DCA metadata warnings for %s: %s", where, render(shoulds))
 
     try:
         model = _normalising_model().model_validate(experimental)
