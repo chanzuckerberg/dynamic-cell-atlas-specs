@@ -6,10 +6,10 @@ from dca_helpers.metadata import STORE_COLUMNS, name_date
 @pytest.mark.parametrize(
     "name, expected",
     [
-        ("2026_09_25_A549_PCNA_DENV_ZIKV", "2026-09-25"),
+        ("2026_09_25_example_screen", "2026-09-25"),
         ("screen0056_20250721", "2025-07-21"),
         ("screen9004", None),
-        ("livescreen_20260626_190942", None),
+        ("timelapse_20260101_120000", None),
         ("run_20251399", None),
         ("2026_13_40_x", None),
         ("", None),
