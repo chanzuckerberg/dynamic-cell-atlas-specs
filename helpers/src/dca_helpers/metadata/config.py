@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from dca_helpers.metadata.resolve import _is_leaf
+from dca_helpers.metadata.resolve import _flatten_provenance, _is_leaf
 
 
 def _merge(base: Any, over: Any) -> Any:
@@ -26,11 +26,25 @@ def _merge(base: Any, over: Any) -> Any:
 
 
 def _read_dca(path: Path) -> dict[str, Any]:
+    """Return the ``[dca]`` table of *path* with its provenance keyed by dotted path."""
     with path.open("rb") as handle:
         data = tomllib.load(handle)
     if "dca" not in data:
         raise ValueError(f"{path} has no [dca] table")
-    return data["dca"]
+    block = data["dca"]
+    provenance = block.get("provenance")
+    if isinstance(provenance, Mapping):
+        block["provenance"] = _flatten_provenance(provenance)
+    return block
+
+
+def _merge_provenance(base: Any, over: Any) -> Any:
+    """Merge two flattened provenance maps; a later record replaces an earlier one whole."""
+    if not (isinstance(base, Mapping) and isinstance(over, Mapping)):
+        return copy.deepcopy(over)
+    merged = {key: copy.deepcopy(val) for key, val in base.items()}
+    merged.update(copy.deepcopy(dict(over)))
+    return merged
 
 
 def load_dca_config(*paths: Path) -> dict[str, Any]:
@@ -39,8 +53,19 @@ def load_dca_config(*paths: Path) -> dict[str, Any]:
     Tables merge key by key; a leaf spec, a scalar or an array is replaced whole by the
     later value. The result is a deep copy. A file without a ``[dca]`` table raises
     ``ValueError`` naming that file.
+
+    Each file's ``provenance`` is flattened to dotted field paths (``"study.release_date"``)
+    before merging, so the nested and quoted TOML spellings name the same entry. A
+    provenance record is replaced whole by a later file's record for the same path, so a
+    confirmed record keeps no key, such as an agent ``citation``, from the base one.
     """
     result: dict[str, Any] = {}
     for path in paths:
-        result = _merge(result, _read_dca(Path(path)))
+        block = _read_dca(Path(path))
+        merged = _merge(result, {k: v for k, v in block.items() if k != "provenance"})
+        if "provenance" in block:
+            merged["provenance"] = _merge_provenance(
+                result.get("provenance"), block["provenance"]
+            )
+        result = merged
     return result

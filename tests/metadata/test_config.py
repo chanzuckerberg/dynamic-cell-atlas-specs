@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from dca_helpers.metadata import load_dca_config
+from dca_helpers.metadata import load_dca_config, resolve_dca
 
 
 def _write(tmp_path: Path, name: str, text: str) -> Path:
@@ -95,3 +95,71 @@ def test_inputs_are_not_mutated_across_calls(tmp_path):
     second = load_dca_config(base, over)
     assert second == {"study": {"license": "CC0-1.0"}}
     assert first is not second
+
+
+_BASE_PROVENANCE = """
+[dca.study]
+release_date = "2026-01-15"
+
+[dca.provenance.study.release_date]
+source_kind = "agent"
+citation = { source_url = "dataset name", quote = "from the name", match_status = "exact" }
+"""
+
+_CONFIRMED_RECORD = (
+    'source_kind = "human"\n'
+    'citation = { source_url = "curator note", quote = "checked", match_status = "exact" }\n'
+)
+
+_CONFIRMED = {
+    "quoted": '[dca.provenance."study.release_date"]\n' + _CONFIRMED_RECORD,
+    "nested": "[dca.provenance.study.release_date]\n" + _CONFIRMED_RECORD,
+}
+
+
+@pytest.mark.parametrize("spelling", sorted(_CONFIRMED))
+def test_a_confirmed_provenance_record_replaces_the_base_record_whole(
+    tmp_path, spelling
+):
+    base = _write(tmp_path, "base.toml", _BASE_PROVENANCE)
+    over = _write(tmp_path, "confirmed.toml", _CONFIRMED[spelling])
+    block = load_dca_config(base, over)
+    confirmed = {
+        "source_kind": "human",
+        "citation": {
+            "source_url": "curator note",
+            "quote": "checked",
+            "match_status": "exact",
+        },
+    }
+    assert block["provenance"] == {"study.release_date": confirmed}
+    assert resolve_dca(block, {})["provenance"] == {"study.release_date": confirmed}
+
+
+def test_a_confirmed_record_drops_base_keys_it_does_not_repeat(tmp_path):
+    base = _write(tmp_path, "base.toml", _BASE_PROVENANCE)
+    over = _write(
+        tmp_path,
+        "confirmed.toml",
+        '[dca.provenance.study.release_date]\nsource_kind = "human"\n',
+    )
+    block = load_dca_config(base, over)
+    assert resolve_dca(block, {})["provenance"] == {
+        "study.release_date": {"source_kind": "human"}
+    }
+
+
+def test_provenance_from_one_file_is_keyed_by_dotted_path(tmp_path):
+    base = _write(tmp_path, "base.toml", _BASE_PROVENANCE)
+    assert list(load_dca_config(base)["provenance"]) == ["study.release_date"]
+
+
+def test_one_path_spelled_both_ways_in_one_file_is_still_an_error(tmp_path):
+    path = _write(
+        tmp_path,
+        "both.toml",
+        _BASE_PROVENANCE
+        + '\n[dca.provenance."study.release_date"]\nsource_kind = "human"\n',
+    )
+    with pytest.raises(ValueError, match="authored twice"):
+        load_dca_config(path)
