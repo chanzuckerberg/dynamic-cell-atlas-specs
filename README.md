@@ -10,7 +10,7 @@ For more detailed information on scope, use cases etc. refer to the [documentati
 - [Data Validator](helpers/src/dca_helpers/validation) using Pydantic
 - [Helper tooling](helpers/src/dca_helpers) for parts of the specification that go beyond general OME-ngff
 
-## Writing a DCA block from a pipeline
+## A pipeline validates every FOV, then writes the DCA block
 
 A pipeline resolves one `[dca.*]` TOML block per FOV with `dca_helpers.metadata`, validates every FOV, and only then writes. The engine exports `load_dca_config`, `resolve_dca`, `validate_dca`, `DcaValidationError`, `merge_dca_attributes`, `write_normalization_statistics`, `DCA_SCHEMA_URL` and `STORE_COLUMNS`. `SPEC_VERSION` lives in `dca_helpers.metadata.attributes`.
 
@@ -89,13 +89,13 @@ except DcaValidationError as err:
     print(err.fields)
 ```
 
-A field the row leaves empty and no TOML fills is reported by path in `err.fields` (`['study.release_date', 'biosample']` for the call above, since `base.toml` alone has no release date and the row has no cell line). Pass a list as `warnings=` to collect SHOULD findings instead of logging them (here, one per field that lacks a `[dca.provenance]` record). `run_attrs={"<tool>": {"version": ..., "code_git_sha": ...}}` records the writing tool as a sibling of `dca`.
+A field the row leaves empty and no TOML fills is reported by path in `err.fields` (`['study.release_date', 'biosample']` for the call above, since `base.toml` alone has no release date and the row has no cell line). Pass a list as `warnings=` to collect SHOULD findings instead of logging them (here, one per field that lacks a `[dca.provenance]` record). A real base config gives each field a provenance record, which silences these warnings. `run_attrs={"<tool>": {"version": ..., "code_git_sha": ...}}` records the writing tool as a sibling of `dca`.
 
 Validate every FOV before writing any. A bad FOV found after half the store is written leaves a store that fails the gate. `validate_dca` checks the experimental block only, not channels or normalization statistics. Gate the written store with `dca_helpers.validation.runner.validate(<store>, spec_version="0.2")` or `dca-validate --spec-version 0.2`.
 
-### Proposing values for unresolved fields
+### dca-propose suggests ontology terms for unresolved fields
 
-`dca-propose` suggests values for a human to confirm and never writes them. Each `--field` is matched by a rule, and `--hint KEY=VALUE` supplies the input by DCA field path.
+`dca-propose` suggests values for a human to confirm. It writes nothing. Each `--field` is matched by a rule, and `--hint KEY=VALUE` supplies the input by DCA field path.
 
 | Rule | Fills | Reads hint |
 | --- | --- | --- |
@@ -112,9 +112,9 @@ dca-propose --offline --output json --field perturbation.definition.chemical.mor
     --hint perturbation.definition.chemical.smiles='CC(=O)Oc1ccccc1C(=O)O'
 ```
 
-`--offline` skips registry lookups. `morgan` always runs offline and needs RDKit from the `chem` extra (`pip install "dca_helpers[chem]"`).
+`--offline` skips registry lookups. `morgan` runs offline and needs RDKit from the `chem` extra. Install it from a checkout with `pip install ".[chem]"`, or pin a release with `pip install "dca_helpers[chem] @ git+https://github.com/chanzuckerberg/dynamic-cell-atlas-specs.git@<tag>"`.
 
-The same lookups are importable from `dca_helpers.metadata`: `search_ensembl(symbol, species=...)`, `ensembl_from_ncbi_gene`, `search_pubchem` and `morgan_fingerprint(smiles)`. The first three return CURIE lists. The fingerprint is pinned to the RDKit Morgan generator with radius 2, 2048 bits and no chirality, encoded as FPS hex.
+The same lookups are importable from `dca_helpers.metadata`: `search_ensembl(symbol, species=...)`, `ensembl_from_ncbi_gene`, `search_pubchem` (exactly one keyword: `name=`, `smiles=` or `inchikey=`) and `morgan_fingerprint(smiles)`. The first three return CURIE lists. The fingerprint is pinned to the RDKit Morgan generator with radius 2, 2048 bits and no chirality, encoded as FPS hex.
 
 ## Building the Documentation
 
