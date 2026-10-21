@@ -76,6 +76,16 @@ def test_an_absent_column_is_an_error():
         resolve({"column": "nope"}, METADATA)
 
 
+def test_resolve_dca_reports_an_absent_column_as_a_plain_value_error():
+    """Row-shaped errors carry no FOV; callers catch ``ValueError`` and add ``where``."""
+    block = min_dca_block()
+    block["biosample"]["cell_line_name"] = {"column": "cell_line"}
+    with pytest.raises(ValueError, match="'cell_line'") as excinfo:
+        resolve_dca(block, {"well": "A1"}, where="A/1/0")
+    assert type(excinfo.value) is ValueError
+    assert "A/1/0" not in str(excinfo.value)
+
+
 def test_plain_dicts_and_literals_recurse_untouched():
     node = {"study": {"license": "CC0-1.0", "dataset_name": {"column": "well"}}}
     assert resolve(node, METADATA) == {
