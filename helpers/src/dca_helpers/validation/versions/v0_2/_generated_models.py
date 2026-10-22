@@ -1119,22 +1119,15 @@ class Perturbation(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'class_uri': 'OME:Reagent',
          'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata',
          'rules': [{'description': 'A compound perturbation must carry the chemical '
-                                   'identifier block, with its PubChem CID and Morgan '
-                                   'fingerprint.',
+                                   'identifier block.',
                     'postconditions': {'slot_conditions': {'chemical': {'name': 'chemical',
-                                                                        'range_expression': {'slot_conditions': {'morgan_fingerprint': {'name': 'morgan_fingerprint',
-                                                                                                                                        'required': True},
-                                                                                                                 'pubchem_cid': {'name': 'pubchem_cid',
-                                                                                                                                 'required': True}}},
                                                                         'required': True}}},
                     'preconditions': {'slot_conditions': {'modality': {'equals_string': 'compound',
                                                                        'name': 'modality'}}}},
                    {'description': 'A genetic perturbation (crispr / orf / shrna / '
                                    'mirna / sirna) must carry the genetic-target '
-                                   'block, with its Ensembl gene id.',
+                                   'block.',
                     'postconditions': {'slot_conditions': {'genetic': {'name': 'genetic',
-                                                                       'range_expression': {'slot_conditions': {'ensembl_gene_id': {'name': 'ensembl_gene_id',
-                                                                                                                                    'required': True}}},
                                                                        'required': True}}},
                     'preconditions': {'slot_conditions': {'modality': {'any_of': [{'equals_string': 'crispr'},
                                                                                   {'equals_string': 'orf'},
@@ -1171,15 +1164,15 @@ class ChemicalPerturbation(ConfiguredBaseModel):
          'exact_mappings': ['cpg:compound_inchi']} })
     smiles: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation'],
          'exact_mappings': ['cpg:Treatment_SMILES']} })
-    pubchem_cid: Optional[str] = Field(default=None, description="""PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block — the value names its own database. Required when ``modality`` is ``compound``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['PubChem:0'],
+    pubchem_cid: Optional[str] = Field(default=None, description="""PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block, so the value names its own database. ``NA`` when the compound has no PubChem record (e.g. an in-house compound). Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['PubChem:0'],
          'domain_of': ['ChemicalPerturbation'],
          'exact_mappings': ['cpg:Treatment_PubChem_CID']} })
-    morgan_fingerprint: Optional[str] = Field(default=None, description="""Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the ``smiles`` slot when present, else from the structure the PubChem CID names; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. Required when ``modality`` is ``compound``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
+    morgan_fingerprint: Optional[str] = Field(default=None, description="""Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the ``smiles`` slot when present, else from the structure the PubChem CID names; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. ``NA`` when ``pubchem_cid`` is ``NA``. Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
     chembl_id: Optional[str] = Field(default=None, description="""ChEMBL compound identifier (e.g. \"CHEMBL25\"). Self-identifying — ChEMBL accessions carry the ``CHEMBL`` prefix in the value itself.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
 
     @field_validator('pubchem_cid')
     def pattern_pubchem_cid(cls, v):
-        pattern=re.compile(r"^PubChem:\d+$")
+        pattern=re.compile(r"^(PubChem:\d+|NA)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1192,7 +1185,7 @@ class ChemicalPerturbation(ConfiguredBaseModel):
 
     @field_validator('morgan_fingerprint')
     def pattern_morgan_fingerprint(cls, v):
-        pattern=re.compile(r"^[0-9a-f]{512}$")
+        pattern=re.compile(r"^([0-9a-f]{512}|NA)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1213,10 +1206,10 @@ class GeneticPerturbation(ConfiguredBaseModel):
     gene_symbol: Optional[str] = Field(default=None, description="""Gene symbol (e.g. \"TP53\"), the human-readable label for ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_symbol', 'cpg:orf_symbol']} })
-    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to the required ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
+    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_ncbi_gene_id', 'cpg:orf_ncbi_gene_id']} })
-    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"). Required when ``modality`` is crispr / orf / shrna / mirna / sirna. Resolvable via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
+    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"), resolvable via the ``prefixes`` block. ``NA`` when the reagent targets no gene (non-targeting guide, scrambled siRNA, LacZ / luciferase ORF). Beta in v0.2: recommended when ``modality`` is crispr / orf / shrna / mirna / sirna, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
     transcript_refseq: Optional[str] = Field(default=None, description="""NCBI RefSeq transcript id (ORF).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_transcript']} })
     vector: Optional[str] = Field(default=None, description="""Expression / delivery vector (ORF; sgRNA vector).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_vector']} })
     insert_length: Optional[int] = Field(default=None, description="""ORF insert length (bp).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'],
@@ -1239,7 +1232,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
 
     @field_validator('ensembl_gene_id')
     def pattern_ensembl_gene_id(cls, v):
-        pattern=re.compile(r"^ensembl:ENS([A-Z]{3})?G\d{11}$")
+        pattern=re.compile(r"^(ensembl:ENS([A-Z]{3})?G\d{11}|NA)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):

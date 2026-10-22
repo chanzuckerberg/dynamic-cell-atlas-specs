@@ -96,10 +96,10 @@ _GENETIC_MODALITIES: frozenset[str] = frozenset(
     {"crispr", "orf", "shrna", "mirna", "sirna"}
 )
 
-# Identifiers the same rules require inside each typed block (the nested
-# ``range_expression`` postconditions in the YAML).
-_COMPOUND_REQUIRED_IDS: tuple[str, ...] = ("pubchem_cid", "morgan_fingerprint")
-_GENETIC_REQUIRED_IDS: tuple[str, ...] = ("ensembl_gene_id",)
+# Identifiers each typed block SHOULD carry: beta in v0.2 (a warning), required from
+# v0.3. ``NA`` (a reagent with no identifier) counts as populated.
+_COMPOUND_BETA_IDS: tuple[str, ...] = ("pubchem_cid", "morgan_fingerprint")
+_GENETIC_BETA_IDS: tuple[str, ...] = ("ensembl_gene_id",)
 
 # Cross-modality v1.1.0 keys the development-stage ontology to the organism. It names a
 # stage ontology for exactly these five; every other organism falls back to a UBERON
@@ -372,54 +372,65 @@ class _FieldProvenanceV0_2(_FieldProvenanceBase):  # type: ignore[misc, valid-ty
 class _PerturbationV0_2(_PerturbationBase):  # type: ignore[misc, valid-type]
     """``Perturbation`` with the ``modality`` ⇒ typed-block rules enforced.
 
-    ``modality: compound`` requires the ``chemical`` block with its
-    ``pubchem_cid`` and ``morgan_fingerprint``; a genetic modality (``crispr`` /
-    ``orf`` / ``shrna`` / ``mirna`` / ``sirna``) requires the ``genetic`` block with
-    its ``ensembl_gene_id``. The remaining modalities (``physical`` /
-    ``biological`` / ``other`` / ``unknown``) require neither.
+    ``modality: compound`` requires the ``chemical`` block; a genetic modality
+    (``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna``) requires the
+    ``genetic`` block. The remaining modalities (``physical`` / ``biological`` /
+    ``other`` / ``unknown``) require neither.
 
-    A missing block is one error; the identifiers inside it are only checked once
-    the block is present, and every missing identifier is reported in one raise.
+    The identifiers inside those blocks are SHOULDs in v0.2; see
+    ``_missing_beta_ids``.
     """
 
     @model_validator(mode="after")
     def _require_modality_block(self):
         modality = _enum_value(getattr(self, "modality", None))
-        if modality == "compound":
-            chemical = getattr(self, "chemical", None)
-            if not _is_populated(chemical):
-                raise ValueError(
-                    "chemical is required when modality is 'compound' "
-                    "(a compound perturbation must carry the chemical identifier block)"
-                )
-            _require_block_ids(
-                chemical, "chemical", _COMPOUND_REQUIRED_IDS, "'compound'"
+        if modality == "compound" and not _is_populated(
+            getattr(self, "chemical", None)
+        ):
+            raise ValueError(
+                "chemical is required when modality is 'compound' "
+                "(a compound perturbation must carry the chemical identifier block)"
             )
-        if modality in _GENETIC_MODALITIES:
-            genetic = getattr(self, "genetic", None)
-            if not _is_populated(genetic):
-                raise ValueError(
-                    "genetic is required when modality is a genetic kind "
-                    f"(crispr / orf / shrna / mirna / sirna; got modality='{modality}')"
-                )
-            _require_block_ids(
-                genetic, "genetic", _GENETIC_REQUIRED_IDS, f"'{modality}'"
+        if modality in _GENETIC_MODALITIES and not _is_populated(
+            getattr(self, "genetic", None)
+        ):
+            raise ValueError(
+                "genetic is required when modality is a genetic kind "
+                f"(crispr / orf / shrna / mirna / sirna; got modality='{modality}')"
             )
         return self
 
 
-def _require_block_ids(
-    block: object, block_name: str, fields: tuple[str, ...], modality: str
-) -> None:
-    """Raise one ``ValueError`` naming every unpopulated identifier in ``block``."""
-    missing = [f for f in fields if not _is_populated(getattr(block, f, None))]
-    if missing:
-        raise ValueError(
-            "\n".join(
-                f"{block_name}.{field} is required when modality is {modality}"
-                for field in missing
-            )
-        )
+def _missing_beta_ids(perturbation: object, prefix: str = "") -> list[str]:
+    """One ``[SHOULD]`` line per identifier the modality's block lacks.
+
+    Beta in v0.2 (``chemical.pubchem_cid`` / ``chemical.morgan_fingerprint`` for
+    ``compound``, ``genetic.ensembl_gene_id`` for a genetic modality); promote to MUST
+    in v0.3. ``NA`` counts as populated. A missing block yields nothing here, since
+    ``_PerturbationV0_2`` already rejects it.
+
+    Not a ``Perturbation`` validator: raised from a nested model, a SHOULD fails that
+    model's construction and so skips the parent's MUST rules (a treated row with no
+    ``definition`` would pass on a warning about its ``cotreatment``). The assignment
+    raises these after its own MUST instead, and ``validate_perturbation_v0_2`` adds
+    them for a bare codebook entry.
+    """
+    modality = _enum_value(getattr(perturbation, "modality", None))
+    if modality == "compound":
+        block_name, fields = "chemical", _COMPOUND_BETA_IDS
+    elif modality in _GENETIC_MODALITIES:
+        block_name, fields = "genetic", _GENETIC_BETA_IDS
+    else:
+        return []
+    block = getattr(perturbation, block_name, None)
+    if not _is_populated(block):
+        return []
+    return [
+        f"[SHOULD] {prefix}{block_name}.{field} is missing for modality "
+        f"'{modality}' (beta in v0.2; required from v0.3)"
+        for field in fields
+        if not _is_populated(getattr(block, field, None))
+    ]
 
 
 class _PerturbationAssignmentV0_2(_PerturbationAssignmentBase):  # type: ignore[misc, valid-type]
@@ -446,6 +457,20 @@ class _PerturbationAssignmentV0_2(_PerturbationAssignmentBase):  # type: ignore[
                     "definition is required when control_class is not 'empty' "
                     "(treated and control material must name a perturbation)"
                 )
+        return self
+
+    # Declared after the MUST rule above so the accumulator cannot mask it (see
+    # _BiosampleV0_2).
+    @model_validator(mode="after")
+    def _beta_identifier_warnings(self):
+        """Warn for each beta identifier ``definition`` / ``cotreatment`` lacks."""
+        warnings = [
+            line
+            for slot in ("definition", "cotreatment")
+            for line in _missing_beta_ids(getattr(self, slot, None), f"{slot}.")
+        ]
+        if warnings:
+            raise ValueError("\n".join(warnings))
         return self
 
 
@@ -719,22 +744,30 @@ def validate_dca_experimental_metadata_v0_2(
 def validate_perturbation_v0_2(obj: dict) -> list[Issue]:
     """Validate one ``Perturbation`` definition, returning ``Issue`` objects.
 
-    Enforces the ``modality`` ⇒ typed-block rules (``compound`` ⇒ ``chemical``
-    with ``pubchem_cid`` and ``morgan_fingerprint``, genetic ⇒ ``genetic`` with
-    ``ensembl_gene_id``) on top of the generated model's type / enum / required
-    checks. Empty list when the object fully conforms. For a bare codebook entry:
-    a ``Perturbation`` reached through ``ExperimentalMetadata.perturbation`` is
-    already checked by ``validate_experimental_metadata_v0_2``.
+    Enforces the ``modality`` ⇒ typed-block rules (``compound`` ⇒ ``chemical``,
+    genetic ⇒ ``genetic``) on top of the generated model's type / enum / required
+    checks, and warns when the block lacks its beta identifiers. Empty list when the
+    object fully conforms. For a bare codebook entry: a ``Perturbation`` reached
+    through ``ExperimentalMetadata.perturbation`` is already checked by
+    ``validate_experimental_metadata_v0_2``.
     """
     import pydantic
 
+    from dca_helpers.validation.result import Issue, Severity
     from dca_helpers.validation.validator import _convert_errors
 
     try:
-        _PerturbationV0_2.model_validate(obj)
+        perturbation = _PerturbationV0_2.model_validate(obj)
     except pydantic.ValidationError as exc:
         return _convert_errors(exc)
-    return []
+    return [
+        Issue(
+            loc=(),
+            message=line[len("[SHOULD]") :].strip(),
+            severity=Severity.WARNING,
+        )
+        for line in _missing_beta_ids(perturbation)
+    ]
 
 
 def validate_well_perturbation_v0_2(obj: dict) -> list[Issue]:

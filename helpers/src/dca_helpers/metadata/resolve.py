@@ -48,6 +48,7 @@ from pydantic import BaseModel, ValidationError, model_validator
 from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     DCAExperimentalMetadataV0_2,
     _BiosampleV0_2,
+    _PerturbationAssignmentV0_2,
     validate_experimental_metadata_v0_2,
 )
 
@@ -641,16 +642,21 @@ def _normalising_model() -> type:
     Two of v0.2.4's rules are SHOULDs that ``dca_helpers`` implements as a *raising*
     model validator rather than as entries in the issue list — ``tissue`` must carry a
     ``CVCL:`` accession when ``tissue_type`` is ``cell line``, and ``development_stage``
-    must use the organism's stage ontology. ``dca_helpers`` documents the consequence on
-    the validator itself: "a consumer constructing the model directly to *read* metadata
-    would see an exception where the report says warning." This module is that consumer,
-    so it constructs a variant that does not raise on them.
+    must use the organism's stage ontology. The perturbation identifiers that are beta
+    in v0.2 (``chemical.pubchem_cid`` / ``chemical.morgan_fingerprint``,
+    ``genetic.ensembl_gene_id``) are raised the same way, from
+    ``PerturbationAssignment`` for its ``definition`` and ``cotreatment``.
+    ``dca_helpers`` documents the consequence on the validator itself: "a consumer
+    constructing the model directly to *read* metadata would see an exception where the
+    report says warning." This module is that consumer, so it constructs a variant that
+    does not raise on them.
 
-    It overrides one method and nothing else, so every MUST rule in the tree still
-    fires — including the two on ``Biosample`` itself, and the ones on ``Study``,
-    ``Perturbation`` and ``FieldProvenance``, which are untouched. And it re-raises
-    anything that is not wholly SHOULD, so a MUST added to that same validator later is
-    still fatal rather than silently swallowed.
+    It overrides the two SHOULD methods and nothing else, so every MUST rule in the tree
+    still fires: the two on ``Biosample`` itself, the non-``empty`` ⇒ ``definition``
+    rule on ``PerturbationAssignment``, and the ones on ``Study``, ``Perturbation`` and
+    ``FieldProvenance``, which are untouched. And it re-raises anything that is not
+    wholly SHOULD, so a MUST added to either validator later is still fatal rather than
+    silently swallowed.
 
     Built lazily and cached, so the subclass costs a few hundred microseconds once per
     process. If ``_BiosampleV0_2`` ever disappears from the validation package, importing
@@ -668,8 +674,19 @@ def _normalising_model() -> type:
                     return self
                 raise
 
+    class _NormalisingAssignment(_PerturbationAssignmentV0_2):  # type: ignore[misc, valid-type]
+        @model_validator(mode="after")
+        def _beta_identifier_warnings(self):
+            try:
+                return super()._beta_identifier_warnings()
+            except ValueError as exc:
+                if _every_line_is_should(str(exc)):
+                    return self
+                raise
+
     class _NormalisingExperimentalMetadata(DCAExperimentalMetadataV0_2):
         biosample: _NormalisingBiosample
+        perturbation: _NormalisingAssignment | None = None
 
     return _NormalisingExperimentalMetadata
 

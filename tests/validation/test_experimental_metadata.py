@@ -65,38 +65,33 @@ def test_genetic_modality_requires_genetic_block():
         assert _requires({"modality": modality}, "Perturbation", "genetic"), modality
 
 
-def test_compound_modality_requires_cid_and_fingerprint():
-    obj = {"modality": "compound", "chemical": {"inchikey": "X"}}
-    assert _requires(obj, "Perturbation", "pubchem_cid")
-    assert _requires(obj, "Perturbation", "morgan_fingerprint")
-    complete = {
-        "modality": "compound",
-        "chemical": {
-            "pubchem_cid": ASPIRIN_PUBCHEM_CID,
-            "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
-        },
-    }
-    assert not _requires(complete, "Perturbation", "pubchem_cid")
-    assert not _requires(complete, "Perturbation", "morgan_fingerprint")
-
-
-def test_genetic_modality_requires_ensembl_gene_id():
+def test_typed_ids_are_not_required_by_the_json_schema():
+    # Beta in v0.2: the runtime validator warns, the JSON Schema requires nothing.
+    compound = {"modality": "compound", "chemical": {"inchikey": "X"}}
+    assert not _requires(compound, "Perturbation", "pubchem_cid")
+    assert not _requires(compound, "Perturbation", "morgan_fingerprint")
     for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
-        obj = {"modality": modality, "genetic": {"gene_symbol": "TP53"}}
-        assert _requires(obj, "Perturbation", "ensembl_gene_id"), modality
-    complete = {
-        "modality": "crispr",
-        "genetic": {"ensembl_gene_id": TP53_ENSEMBL_GENE_ID},
-    }
-    assert not _requires(complete, "Perturbation", "ensembl_gene_id")
+        genetic = {"modality": modality, "genetic": {"gene_symbol": "TP53"}}
+        assert not _requires(genetic, "Perturbation", "ensembl_gene_id"), modality
 
 
-def test_typed_ids_not_required_outside_their_modality():
-    # A chemical block on a non-compound perturbation carries no id requirement.
-    obj = {"modality": "biological", "chemical": {"inchikey": "X"}}
-    msgs = _messages(obj, "Perturbation")
-    assert "'pubchem_cid' is a required property" not in msgs
-    assert "'morgan_fingerprint' is a required property" not in msgs
+@pytest.mark.parametrize(
+    "block, slot",
+    [
+        ({"chemical": {"pubchem_cid": "NA"}}, "pubchem_cid"),
+        ({"chemical": {"morgan_fingerprint": "NA"}}, "morgan_fingerprint"),
+        ({"genetic": {"ensembl_gene_id": "NA"}}, "ensembl_gene_id"),
+        ({"chemical": {"pubchem_cid": ASPIRIN_PUBCHEM_CID}}, "pubchem_cid"),
+        (
+            {"chemical": {"morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT}},
+            "morgan_fingerprint",
+        ),
+        ({"genetic": {"ensembl_gene_id": TP53_ENSEMBL_GENE_ID}}, "ensembl_gene_id"),
+    ],
+)
+def test_typed_id_patterns_accept_curies_and_na(block, slot):
+    msgs = _messages({"modality": "other", **block}, "Perturbation")
+    assert not any(slot in m or "does not match" in m for m in msgs), msgs
 
 
 def test_physical_modality_requires_neither_reagent_block():

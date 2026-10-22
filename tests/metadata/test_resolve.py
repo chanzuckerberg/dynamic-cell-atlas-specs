@@ -626,6 +626,32 @@ def test_a_warnings_list_collects_should_findings_and_logs_nothing(caplog):
     assert caplog.records == []
 
 
+@pytest.mark.parametrize("slot", ["definition", "cotreatment"])
+def test_a_missing_beta_perturbation_id_is_a_warning_not_an_error(slot):
+    chemical = {"pubchem_cid": ASPIRIN_PUBCHEM_CID}
+    perturbation = {
+        "control_class": "treatment",
+        "definition": {"perturbation_id": "P1", "modality": "compound"},
+        slot: {"perturbation_id": "P2", "modality": "compound", "chemical": chemical},
+    }
+    if slot == "cotreatment":
+        perturbation["definition"]["chemical"] = {
+            **chemical,
+            "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+        }
+    collected: list[str] = []
+
+    out = validate_dca(
+        min_dca_block(perturbation=perturbation), where="A/1/0", warnings=collected
+    )
+
+    assert out["perturbation"][slot]["chemical"] == chemical
+    assert [w for w in collected if "morgan_fingerprint" in w] == [
+        f"perturbation: {slot}.chemical.morgan_fingerprint is missing for modality "
+        "'compound' (beta in v0.2; required from v0.3)"
+    ]
+
+
 def test_without_a_warnings_list_should_findings_are_logged(caplog):
     with caplog.at_level("WARNING"):
         validate_dca(_block_with_a_should_finding(), where="group A9_s1")
