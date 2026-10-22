@@ -1,0 +1,16 @@
+{
+ "body": [
+  {
+   "id": "FBgn0003996",
+   "type": "gene"
+  }
+ ],
+ "request": {
+  "params": {
+   "content-type": "application/json",
+   "object_type": "gene"
+  },
+  "url": "https://rest.ensembl.org/xrefs/symbol/drosophila_melanogaster/w"
+ },
+ "status_code": 200
+}

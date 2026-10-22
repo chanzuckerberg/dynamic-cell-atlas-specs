@@ -435,17 +435,27 @@ def test_na_counts_as_populated_for_every_beta_identifier():
         TP53_ENSEMBL_GENE_ID,
         "ensembl:ENSMUSG00000059552",
         "ensembl:ENSDARG00000068096",
+        "ensembl:FBgn0003996",
+        "ensembl:WBGene00006759",
+        "ensembl:YFL039C",
     ],
-    ids=["human", "mouse", "zebrafish"],
+    ids=["human", "mouse", "zebrafish", "fly", "worm", "yeast"],
 )
-def test_ensembl_gene_id_pattern_accepts_species_prefixes(ensembl_gene_id):
+def test_ensembl_gene_id_pattern_accepts_every_species(ensembl_gene_id):
     assert validate_perturbation_v0_2(_genetic(ensembl_gene_id=ensembl_gene_id)) == []
 
 
 @pytest.mark.parametrize(
     "ensembl_gene_id",
-    ["ensembl:ENSG123", "ensembl:ENST00000269305", "ENSG00000141510"],
-    ids=["short", "transcript", "no-prefix"],
+    [
+        "ENSG00000141510",
+        "ensembl:",
+        "ensembl:-FBgn0003996",
+        "ensembl:TP 53",
+        "Ensembl:ENSG00000141510",
+        "na",
+    ],
+    ids=["no-prefix", "empty-id", "leading-dash", "space", "prefix-case", "lower-na"],
 )
 def test_ensembl_gene_id_pattern_rejects_malformed_ids(ensembl_gene_id):
     issues = validate_perturbation_v0_2(_genetic(ensembl_gene_id=ensembl_gene_id))

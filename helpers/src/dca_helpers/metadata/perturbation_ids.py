@@ -17,7 +17,8 @@ from dca_helpers.validation.ontology_lookup import (
 )
 
 _ENSEMBL_JSON = {"content-type": "application/json"}
-_ENSEMBL_GENE_ID = re.compile(r"^ENS([A-Z]{3})?G\d{11}$")
+_ENSEMBL_STABLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_LRG_PREFIX = "LRG_"
 _NCBI_GENE_ID = re.compile(r"^(?:NCBIGene:)?(\d+)$")
 _HTTP_NOT_FOUND = 404
 
@@ -31,7 +32,11 @@ def _ensembl_gene_ids(url: str, params: dict) -> list[str]:
     ids: dict[str, None] = {}
     for record in resp.json():
         gene_id = record.get("id", "")
-        if record.get("type") == "gene" and _ENSEMBL_GENE_ID.match(gene_id):
+        if (
+            record.get("type") == "gene"
+            and _ENSEMBL_STABLE_ID.match(gene_id)
+            and not gene_id.startswith(_LRG_PREFIX)
+        ):
             ids.setdefault(f"ensembl:{gene_id}")
     return list(ids)
 
@@ -39,13 +44,14 @@ def _ensembl_gene_ids(url: str, params: dict) -> list[str]:
 def search_ensembl(symbol: str, *, species: str = "homo_sapiens") -> list[str]:
     """Return ``ensembl:<id>`` CURIEs for the genes Ensembl links to ``symbol``.
 
-    Calls ``/xrefs/symbol/<species>/<symbol>`` with ``object_type=gene``. Only
-    Ensembl gene ids are kept (LRG records are dropped), de-duplicated, in the
-    order Ensembl returns them. A symbol with genes on alternate haplotypes
-    returns several ids. An unknown symbol returns an empty list (Ensembl answers
-    200 with ``[]``). ``species`` and ``symbol`` are percent-encoded as path
-    segments; Ensembl still answers 404 to an encoded ``/``, which raises
-    ``requests.HTTPError``.
+    Calls ``/xrefs/symbol/<species>/<symbol>`` with ``object_type=gene``. Every
+    gene record's stable id is kept, whatever the species' id scheme (``ENSG…``,
+    ``FBgn…``, ``WBGene…``, yeast ORF names); Locus Reference Genomic (``LRG_…``)
+    records are dropped. Ids are de-duplicated, in the order Ensembl returns them. A
+    symbol with genes on alternate haplotypes returns several ids. An unknown symbol
+    returns an empty list (Ensembl answers 200 with ``[]``). ``species`` and
+    ``symbol`` are percent-encoded as path segments; Ensembl still answers 404 to an
+    encoded ``/``, which raises ``requests.HTTPError``.
     """
     return _ensembl_gene_ids(
         f"{ENSEMBL_BASE_URL}/xrefs/symbol/{quote(species, safe='')}/"

@@ -1269,14 +1269,15 @@ classes:
         close_mappings: [NCBIGene:0]
       ensembl_gene_id:
         description: >-
-          Ensembl gene id as a colon CURIE (e.g. "ensembl:ENSG00000141510", or a
-          species-prefixed id such as mouse "ensembl:ENSMUSG00000059552"), resolvable
-          via the ``prefixes`` block. ``NA`` when the reagent targets no gene
-          (non-targeting guide, scrambled siRNA, LacZ / luciferase ORF). Beta in
-          v0.2: recommended when ``modality`` is crispr / orf / shrna / mirna /
-          sirna, and validators warn when it is missing; v0.3 makes the warning an
-          error.
-        pattern: "^(ensembl:ENS([A-Z]{3})?G\\d{11}|NA)$"
+          Ensembl gene stable id as a colon CURIE, for any species Ensembl
+          annotates, resolvable via the ``prefixes`` block: e.g. human
+          "ensembl:ENSG00000141510", mouse "ensembl:ENSMUSG00000059552", fly
+          "ensembl:FBgn0003996", worm "ensembl:WBGene00006759", yeast
+          "ensembl:YFL039C". ``NA`` when the reagent targets no gene (non-targeting
+          guide, scrambled siRNA, LacZ / luciferase ORF). Beta in v0.2: recommended
+          when ``modality`` is crispr / orf / shrna / mirna / sirna, and validators
+          warn when it is missing; v0.3 makes the warning an error.
+        pattern: "^(ensembl:[A-Za-z0-9][A-Za-z0-9._-]*|NA)$"
         close_mappings: [ensembl:0]
       transcript_refseq:
         description: NCBI RefSeq transcript id (ORF).

@@ -1209,7 +1209,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
     ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_ncbi_gene_id', 'cpg:orf_ncbi_gene_id']} })
-    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\", or a species-prefixed id such as mouse \"ensembl:ENSMUSG00000059552\"), resolvable via the ``prefixes`` block. ``NA`` when the reagent targets no gene (non-targeting guide, scrambled siRNA, LacZ / luciferase ORF). Beta in v0.2: recommended when ``modality`` is crispr / orf / shrna / mirna / sirna, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
+    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene stable id as a colon CURIE, for any species Ensembl annotates, resolvable via the ``prefixes`` block: e.g. human \"ensembl:ENSG00000141510\", mouse \"ensembl:ENSMUSG00000059552\", fly \"ensembl:FBgn0003996\", worm \"ensembl:WBGene00006759\", yeast \"ensembl:YFL039C\". ``NA`` when the reagent targets no gene (non-targeting guide, scrambled siRNA, LacZ / luciferase ORF). Beta in v0.2: recommended when ``modality`` is crispr / orf / shrna / mirna / sirna, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
     transcript_refseq: Optional[str] = Field(default=None, description="""NCBI RefSeq transcript id (ORF).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_transcript']} })
     vector: Optional[str] = Field(default=None, description="""Expression / delivery vector (ORF; sgRNA vector).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_vector']} })
     insert_length: Optional[int] = Field(default=None, description="""ORF insert length (bp).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'],
@@ -1232,7 +1232,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
 
     @field_validator('ensembl_gene_id')
     def pattern_ensembl_gene_id(cls, v):
-        pattern=re.compile(r"^(ensembl:ENS([A-Z]{3})?G\d{11}|NA)$")
+        pattern=re.compile(r"^(ensembl:[A-Za-z0-9][A-Za-z0-9._-]*|NA)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):

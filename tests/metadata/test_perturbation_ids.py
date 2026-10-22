@@ -42,6 +42,21 @@ def test_search_ensembl_returns_every_gene_id_in_registry_order(replay_registry)
     assert all(i.startswith("ensembl:ENSG") for i in ids)
 
 
+@pytest.mark.parametrize(
+    "species, symbol, gene_id",
+    [
+        ("drosophila_melanogaster", "w", "ensembl:FBgn0003996"),
+        ("caenorhabditis_elegans", "unc-22", "ensembl:WBGene00006759"),
+        ("saccharomyces_cerevisiae", "ACT1", "ensembl:YFL039C"),
+    ],
+    ids=["fly", "worm", "yeast"],
+)
+def test_search_ensembl_keeps_non_vertebrate_stable_ids(
+    replay_registry, species, symbol, gene_id
+):
+    assert search_ensembl(symbol, species=species) == [gene_id]
+
+
 def test_search_ensembl_unknown_symbol_is_an_empty_list(replay_registry):
     assert search_ensembl("NOTAREALGENEXYZ") == []
 

@@ -11,6 +11,13 @@ def test_live_tp53_symbol_and_ncbi_gene_map_to_one_ensembl_gene():
 
 
 @pytest.mark.live
+def test_live_fly_symbol_maps_to_a_flybase_gene_id():
+    assert search_ensembl("w", species="drosophila_melanogaster") == [
+        "ensembl:FBgn0003996"
+    ]
+
+
+@pytest.mark.live
 def test_live_aspirin_by_name_and_smiles():
     assert search_pubchem(name="aspirin")[0] == ASPIRIN_PUBCHEM_CID
     assert search_pubchem(smiles="CC(=O)Oc1ccccc1C(=O)O")[0] == ASPIRIN_PUBCHEM_CID
