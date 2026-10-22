@@ -97,7 +97,7 @@ _GENETIC_MODALITIES: frozenset[str] = frozenset(
 )
 
 # Identifiers each typed block SHOULD carry: beta in v0.2 (a warning), required from
-# v0.3. ``NA`` (a reagent with no identifier) counts as populated.
+# v0.3. The ``na`` sentinel (a reagent with no identifier) counts as populated.
 _COMPOUND_BETA_IDS: tuple[str, ...] = ("pubchem_cid", "morgan_fingerprint")
 _GENETIC_BETA_IDS: tuple[str, ...] = ("ensembl_gene_id",)
 
@@ -406,7 +406,7 @@ def _missing_beta_ids(perturbation: object, prefix: str = "") -> list[str]:
 
     Beta in v0.2 (``chemical.pubchem_cid`` / ``chemical.morgan_fingerprint`` for
     ``compound``, ``genetic.ensembl_gene_id`` for a genetic modality); promote to MUST
-    in v0.3. ``NA`` counts as populated. A missing block yields nothing here, since
+    in v0.3. The ``na`` sentinel counts as populated. A missing block yields nothing here, since
     ``_PerturbationV0_2`` already rejects it.
 
     Not a ``Perturbation`` validator: raised from a nested model, a SHOULD fails that

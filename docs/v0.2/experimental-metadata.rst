@@ -625,12 +625,13 @@ error.
   species Ensembl annotates. Human ``ensembl:ENSG00000141510``, mouse
   ``ensembl:ENSMUSG00000059552``, fly ``ensembl:FBgn0003996``, worm
   ``ensembl:WBGene00006759`` and yeast ``ensembl:YFL039C`` are all accepted.
+  Locus Reference Genomic ids (``LRG_…``) are not Ensembl stable ids and are rejected.
 
-A reagent with no identifier records the sentinel ``NA`` (upper case, as the slot
-patterns spell it), which counts as present. A non-targeting guide, a scrambled siRNA
-or a LacZ / luciferase ORF control has ``ensembl_gene_id: NA``; an in-house compound
-with no PubChem record has ``pubchem_cid: NA`` and therefore
-``morgan_fingerprint: NA``.
+A reagent with no identifier records the ``na`` sentinel (the field does not apply; see
+:ref:`Conformance <experimental-conformance>`), which counts as present. A
+non-targeting guide, a scrambled siRNA or a LacZ / luciferase ORF control has
+``ensembl_gene_id: na``; an in-house compound with no PubChem record has
+``pubchem_cid: na`` and therefore ``morgan_fingerprint: na``.
 
 **Which CID.** ``pubchem_cid`` is the form (salt or parent) described by the vendor
 catalog entry the source cites, where it cites one; that catalog id is the namespaced
@@ -659,7 +660,7 @@ different datasets can be compared bit for bit:
      - the ``SMILES`` property of the PubChem record for ``pubchem_cid``
    * - Encoding
      - FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``),
-       512 lowercase hex characters (pattern ``^([0-9a-f]{512}|NA)$``)
+       512 lowercase hex characters (pattern ``^([0-9a-f]{512}|na)$``)
 
 In RDKit this is
 ``rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048,

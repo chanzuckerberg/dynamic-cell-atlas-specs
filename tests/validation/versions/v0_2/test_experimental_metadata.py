@@ -394,9 +394,9 @@ def test_genetic_modality_without_genetic_block_still_fails(modality):
         ASPIRIN_MORGAN_FINGERPRINT + "0",
         ASPIRIN_MORGAN_FINGERPRINT.upper().replace("0", "A"),
         ASPIRIN_MORGAN_FINGERPRINT[:-1] + "g",
-        "na",
+        "NA",
     ],
-    ids=["511-chars", "513-chars", "uppercase", "non-hex", "lowercase-na"],
+    ids=["511-chars", "513-chars", "uppercase", "non-hex", "uppercase-NA"],
 )
 def test_malformed_morgan_fingerprint_fails(fingerprint):
     issues = validate_perturbation_v0_2(_chemical(morgan_fingerprint=fingerprint))
@@ -405,7 +405,7 @@ def test_malformed_morgan_fingerprint_fails(fingerprint):
     )
 
 
-@pytest.mark.parametrize("cid", ["2244", "PubChem:", "pubchem:2244", "N/A"])
+@pytest.mark.parametrize("cid", ["2244", "PubChem:", "pubchem:2244", "N/A", "NA"])
 def test_malformed_pubchem_cid_fails(cid):
     issues = validate_perturbation_v0_2(_chemical(pubchem_cid=cid))
     assert any("pubchem_cid" in i.loc for i in issues if i.severity is Severity.ERROR)
@@ -422,9 +422,9 @@ def test_genetic_modality_without_ensembl_gene_id_warns(modality):
 
 
 def test_na_counts_as_populated_for_every_beta_identifier():
-    assert validate_perturbation_v0_2(_genetic(ensembl_gene_id="NA")) == []
+    assert validate_perturbation_v0_2(_genetic(ensembl_gene_id="na")) == []
     assert (
-        validate_perturbation_v0_2(_chemical(pubchem_cid="NA", morgan_fingerprint="NA"))
+        validate_perturbation_v0_2(_chemical(pubchem_cid="na", morgan_fingerprint="na"))
         == []
     )
 
@@ -453,9 +453,18 @@ def test_ensembl_gene_id_pattern_accepts_every_species(ensembl_gene_id):
         "ensembl:-FBgn0003996",
         "ensembl:TP 53",
         "Ensembl:ENSG00000141510",
-        "na",
+        "ensembl:LRG_321",
+        "NA",
     ],
-    ids=["no-prefix", "empty-id", "leading-dash", "space", "prefix-case", "lower-na"],
+    ids=[
+        "no-prefix",
+        "empty-id",
+        "leading-dash",
+        "space",
+        "prefix-case",
+        "lrg",
+        "uppercase-NA",
+    ],
 )
 def test_ensembl_gene_id_pattern_rejects_malformed_ids(ensembl_gene_id):
     issues = validate_perturbation_v0_2(_genetic(ensembl_gene_id=ensembl_gene_id))

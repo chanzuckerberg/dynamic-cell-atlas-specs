@@ -459,7 +459,7 @@ provenance-coverage (see below). Label images are exempt.
      - For ``tissue_type: "cell line"``, ``tissue`` should carry a ``CVCL:`` accession, and ``cell_line_id`` should match it. Two warnings: ``tissue`` holding no accession at all, and the mirror disagreeing with it
      - experimental-metadata.rst § What is and is not machine-checked
    * - SHOULD
-     - Beta in v0.2, required from v0.3: a ``compound`` perturbation's ``chemical`` block should carry ``pubchem_cid`` and ``morgan_fingerprint``, and a genetic one's ``genetic`` block should carry ``ensembl_gene_id``. One WARNING per missing identifier, on the image group's ``definition`` / ``cotreatment``, the same on a ``WellPerturbation``, and on a bare codebook entry. ``NA`` counts as present
+     - Beta in v0.2, required from v0.3: a ``compound`` perturbation's ``chemical`` block should carry ``pubchem_cid`` and ``morgan_fingerprint``, and a genetic one's ``genetic`` block should carry ``ensembl_gene_id``. One WARNING per missing identifier, on the image group's ``definition`` / ``cotreatment``, the same on a ``WellPerturbation``, and on a bare codebook entry. The ``na`` sentinel counts as present
      - experimental-metadata.rst § Perturbation identifiers are beta in v0.2
 
 Provenance coverage is a cross-field check (the set of ``provenance`` keys vs. the

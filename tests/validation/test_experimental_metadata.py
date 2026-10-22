@@ -78,9 +78,9 @@ def test_typed_ids_are_not_required_by_the_json_schema():
 @pytest.mark.parametrize(
     "block, slot",
     [
-        ({"chemical": {"pubchem_cid": "NA"}}, "pubchem_cid"),
-        ({"chemical": {"morgan_fingerprint": "NA"}}, "morgan_fingerprint"),
-        ({"genetic": {"ensembl_gene_id": "NA"}}, "ensembl_gene_id"),
+        ({"chemical": {"pubchem_cid": "na"}}, "pubchem_cid"),
+        ({"chemical": {"morgan_fingerprint": "na"}}, "morgan_fingerprint"),
+        ({"genetic": {"ensembl_gene_id": "na"}}, "ensembl_gene_id"),
         ({"chemical": {"pubchem_cid": ASPIRIN_PUBCHEM_CID}}, "pubchem_cid"),
         (
             {"chemical": {"morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT}},
