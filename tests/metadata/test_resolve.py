@@ -652,6 +652,24 @@ def test_a_missing_beta_perturbation_id_is_a_warning_not_an_error(slot):
     ]
 
 
+def test_a_cotreatment_warning_does_not_hide_a_missing_definition():
+    perturbation = {
+        "control_class": "treatment",
+        "cotreatment": {
+            "perturbation_id": "P2",
+            "modality": "crispr",
+            "genetic": {"gene_symbol": "TP53"},
+        },
+    }
+    collected: list[str] = []
+    with pytest.raises(DcaValidationError) as exc:
+        validate_dca(
+            min_dca_block(perturbation=perturbation), where="A/1/0", warnings=collected
+        )
+    assert "definition is required" in str(exc.value)
+    assert exc.value.fields == ["perturbation"]
+
+
 def test_without_a_warnings_list_should_findings_are_logged(caplog):
     with caplog.at_level("WARNING"):
         validate_dca(_block_with_a_should_finding(), where="group A9_s1")

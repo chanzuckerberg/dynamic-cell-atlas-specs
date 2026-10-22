@@ -658,10 +658,10 @@ def _normalising_model() -> type:
     wholly SHOULD, so a MUST added to either validator later is still fatal rather than
     silently swallowed.
 
-    Built lazily and cached, so the subclass costs a few hundred microseconds once per
-    process. If ``_BiosampleV0_2`` ever disappears from the validation package, importing
-    this module raises ``ImportError`` naming the symbol, which is the right failure for a
-    coupling this deliberate.
+    Built lazily and cached, so the subclasses cost a few hundred microseconds once per
+    process. If ``_BiosampleV0_2`` or ``_PerturbationAssignmentV0_2`` ever disappears from
+    the validation package, importing this module raises ``ImportError`` naming the
+    symbol, which is the right failure for a coupling this deliberate.
     """
 
     class _NormalisingBiosample(_BiosampleV0_2):  # type: ignore[misc, valid-type]
