@@ -426,7 +426,7 @@ provenance-coverage (see below). Label images are exempt.
      - CURIE shape on ontology-id fields (e.g. ``^NCBITaxon:\d+$``, ``^EFO:\d+$``; the ``unknown`` / ``na`` / ``unavailable`` sentinels are permitted where the slot allows them). A few "no value" ontology terms are rejected so each sentinel has one spelling: ``ZFS:0000000``, ``FBdv:00007012`` and ``ZFA:0001093``
      - experimental-metadata.rst § Conformance
    * - MUST
-     - ``modality: compound`` requires the ``chemical`` block with ``pubchem_cid`` and ``morgan_fingerprint``; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require the ``genetic`` block with ``ensembl_gene_id``
+     - ``modality: compound`` requires the ``chemical`` block; ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require the ``genetic`` block
      - experimental-metadata.rst § Conformance
    * - MUST
      - ``tissue_type: "cell line"`` requires ``cell_line_name``
@@ -458,6 +458,9 @@ provenance-coverage (see below). Label images are exempt.
    * - SHOULD
      - For ``tissue_type: "cell line"``, ``tissue`` should carry a ``CVCL:`` accession, and ``cell_line_id`` should match it. Two warnings: ``tissue`` holding no accession at all, and the mirror disagreeing with it
      - experimental-metadata.rst § What is and is not machine-checked
+   * - SHOULD
+     - Beta in v0.2, required from v0.3: a ``compound`` perturbation's ``chemical`` block should carry ``pubchem_cid`` and ``morgan_fingerprint``, and a genetic one's ``genetic`` block should carry ``ensembl_gene_id``. One WARNING per missing identifier, on the image group's ``definition`` / ``cotreatment``, the same on a ``WellPerturbation``, and on a bare codebook entry. ``NA`` counts as present
+     - experimental-metadata.rst § Perturbation identifiers are beta in v0.2
 
 Provenance coverage is a cross-field check (the set of ``provenance`` keys vs. the
 populated fields) that LinkML rules cannot express, so it is computed by the validator

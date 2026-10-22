@@ -335,13 +335,15 @@ exhaustive, authoritative list.
    * - Perturbation
      - chemical (``inchikey`` / ``inchi`` / ``smiles`` / ``pubchem_cid`` /
        ``morgan_fingerprint`` / ``chembl_id``)
-     - Required when chemical, with ``pubchem_cid`` and ``morgan_fingerprint``
+     - Required when chemical; ``pubchem_cid`` and ``morgan_fingerprint`` are
+       beta (warned when missing in v0.2, required from v0.3)
      - CellPainting Gallery + PubChem
    * - Perturbation
      - genetic (``gene_symbol`` / ``ncbi_gene_id`` / ``ensembl_gene_id`` /
        ``vector`` …)
-     - Required when genetic (CRISPR / ORF / shRNA / miRNA / siRNA), with
-       ``ensembl_gene_id``
+     - Required when genetic (CRISPR / ORF / shRNA / miRNA / siRNA);
+       ``ensembl_gene_id`` is beta (warned when missing in v0.2, required from
+       v0.3)
      - CellPainting Gallery + HGNC / NCBIGene / Ensembl
    * - Perturbation
      - dosing / timing (``solvent`` / ``duration_h`` /
@@ -611,19 +613,33 @@ is **omitted when** ``control_class`` **is** ``empty``, which has nothing to rec
 The ``chemical`` vs ``genetic`` block is required according to ``modality``. All three
 conditionals are enforced as schema rules (see Validation).
 
-**Required identifiers.** Each typed block carries the identifiers that make a
-perturbation comparable across datasets:
+**Perturbation identifiers are beta in v0.2.** Each typed block carries the
+identifiers that make a perturbation comparable across datasets. In v0.2 they are
+recommended: the validator warns when one is missing, and v0.3 makes that warning an
+error.
 
-* ``compound`` requires ``chemical.pubchem_cid`` (e.g. ``PubChem:2244``) and
+* ``compound``: ``chemical.pubchem_cid`` (e.g. ``PubChem:2244``) and
   ``chemical.morgan_fingerprint``.
-* ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` require
-  ``genetic.ensembl_gene_id``, a colon CURIE with an 11-digit Ensembl gene id. Human
-  ids (``ensembl:ENSG00000141510``) and species-prefixed ids (mouse
-  ``ensembl:ENSMUSG00000059552``, zebrafish ``ensembl:ENSDARG00000068096``) are both
-  accepted.
+* ``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna``:
+  ``genetic.ensembl_gene_id``, an Ensembl gene stable id as a colon CURIE, for any
+  species Ensembl annotates. Human ``ensembl:ENSG00000141510``, mouse
+  ``ensembl:ENSMUSG00000059552``, fly ``ensembl:FBgn0003996``, worm
+  ``ensembl:WBGene00006759`` and yeast ``ensembl:YFL039C`` are all accepted.
 
-The fingerprint parameters are pinned so values from different datasets can be
-compared bit for bit:
+A reagent with no identifier records the sentinel ``NA`` (upper case, as the slot
+patterns spell it), which counts as present. A non-targeting guide, a scrambled siRNA
+or a LacZ / luciferase ORF control has ``ensembl_gene_id: NA``; an in-house compound
+with no PubChem record has ``pubchem_cid: NA`` and therefore
+``morgan_fingerprint: NA``.
+
+**Which CID.** ``pubchem_cid`` is the form (salt or parent) described by the vendor
+catalog entry the source cites, where it cites one; that catalog id is the namespaced
+``perturbation_identifier``. Otherwise it is the form the source names.
+
+The fingerprint is computed from the PubChem record of ``pubchem_cid`` (the record's
+``SMILES`` property), not from a SMILES in the dataset. Nothing is salt-stripped: a salt
+CID gives the fingerprint of the salt. The parameters are pinned so values from
+different datasets can be compared bit for bit:
 
 .. list-table:: Pinned ``morgan_fingerprint`` parameters
    :header-rows: 1
@@ -640,15 +656,18 @@ compared bit for bit:
    * - Chirality
      - not included
    * - Input
-     - the ``smiles`` slot when present, else the structure the PubChem CID names
+     - the ``SMILES`` property of the PubChem record for ``pubchem_cid``
    * - Encoding
      - FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``),
-       512 lowercase hex characters (pattern ``^[0-9a-f]{512}$``)
+       512 lowercase hex characters (pattern ``^([0-9a-f]{512}|NA)$``)
 
 In RDKit this is
 ``rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048,
 includeChirality=False).GetFingerprint(mol)`` followed by
-``DataStructs.BitVectToFPSText``.
+``DataStructs.BitVectToFPSText``. The field's provenance records the RDKit version
+used, e.g. in its ``citation``; ``dca_helpers.metadata.rdkit_version()`` returns the
+installed version, and ``dca-propose`` names it in the source of a fingerprint it
+proposes.
 
 .. _experimental-perturbation-placement:
 
@@ -725,10 +744,10 @@ See the ``Perturbation``, ``ChemicalPerturbation``, ``GeneticPerturbation``,
      - ``Treatment_Concentration`` (str)
    * - Compound ids
      - (``AnnotationRef``)
-     - ``InChIKey`` / ``SMILES`` / ``PubChem_CID`` (``PubChem_CID`` maps to the
-       required ``pubchem_cid``; CPG has no fingerprint, so the required
-       ``morgan_fingerprint`` is computed from ``SMILES`` with the pinned
-       parameters above)
+     - ``InChIKey`` / ``SMILES`` / ``PubChem_CID`` (``PubChem_CID`` maps to
+       ``pubchem_cid``; CPG has no fingerprint, so ``morgan_fingerprint`` is
+       computed from the PubChem record of that CID with the pinned parameters
+       above)
    * - **Gene target**
      - —
      - **absent**
@@ -748,8 +767,9 @@ Known gaps and contradictions:
 * **Concentration type** — CPG records free text; DCA uses
   ``{value, unit}``. The schema keeps structured ``value``/``unit`` with a
   free-text ``text`` fallback.
-* **Gene identifier** — the Ensembl gene id is the required key for the genetic
-  modalities; NCBI Gene ID is an optional cross-reference and the symbol is the label.
+* **Gene identifier** — the Ensembl gene id is the key for the genetic modalities
+  (beta in v0.2, required from v0.3); NCBI Gene ID is an optional cross-reference and
+  the symbol is the label.
 
 .. _experimental-deferred-pooled:
 
