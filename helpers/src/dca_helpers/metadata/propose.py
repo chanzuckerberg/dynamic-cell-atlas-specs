@@ -283,29 +283,29 @@ def _propose_one(
 def _propose_morgan(field: str, hints: Mapping[str, str], online: bool) -> Proposal:
     """Fingerprint the PubChem record SMILES of the hinted CID.
 
-    A CID hint of ``NA`` proposes ``NA``, offline too: a compound with no PubChem
+    A CID hint of ``na`` proposes ``na``, offline too: a compound with no PubChem
     record has no record to fingerprint. ``source`` names the RDKit version, which
-    belongs in the field's provenance.
+    belongs in the field's provenance, and the CID as ``PubChem:<n>``.
     """
-    cid = hints.get(_PUBCHEM_CID_HINT)
-    if cid == "NA":
-        return Proposal(field, "NA", f"{_PUBCHEM_CID_HINT} is NA", "morgan")
-    try:
-        version = rdkit_version()
-    except ImportError:
-        return Proposal(
-            field, None, "rdkit not installed (dca_helpers[chem])", "morgan"
-        )
+    cid = hints.get(_PUBCHEM_CID_HINT, "").strip()
+    if cid == "na":
+        return Proposal(field, "na", f"{_PUBCHEM_CID_HINT} is na", "morgan")
     failed, found = _lookup(
         field,
         "morgan",
         _registry_of(PUBCHEM_BASE_URL),
         hints,
         online,
-        {_PUBCHEM_CID_HINT: lambda value: [(pubchem_smiles(value), "")]},
+        {_PUBCHEM_CID_HINT: lambda _: [(pubchem_smiles(cid), "")]},
     )
     if failed:
         return failed
+    try:
+        version = rdkit_version()
+    except ImportError:
+        return Proposal(
+            field, None, "rdkit not installed (dca_helpers[chem])", "morgan"
+        )
     try:
         value = morgan_fingerprint(found[0][0])
     except ValueError:
@@ -313,7 +313,8 @@ def _propose_morgan(field: str, hints: Mapping[str, str], online: bool) -> Propo
     return Proposal(
         field,
         value,
-        f"RDKit {version} Morgan radius 2, 2048 bits, from {cid} record SMILES",
+        f"RDKit {version} Morgan radius 2, 2048 bits, "
+        f"from PubChem:{cid.removeprefix('PubChem:')} record SMILES",
         "morgan",
     )
 
@@ -331,7 +332,7 @@ def propose(
     ``Proposal`` with ``value=None`` and the reason in ``source``. The ``morgan``
     rule is a lookup too (the PubChem record SMILES of the CID hint) and degrades the
     same way, and also when RDKit is not installed or cannot parse the SMILES; a CID
-    hint of ``NA`` proposes ``NA`` without a lookup. This function does not raise on
+    hint of ``na`` proposes ``na`` without a lookup. This function does not raise on
     lookup failure.
     """
     proposals = (_propose_one(field, hints, online) for field in unresolved)

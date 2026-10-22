@@ -150,10 +150,18 @@ def test_morgan_fingerprints_the_pubchem_record(replay_registry):
     assert url.endswith("/compound/cid/2244/property/SMILES/JSON")
 
 
+def test_morgan_source_names_a_bare_cid_hint_as_a_curie(replay_registry):
+    pytest.importorskip("rdkit")
+    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": " 2244 "})
+    assert p.value == ASPIRIN_MORGAN_FINGERPRINT
+    assert p.source.endswith(f"from {ASPIRIN_PUBCHEM_CID} record SMILES")
+
+
 @pytest.mark.parametrize("online", [True, False])
-def test_morgan_proposes_na_for_an_na_cid(replay_registry, online):
-    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": "NA"}, online=online)
-    assert p == Proposal(MORGAN, "NA", f"{CHEMICAL}pubchem_cid is NA", "morgan")
+@pytest.mark.parametrize("hint", ["na", " na "])
+def test_morgan_proposes_na_for_an_na_cid(replay_registry, online, hint):
+    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": hint}, online=online)
+    assert p == Proposal(MORGAN, "na", f"{CHEMICAL}pubchem_cid is na", "morgan")
     assert replay_registry.requests == []
 
 
@@ -195,7 +203,27 @@ def test_morgan_degrades_to_a_reasoned_none(replay_registry, hints, online, reas
     assert p == Proposal(MORGAN, None, reason, "morgan")
 
 
-def test_morgan_without_rdkit_names_the_extra(hide_rdkit):
+@pytest.mark.parametrize(
+    "hints, online, reason",
+    [
+        ({}, True, f"no hint: {CHEMICAL}pubchem_cid"),
+        (
+            {CHEMICAL + "pubchem_cid": ASPIRIN_PUBCHEM_CID},
+            False,
+            "lookup skipped (offline)",
+        ),
+    ],
+    ids=["no-hint", "offline"],
+)
+def test_morgan_reports_hint_and_offline_before_missing_rdkit(
+    hide_rdkit, hints, online, reason
+):
+    assert _one(MORGAN, hints=hints, online=online) == Proposal(
+        MORGAN, None, reason, "morgan"
+    )
+
+
+def test_morgan_without_rdkit_names_the_extra(replay_registry, hide_rdkit):
     p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": ASPIRIN_PUBCHEM_CID})
     assert p == Proposal(
         MORGAN, None, "rdkit not installed (dca_helpers[chem])", "morgan"

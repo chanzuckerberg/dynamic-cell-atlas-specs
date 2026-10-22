@@ -4,7 +4,7 @@ CLI entry point for DCA proposals.
 Lookups: Cellosaurus, NCBITaxon and OLS labels for taxonomy fields, Ensembl gene
 ids and PubChem CIDs for perturbations. The Morgan fingerprint of a compound is
 computed with RDKit from the PubChem record SMILES of a ``pubchem_cid`` hint, so it
-needs the network unless the hint is ``NA``.
+needs the network unless the hint is ``na``.
 
 Usage
 -----
@@ -80,7 +80,7 @@ def main(
     perturbation.definition.genetic.gene_symbol=TP53 (or .ncbi_gene_id, plus an
     optional species=mus_musculus), perturbation.definition.chemical.smiles,
     .inchikey, or perturbation.definition.name. The morgan_fingerprint rule reads
-    perturbation.definition.chemical.pubchem_cid (PubChem:<n>, or NA).
+    perturbation.definition.chemical.pubchem_cid (PubChem:<n>, or na).
     """
     proposals = propose(
         fields,
