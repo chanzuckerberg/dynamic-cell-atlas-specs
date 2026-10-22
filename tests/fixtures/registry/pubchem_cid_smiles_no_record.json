@@ -1,0 +1,16 @@
+{
+ "body": {
+  "PropertyTable": {
+   "Properties": [
+    {
+     "CID": 999999999
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {},
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/999999999/property/SMILES/JSON"
+ },
+ "status_code": 200
+}

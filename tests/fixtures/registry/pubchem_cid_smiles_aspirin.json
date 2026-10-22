@@ -1,0 +1,17 @@
+{
+ "body": {
+  "PropertyTable": {
+   "Properties": [
+    {
+     "CID": 2244,
+     "SMILES": "CC(=O)OC1=CC=CC=C1C(=O)O"
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {},
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/2244/property/SMILES/JSON"
+ },
+ "status_code": 200
+}

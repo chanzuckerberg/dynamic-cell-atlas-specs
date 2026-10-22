@@ -19,6 +19,8 @@ from dca_helpers.metadata.config import load_dca_config
 from dca_helpers.metadata.perturbation_ids import (
     ensembl_from_ncbi_gene,
     morgan_fingerprint,
+    pubchem_smiles,
+    rdkit_version,
     search_ensembl,
     search_pubchem,
 )
@@ -52,6 +54,8 @@ __all__ = [
     "merge_dca_attributes",
     "morgan_fingerprint",
     "propose",
+    "pubchem_smiles",
+    "rdkit_version",
     "resolve",
     "resolve_dca",
     "search_cellosaurus",

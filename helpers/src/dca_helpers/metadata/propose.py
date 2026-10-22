@@ -1,8 +1,9 @@
 """Proposals for DCA fields a pipeline's finalize step could not resolve.
 
 Rules look a hinted name or term up in Cellosaurus, NCBITaxon, OLS, Ensembl or
-PubChem, or compute a compound's Morgan fingerprint from a hinted SMILES. A
-proposal is a suggestion for a human to confirm. Nothing here writes to a store.
+PubChem, or compute a compound's Morgan fingerprint from the PubChem record of a
+hinted CID. A proposal is a suggestion for a human to confirm. Nothing here writes
+to a store.
 """
 
 import logging
@@ -15,6 +16,8 @@ import requests
 from dca_helpers.metadata.perturbation_ids import (
     ensembl_from_ncbi_gene,
     morgan_fingerprint,
+    pubchem_smiles,
+    rdkit_version,
     search_ensembl,
     search_pubchem,
 )
@@ -44,6 +47,7 @@ _SEARCH_ROWS = 100
 _GENETIC = "perturbation.definition.genetic."
 _CHEMICAL = "perturbation.definition.chemical."
 _SMILES_HINT = _CHEMICAL + "smiles"
+_PUBCHEM_CID_HINT = _CHEMICAL + "pubchem_cid"
 #: PubChem namespace per hint, in the order the ``pubchem`` rule tries them.
 _PUBCHEM_HINTS = {
     _CHEMICAL + "inchikey": "inchikey",
@@ -271,27 +275,45 @@ def _propose_one(
         )
 
     if field == _CHEMICAL + "morgan_fingerprint":
-        return _propose_morgan(field, hints)
+        return _propose_morgan(field, hints, online)
 
     return None
 
 
-def _propose_morgan(field: str, hints: Mapping[str, str]) -> Proposal:
-    """Fingerprint the hinted SMILES. Offline, so it runs even when ``online`` is False."""
-    if _SMILES_HINT not in hints:
-        return Proposal(field, None, f"no hint: {_SMILES_HINT}", "morgan")
+def _propose_morgan(field: str, hints: Mapping[str, str], online: bool) -> Proposal:
+    """Fingerprint the PubChem record SMILES of the hinted CID.
+
+    A CID hint of ``NA`` proposes ``NA``, offline too: a compound with no PubChem
+    record has no record to fingerprint. ``source`` names the RDKit version, which
+    belongs in the field's provenance.
+    """
+    cid = hints.get(_PUBCHEM_CID_HINT)
+    if cid == "NA":
+        return Proposal(field, "NA", f"{_PUBCHEM_CID_HINT} is NA", "morgan")
     try:
-        value = morgan_fingerprint(hints[_SMILES_HINT])
+        version = rdkit_version()
     except ImportError:
         return Proposal(
             field, None, "rdkit not installed (dca_helpers[chem])", "morgan"
         )
+    failed, found = _lookup(
+        field,
+        "morgan",
+        _registry_of(PUBCHEM_BASE_URL),
+        hints,
+        online,
+        {_PUBCHEM_CID_HINT: lambda value: [(pubchem_smiles(value), "")]},
+    )
+    if failed:
+        return failed
+    try:
+        value = morgan_fingerprint(found[0][0])
     except ValueError:
         return Proposal(field, None, "invalid SMILES", "morgan")
     return Proposal(
         field,
         value,
-        f"RDKit Morgan radius 2, 2048 bits, from {_SMILES_HINT}",
+        f"RDKit {version} Morgan radius 2, 2048 bits, from {cid} record SMILES",
         "morgan",
     )
 
@@ -307,9 +329,10 @@ def propose(
     Fields no rule covers get no proposal. A lookup rule that cannot answer (hint
     missing or invalid, offline, registry error, no candidates) returns a
     ``Proposal`` with ``value=None`` and the reason in ``source``. The ``morgan``
-    rule needs no network and runs offline; it degrades the same way when the
-    SMILES hint is missing or invalid or RDKit is not installed. This function does
-    not raise on lookup failure.
+    rule is a lookup too (the PubChem record SMILES of the CID hint) and degrades the
+    same way, and also when RDKit is not installed or cannot parse the SMILES; a CID
+    hint of ``NA`` proposes ``NA`` without a lookup. This function does not raise on
+    lookup failure.
     """
     proposals = (_propose_one(field, hints, online) for field in unresolved)
     return [p for p in proposals if p is not None]

@@ -8,6 +8,8 @@ import requests
 from dca_helpers.metadata import (
     ensembl_from_ncbi_gene,
     morgan_fingerprint,
+    pubchem_smiles,
+    rdkit_version,
     search_ensembl,
     search_pubchem,
 )
@@ -22,6 +24,7 @@ from ._registry import UnrecordedRequest
 perturbation_ids = importlib.import_module("dca_helpers.metadata.perturbation_ids")
 
 ASPIRIN_SMILES = "CC(=O)Oc1ccccc1C(=O)O"
+ASPIRIN_RECORD_SMILES = "CC(=O)OC1=CC=CC=C1C(=O)O"
 
 
 def test_search_ensembl_keeps_gene_ids_and_drops_lrg_records(replay_registry):
@@ -125,8 +128,40 @@ def test_search_pubchem_needs_exactly_one_identifier(kwargs):
         search_pubchem(**kwargs)
 
 
+@pytest.mark.parametrize("cid", [ASPIRIN_PUBCHEM_CID, "2244"])
+def test_pubchem_smiles_returns_the_record_smiles(replay_registry, cid):
+    assert pubchem_smiles(cid) == ASPIRIN_RECORD_SMILES
+    assert replay_registry.requests == [
+        (
+            "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/2244/property/SMILES/JSON",
+            {},
+        )
+    ]
+
+
+def test_pubchem_smiles_record_without_smiles_names_the_cid(replay_registry):
+    with pytest.raises(ValueError, match="PubChem:999999999"):
+        pubchem_smiles("PubChem:999999999")
+
+
+@pytest.mark.parametrize("bad", ["aspirin", "PubChem:", "CID2244", ""])
+def test_pubchem_smiles_rejects_a_non_numeric_cid(bad):
+    with pytest.raises(ValueError, match="PubChem CID"):
+        pubchem_smiles(bad)
+
+
+def test_record_smiles_fingerprint_matches_the_pinned_aspirin_value(replay_registry):
+    smiles = pubchem_smiles(ASPIRIN_PUBCHEM_CID)
+    assert morgan_fingerprint(smiles) == ASPIRIN_MORGAN_FINGERPRINT
+
+
 @pytest.mark.parametrize(
-    "search", [lambda: search_ensembl("TP53"), lambda: search_pubchem(name="aspirin")]
+    "search",
+    [
+        lambda: search_ensembl("TP53"),
+        lambda: search_pubchem(name="aspirin"),
+        lambda: pubchem_smiles(ASPIRIN_PUBCHEM_CID),
+    ],
 )
 def test_registry_failure_propagates_from_the_http_boundary(monkeypatch, search):
     def down(url, params):
@@ -156,12 +191,23 @@ def test_morgan_fingerprint_without_rdkit_names_the_extra(hide_rdkit):
         morgan_fingerprint(ASPIRIN_SMILES)
 
 
+def test_rdkit_version_is_the_installed_rdkit():
+    rdkit = pytest.importorskip("rdkit")
+    assert rdkit_version() == rdkit.__version__
+
+
+def test_rdkit_version_without_rdkit_names_the_extra(hide_rdkit):
+    with pytest.raises(ImportError, match=r"dca_helpers\[chem\]"):
+        rdkit_version()
+
+
 def test_metadata_package_imports_without_rdkit():
     code = (
         "import sys\n"
         "sys.modules['rdkit'] = None\n"
         "import dca_helpers.metadata as m\n"
         "assert callable(m.morgan_fingerprint)\n"
+        "assert callable(m.rdkit_version)\n"
         "assert 'rdkit.Chem' not in sys.modules\n"
     )
     result = subprocess.run(

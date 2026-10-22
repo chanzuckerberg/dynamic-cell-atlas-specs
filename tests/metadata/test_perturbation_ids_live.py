@@ -1,6 +1,11 @@
 import pytest
 
-from dca_helpers.metadata import ensembl_from_ncbi_gene, search_ensembl, search_pubchem
+from dca_helpers.metadata import (
+    ensembl_from_ncbi_gene,
+    pubchem_smiles,
+    search_ensembl,
+    search_pubchem,
+)
 from tests.conftest import ASPIRIN_PUBCHEM_CID, TP53_ENSEMBL_GENE_ID
 
 
@@ -31,3 +36,8 @@ def test_live_aspirin_by_name_and_smiles():
 )
 def test_live_smiles_with_url_special_characters(smiles, cid):
     assert search_pubchem(smiles=smiles)[0] == cid
+
+
+@pytest.mark.live
+def test_live_aspirin_record_smiles():
+    assert pubchem_smiles(ASPIRIN_PUBCHEM_CID) == "CC(=O)OC1=CC=CC=C1C(=O)O"

@@ -282,7 +282,7 @@
                     ]
                 },
                 "morgan_fingerprint": {
-                    "description": "Morgan (ECFP4-like) fingerprint of the compound's structure: RDKit Morgan generator, radius 2, 2048 bits, chirality not included, computed from the ``smiles`` slot when present, else from the structure the PubChem CID names; encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. ``NA`` when ``pubchem_cid`` is ``NA``. Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.",
+                    "description": "Morgan (ECFP4-like) fingerprint computed from the PubChem record of ``pubchem_cid`` (the record's ``SMILES`` property): RDKit Morgan generator, radius 2, 2048 bits, chirality not included, encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. No salt stripping: the fingerprint is of whatever structure the CID record holds, salt or parent, as chosen for ``pubchem_cid``. The field's provenance records the RDKit version used (e.g. in its citation). ``NA`` when ``pubchem_cid`` is ``NA``. Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.",
                     "pattern": "^([0-9a-f]{512}|NA)$",
                     "type": [
                         "string",
@@ -290,7 +290,7 @@
                     ]
                 },
                 "pubchem_cid": {
-                    "description": "PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block, so the value names its own database. ``NA`` when the compound has no PubChem record (e.g. an in-house compound). Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.",
+                    "description": "PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block, so the value names its own database. The CID is the form (salt or parent) that the vendor catalog entry cited in the source describes, where one is cited (that catalog id is the namespaced ``perturbation_identifier``); otherwise the form the source names. ``NA`` when the compound has no PubChem record (e.g. an in-house compound). Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.",
                     "pattern": "^(PubChem:\\d+|NA)$",
                     "type": [
                         "string",

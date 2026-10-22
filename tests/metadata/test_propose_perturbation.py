@@ -120,6 +120,11 @@ def test_lookup_rules_skip_the_registry_offline(field, rule):
     [
         (ENSEMBL, {GENETIC + "gene_symbol": "TP53"}, "rest.ensembl.org"),
         (PUBCHEM, {CHEMICAL + "smiles": "C"}, "pubchem.ncbi.nlm.nih.gov"),
+        (
+            MORGAN,
+            {CHEMICAL + "pubchem_cid": "PubChem:2244"},
+            "pubchem.ncbi.nlm.nih.gov",
+        ),
     ],
 )
 def test_registry_failure_degrades(monkeypatch, field, hints, host):
@@ -131,27 +136,67 @@ def test_registry_failure_degrades(monkeypatch, field, hints, host):
     assert (p.value, p.source) == (None, f"lookup failed: {host}")
 
 
+def test_morgan_fingerprints_the_pubchem_record(replay_registry):
+    rdkit = pytest.importorskip("rdkit")
+    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": ASPIRIN_PUBCHEM_CID})
+    assert p == Proposal(
+        MORGAN,
+        ASPIRIN_MORGAN_FINGERPRINT,
+        f"RDKit {rdkit.__version__} Morgan radius 2, 2048 bits, "
+        f"from {ASPIRIN_PUBCHEM_CID} record SMILES",
+        "morgan",
+    )
+    [(url, _)] = replay_registry.requests
+    assert url.endswith("/compound/cid/2244/property/SMILES/JSON")
+
+
 @pytest.mark.parametrize("online", [True, False])
-def test_morgan_runs_offline(online):
-    p = _one(MORGAN, hints={CHEMICAL + "smiles": ASPIRIN_SMILES}, online=online)
-    assert (p.field, p.value, p.rule) == (MORGAN, ASPIRIN_MORGAN_FINGERPRINT, "morgan")
-    assert p.source.startswith("RDKit Morgan")
+def test_morgan_proposes_na_for_an_na_cid(replay_registry, online):
+    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": "NA"}, online=online)
+    assert p == Proposal(MORGAN, "NA", f"{CHEMICAL}pubchem_cid is NA", "morgan")
+    assert replay_registry.requests == []
 
 
 @pytest.mark.parametrize(
-    "hints, reason",
+    "hints, online, reason",
     [
-        ({}, f"no hint: {CHEMICAL}smiles"),
-        ({CHEMICAL + "smiles": "C1CC("}, "invalid SMILES"),
+        ({}, True, f"no hint: {CHEMICAL}pubchem_cid"),
+        (
+            {CHEMICAL + "smiles": ASPIRIN_SMILES},
+            True,
+            f"no hint: {CHEMICAL}pubchem_cid",
+        ),
+        (
+            {CHEMICAL + "pubchem_cid": ASPIRIN_PUBCHEM_CID},
+            False,
+            "lookup skipped (offline)",
+        ),
+        (
+            {CHEMICAL + "pubchem_cid": "PubChem:999999999"},
+            True,
+            f"invalid hint: {CHEMICAL}pubchem_cid",
+        ),
+        (
+            {CHEMICAL + "pubchem_cid": "aspirin"},
+            True,
+            f"invalid hint: {CHEMICAL}pubchem_cid",
+        ),
     ],
-    ids=["no-hint", "invalid"],
+    ids=[
+        "no-hint",
+        "smiles-is-not-the-input",
+        "offline",
+        "no-record-smiles",
+        "not-a-cid",
+    ],
 )
-def test_morgan_degrades_to_a_reasoned_none(hints, reason):
-    assert _one(MORGAN, hints=hints) == Proposal(MORGAN, None, reason, "morgan")
+def test_morgan_degrades_to_a_reasoned_none(replay_registry, hints, online, reason):
+    p = _one(MORGAN, hints=hints, online=online)
+    assert p == Proposal(MORGAN, None, reason, "morgan")
 
 
 def test_morgan_without_rdkit_names_the_extra(hide_rdkit):
-    p = _one(MORGAN, hints={CHEMICAL + "smiles": ASPIRIN_SMILES})
+    p = _one(MORGAN, hints={CHEMICAL + "pubchem_cid": ASPIRIN_PUBCHEM_CID})
     assert p == Proposal(
         MORGAN, None, "rdkit not installed (dca_helpers[chem])", "morgan"
     )
