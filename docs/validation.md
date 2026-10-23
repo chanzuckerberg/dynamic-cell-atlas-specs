@@ -276,7 +276,7 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 | Level-0 `t` scale is 1 when sampling is `variable` | MUST | new |
 | `dca` key present | MUST | new |
 | Channel count matches C axis size | SHOULD | new |
-| `normalization_statistics[*].timepoint_statistics`, when present, has an entry for every timepoint (T read from the level-0 shape) | MUST | new |
+| `normalization_statistics[*].timepoint_statistics`, when present, has keys exactly `"0"` to `"T-1"` as strings (T read from the level-0 shape) | MUST | new |
 
 **`DCAGroupMetadataV0_2`** (the `dca` root object): `version: Literal["0.2"], url, channels: list[DCAChannelMetadataV0_2], normalization_statistics`. Channel `index` values must be unique. Each channel carries `channel_type` (SHOULD be in `{fluorescence, labelfree, predicted}`, and SHOULD have `biological_annotation` when fluorescence/predicted) and an optional `biological_annotation.marker_type` (SHOULD be in a fixed vocabulary).
 

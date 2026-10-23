@@ -819,11 +819,12 @@ class DCAStoreSpecV0_2(BaseModel):
 
     # ------------------------------------------------------------------
     # normalization-statistics.rst § Channel Normalization Fields — MUST
-    # A present timepoint_statistics MUST have an entry for every timepoint.
+    # A present timepoint_statistics MUST have an entry for every timepoint, and
+    # its keys are timepoint indices, so it MUST have no others.
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def check_timepoint_statistics_complete(self) -> "DCAStoreSpecV0_2":
+    def check_timepoint_statistics_match(self) -> "DCAStoreSpecV0_2":
         if self.dca is None or not self.levels:
             return self
         n_timepoints = self.levels[0].shape[0]
@@ -844,6 +845,18 @@ class DCAStoreSpecV0_2(BaseModel):
                     f"missing {len(missing)} of {n_timepoints} timepoints "
                     f"(first missing: '{missing[0]}'). If present, it MUST contain "
                     "entries for all timepoints in the dataset "
+                    "(normalization-statistics.rst § Channel Normalization Fields)."
+                )
+            unexpected = sorted(
+                (k for k in tp_stats if k not in expected), key=lambda k: repr(k)
+            )
+            if unexpected:
+                errors.append(
+                    f"normalization_statistics['{channel}'].timepoint_statistics has "
+                    f"{len(unexpected)} keys that are not timepoint indices "
+                    f"'0' to '{n_timepoints - 1}' as strings "
+                    f"(first unexpected: {unexpected[0]!r}). Keys MUST be "
+                    "zero-based timepoint indices of the dataset "
                     "(normalization-statistics.rst § Channel Normalization Fields)."
                 )
         if errors:

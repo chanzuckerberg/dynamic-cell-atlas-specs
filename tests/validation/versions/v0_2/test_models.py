@@ -1603,9 +1603,10 @@ class TestTimepointStatisticsCompleteMust:
 
     def test_single_timepoint_requires_entry_zero(self):
         store = timepoint_store(1, ["1"])
-        errs = errors(validate_store(store))
-        assert len(errs) == 1
-        assert "first missing: '0'" in errs[0].message
+        messages = [e.message for e in errors(validate_store(store))]
+        assert len(messages) == 2
+        assert any("first missing: '0'" in m for m in messages)
+        assert any("first unexpected: '1'" in m for m in messages)
 
     def test_malformed_timepoint_statistics_is_not_a_completeness_error(self):
         store = timepoint_store(3, range(3))
@@ -1614,3 +1615,47 @@ class TestTimepointStatisticsCompleteMust:
             "timepoints" in e.message and "MUST contain" in e.message
             for e in errors(validate_store(store))
         )
+
+
+def with_extra_timepoint_key(store, key):
+    stats = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
+    store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"][key] = stats
+    return store
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsNoExtraKeysMust:
+    def test_index_equal_to_t_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "4")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: '4'" in errs[0].message
+        assert "'0' to '3'" in errs[0].message
+
+    def test_non_digit_key_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "foo")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: 'foo'" in errs[0].message
+
+    def test_non_canonical_index_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "01")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: '01'" in errs[0].message
+
+    def test_integer_keys_are_rejected(self):
+        store = timepoint_store(2, [])
+        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = {
+            0: {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0},
+            1: {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0},
+        }
+        messages = [e.message for e in errors(validate_store(store))]
+        assert any("Input should be a valid string" in m for m in messages)
+
+    def test_missing_and_unexpected_are_both_reported(self):
+        store = with_extra_timepoint_key(timepoint_store(3, [0, 1]), "7")
+        messages = [e.message for e in errors(validate_store(store))]
+        assert len(messages) == 2
+        assert any("missing 1 of 3 timepoints" in m for m in messages)
+        assert any("first unexpected: '7'" in m for m in messages)
