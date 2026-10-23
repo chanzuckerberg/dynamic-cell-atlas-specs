@@ -817,6 +817,39 @@ class DCAStoreSpecV0_2(BaseModel):
             )
         return self
 
+    # ------------------------------------------------------------------
+    # normalization-statistics.rst § Channel Normalization Fields — MUST
+    # A present timepoint_statistics MUST have an entry for every timepoint.
+    # ------------------------------------------------------------------
+
+    @model_validator(mode="after")
+    def check_timepoint_statistics_complete(self) -> "DCAStoreSpecV0_2":
+        if self.dca is None or not self.levels:
+            return self
+        n_timepoints = self.levels[0].shape[0]
+        expected = {str(t) for t in range(n_timepoints)}
+        errors: list[str] = []
+        for channel, entry in (
+            self.dca.normalization_statistics.model_extra or {}
+        ).items():
+            tp_stats = (
+                entry.get("timepoint_statistics") if isinstance(entry, dict) else None
+            )
+            if not isinstance(tp_stats, dict):
+                continue
+            missing = sorted(expected - set(tp_stats), key=int)
+            if missing:
+                errors.append(
+                    f"normalization_statistics['{channel}'].timepoint_statistics is "
+                    f"missing {len(missing)} of {n_timepoints} timepoints "
+                    f"(first missing: '{missing[0]}'). If present, it MUST contain "
+                    "entries for all timepoints in the dataset "
+                    "(normalization-statistics.rst § Channel Normalization Fields)."
+                )
+        if errors:
+            raise ValueError("\n".join(errors))
+        return self
+
 
 # ---------------------------------------------------------------------------
 # Label store-level model

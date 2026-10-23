@@ -1546,3 +1546,71 @@ class TestVariableTimeSampling:
             }
         )
         assert errors(validate_store(store)) == []
+
+
+# ---------------------------------------------------------------------------
+# normalization-statistics.rst § Channel Normalization Fields — MUST
+# timepoint_statistics, if present, covers every timepoint
+# ---------------------------------------------------------------------------
+
+
+def timepoint_store(n_timepoints, covered, channels=1):
+    store = valid_store(c=channels)
+    for level in store["levels"]:
+        level["shape"][0] = n_timepoints
+    stats = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
+    for channel in store["dca"]["normalization_statistics"].values():
+        channel["timepoint_statistics"] = {str(t): dict(stats) for t in covered}
+    return store
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsCompleteMust:
+    def test_full_coverage_passes(self):
+        store = timepoint_store(4, range(4))
+        assert errors(validate_store(store)) == []
+
+    def test_absent_timepoint_statistics_passes(self):
+        store = timepoint_store(4, range(4))
+        del store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"]
+        assert errors(validate_store(store)) == []
+
+    def test_partial_coverage_errors(self):
+        store = timepoint_store(100, range(50))
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "missing 50 of 100 timepoints" in errs[0].message
+        assert "first missing: '50'" in errs[0].message
+
+    def test_gap_in_coverage_errors(self):
+        store = timepoint_store(4, [0, 1, 3])
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first missing: '2'" in errs[0].message
+
+    def test_empty_timepoint_statistics_errors(self):
+        store = timepoint_store(3, [])
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "missing 3 of 3 timepoints" in errs[0].message
+
+    def test_each_incomplete_channel_is_reported(self):
+        store = timepoint_store(3, [0], channels=2)
+        errs = errors(validate_store(store))
+        assert len(errs) == 2
+        assert "['0']" in errs[0].message
+        assert "['1']" in errs[1].message
+
+    def test_single_timepoint_requires_entry_zero(self):
+        store = timepoint_store(1, ["1"])
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first missing: '0'" in errs[0].message
+
+    def test_malformed_timepoint_statistics_is_not_a_completeness_error(self):
+        store = timepoint_store(3, range(3))
+        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = []
+        assert not any(
+            "timepoints" in e.message and "MUST contain" in e.message
+            for e in errors(validate_store(store))
+        )
