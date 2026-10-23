@@ -1,0 +1,16 @@
+{
+ "body": {
+  "IdentifierList": {
+   "CID": [
+    2244
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"
+  },
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/cids/JSON"
+ },
+ "status_code": 200
+}

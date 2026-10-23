@@ -1,0 +1,16 @@
+{
+ "body": [
+  {
+   "id": "YFL039C",
+   "type": "gene"
+  }
+ ],
+ "request": {
+  "params": {
+   "content-type": "application/json",
+   "object_type": "gene"
+  },
+  "url": "https://rest.ensembl.org/xrefs/symbol/saccharomyces_cerevisiae/ACT1"
+ },
+ "status_code": 200
+}

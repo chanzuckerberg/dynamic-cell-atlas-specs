@@ -1142,7 +1142,7 @@ class Perturbation(ConfiguredBaseModel):
                             'cpg:Treatment_Primary_Treatment']} })
     description: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Study', 'Perturbation'],
          'exact_mappings': ['bioformats:Reagent.Description']} })
-    perturbation_identifier: Optional[str] = Field(default=None, description="""External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database — e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``); this generic slot records the source's own catalog id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'],
+    perturbation_identifier: Optional[str] = Field(default=None, description="""External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database — e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ensembl_gene_id``); this generic slot records the source's own catalog id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'],
          'exact_mappings': ['bioformats:Reagent.ReagentIdentifier',
                             'cpg:Treatment_Broad_Sample']} })
     modality: PerturbationModality = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation'],
@@ -1164,14 +1164,15 @@ class ChemicalPerturbation(ConfiguredBaseModel):
          'exact_mappings': ['cpg:compound_inchi']} })
     smiles: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation'],
          'exact_mappings': ['cpg:Treatment_SMILES']} })
-    pubchem_cid: Optional[str] = Field(default=None, description="""PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block — the value names its own database.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['PubChem:0'],
+    pubchem_cid: Optional[str] = Field(default=None, description="""PubChem Compound ID as a colon CURIE (e.g. \"PubChem:2244\"), resolvable via the ``prefixes`` block, so the value names its own database. The CID is the form (salt or parent) that the vendor catalog entry cited in the source describes, where one is cited (that catalog id is the namespaced ``perturbation_identifier``); otherwise the form the source names. The ``na`` sentinel when the compound has no PubChem record (e.g. an in-house compound). Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['PubChem:0'],
          'domain_of': ['ChemicalPerturbation'],
          'exact_mappings': ['cpg:Treatment_PubChem_CID']} })
+    morgan_fingerprint: Optional[str] = Field(default=None, description="""Morgan (ECFP4-like) fingerprint computed from the PubChem record of ``pubchem_cid`` (the record's ``SMILES`` property): RDKit Morgan generator, radius 2, 2048 bits, chirality not included, encoded as the FPS hex string of the bit vector (RDKit ``DataStructs.BitVectToFPSText``), 512 lowercase hex characters. Pinned so values are comparable across datasets. No salt stripping: the fingerprint is of whatever structure the CID record holds, salt or parent, as chosen for ``pubchem_cid``. The field's provenance records the RDKit version used (e.g. in its citation). ``na`` when ``pubchem_cid`` is ``na``. Beta in v0.2: recommended when ``modality`` is ``compound``, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
     chembl_id: Optional[str] = Field(default=None, description="""ChEMBL compound identifier (e.g. \"CHEMBL25\"). Self-identifying — ChEMBL accessions carry the ``CHEMBL`` prefix in the value itself.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ChemicalPerturbation']} })
 
     @field_validator('pubchem_cid')
     def pattern_pubchem_cid(cls, v):
-        pattern=re.compile(r"^PubChem:\d+$")
+        pattern=re.compile(r"^(PubChem:\d+|na)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1182,20 +1183,33 @@ class ChemicalPerturbation(ConfiguredBaseModel):
             raise ValueError(err_msg)
         return v
 
+    @field_validator('morgan_fingerprint')
+    def pattern_morgan_fingerprint(cls, v):
+        pattern=re.compile(r"^([0-9a-f]{512}|na)$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid morgan_fingerprint format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid morgan_fingerprint format: {v}"
+            raise ValueError(err_msg)
+        return v
+
 
 class GeneticPerturbation(ConfiguredBaseModel):
     """
-    Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.
+    Genetic-target identifiers for CRISPR / ORF / shRNA / miRNA / siRNA perturbations. The gene target is what CellPainting Gallery cannot express (it has only the ``Treatment_Category`` enum); these fields fill that gap.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
-    gene_symbol: Optional[str] = Field(default=None, description="""HGNC gene symbol (e.g. \"TP53\") — the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
+    gene_symbol: Optional[str] = Field(default=None, description="""Gene symbol (e.g. \"TP53\"), the human-readable label for ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_symbol', 'cpg:orf_symbol']} })
-    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") — the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
+    ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\"), an optional cross-reference to ``ensembl_gene_id``.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
          'exact_mappings': ['cpg:crispr_ncbi_gene_id', 'cpg:orf_ncbi_gene_id']} })
-    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene id as a colon CURIE (e.g. \"ensembl:ENSG00000141510\"); optional cross-map. Resolvable via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
+    ensembl_gene_id: Optional[str] = Field(default=None, description="""Ensembl gene stable id as a colon CURIE, for any species Ensembl annotates, resolvable via the ``prefixes`` block: e.g. human \"ensembl:ENSG00000141510\", mouse \"ensembl:ENSMUSG00000059552\", fly \"ensembl:FBgn0003996\", worm \"ensembl:WBGene00006759\", yeast \"ensembl:YFL039C\"; Locus Reference Genomic (``LRG_``) ids are not Ensembl stable ids and are rejected. The ``na`` sentinel when the reagent targets no gene (non-targeting guide, scrambled siRNA, LacZ / luciferase ORF). Beta in v0.2: recommended when ``modality`` is crispr / orf / shrna / mirna / sirna, and validators warn when it is missing; v0.3 makes the warning an error.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['ensembl:0'], 'domain_of': ['GeneticPerturbation']} })
     transcript_refseq: Optional[str] = Field(default=None, description="""NCBI RefSeq transcript id (ORF).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_transcript']} })
     vector: Optional[str] = Field(default=None, description="""Expression / delivery vector (ORF; sgRNA vector).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'], 'exact_mappings': ['cpg:orf_vector']} })
     insert_length: Optional[int] = Field(default=None, description="""ORF insert length (bp).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation'],
@@ -1218,7 +1232,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
 
     @field_validator('ensembl_gene_id')
     def pattern_ensembl_gene_id(cls, v):
-        pattern=re.compile(r"^ensembl:ENSG\d+$")
+        pattern=re.compile(r"^(ensembl:(?!LRG_)[A-Za-z0-9][A-Za-z0-9._-]*|na)$")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):

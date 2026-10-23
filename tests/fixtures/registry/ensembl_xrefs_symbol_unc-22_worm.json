@@ -1,0 +1,16 @@
+{
+ "body": [
+  {
+   "id": "WBGene00006759",
+   "type": "gene"
+  }
+ ],
+ "request": {
+  "params": {
+   "content-type": "application/json",
+   "object_type": "gene"
+  },
+  "url": "https://rest.ensembl.org/xrefs/symbol/caenorhabditis_elegans/unc-22"
+ },
+ "status_code": 200
+}

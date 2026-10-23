@@ -1,0 +1,16 @@
+{
+ "body": {
+  "IdentifierList": {
+   "CID": [
+    2244
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "name": "aspirin"
+  },
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/cids/JSON"
+ },
+ "status_code": 200
+}

@@ -26,7 +26,13 @@ from dca_helpers.validation.result import Severity
 from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     DCAExperimentalMetadataV0_2,
     validate_experimental_metadata_v0_2,
+    validate_perturbation_v0_2,
     validate_well_perturbation_v0_2,
+)
+from tests.conftest import (
+    ASPIRIN_MORGAN_FINGERPRINT,
+    ASPIRIN_PUBCHEM_CID,
+    TP53_ENSEMBL_GENE_ID,
 )
 
 
@@ -237,7 +243,10 @@ def test_valid_perturbation_block_has_no_issues():
         {
             "perturbation_id": "Broad:BRD-K12345678",
             "modality": "compound",
-            "chemical": {"pubchem_cid": "PubChem:2244"},
+            "chemical": {
+                "pubchem_cid": ASPIRIN_PUBCHEM_CID,
+                "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+            },
         }
     )
     _covered(obj, "perturbation.control_class", "perturbation.definition")
@@ -278,6 +287,217 @@ def test_nested_perturbation_modality_rule_is_enforced():
         if i.severity is Severity.ERROR
     ]
     assert any("chemical" in e.message for e in errors)
+
+
+def test_nested_compound_without_fingerprint_warns():
+    # compound -> chemical.morgan_fingerprint is beta in v0.2: a warning, not an error.
+    obj = _base_object()
+    obj["perturbation"] = _treated(
+        {
+            "perturbation_id": "P1",
+            "modality": "compound",
+            "chemical": {"pubchem_cid": ASPIRIN_PUBCHEM_CID},
+        }
+    )
+    _covered(obj, "perturbation.control_class", "perturbation.definition")
+    issues = validate_experimental_metadata_v0_2(obj)
+    assert _error_messages(issues) == []
+    assert _warning_messages(issues) == [
+        "definition.chemical.morgan_fingerprint is missing for modality 'compound' "
+        "(beta in v0.2; required from v0.3)"
+    ]
+
+
+# --- beta identifiers inside the typed modality blocks (issue #17) ----------
+# SHOULDs in v0.2 (warnings); v0.3 promotes them to MUSTs.
+
+
+def _genetic(modality: str = "crispr", **genetic) -> dict:
+    block = {"gene_symbol": "TP53", "ensembl_gene_id": TP53_ENSEMBL_GENE_ID}
+    block.update(genetic)
+    return {
+        "perturbation_id": "P1",
+        "modality": modality,
+        "genetic": {k: v for k, v in block.items() if v is not None},
+    }
+
+
+def _chemical(**chemical) -> dict:
+    block = {
+        "pubchem_cid": ASPIRIN_PUBCHEM_CID,
+        "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+    }
+    block.update(chemical)
+    return {
+        "perturbation_id": "P1",
+        "modality": "compound",
+        "chemical": {k: v for k, v in block.items() if v is not None},
+    }
+
+
+def _error_messages(issues) -> list[str]:
+    return [i.message for i in issues if i.severity is Severity.ERROR]
+
+
+def _warning_messages(issues) -> list[str]:
+    return [i.message for i in issues if i.severity is Severity.WARNING]
+
+
+def test_compound_with_cid_and_fingerprint_is_valid():
+    assert validate_perturbation_v0_2(_chemical()) == []
+
+
+def test_compound_without_pubchem_cid_warns():
+    issues = validate_perturbation_v0_2(_chemical(pubchem_cid=None))
+    assert _error_messages(issues) == []
+    assert _warning_messages(issues) == [
+        "chemical.pubchem_cid is missing for modality 'compound' "
+        "(beta in v0.2; required from v0.3)"
+    ]
+
+
+def test_compound_without_morgan_fingerprint_warns():
+    issues = validate_perturbation_v0_2(_chemical(morgan_fingerprint=None))
+    assert _error_messages(issues) == []
+    assert any("morgan_fingerprint" in m for m in _warning_messages(issues))
+
+
+def test_compound_missing_both_ids_warns_for_both():
+    issues = validate_perturbation_v0_2(
+        _chemical(pubchem_cid=None, morgan_fingerprint=None, inchikey="X")
+    )
+    assert _error_messages(issues) == []
+    warnings = _warning_messages(issues)
+    assert len(warnings) == 2
+    assert any("pubchem_cid" in m for m in warnings)
+    assert any("morgan_fingerprint" in m for m in warnings)
+
+
+def test_compound_without_chemical_block_still_fails():
+    issues = validate_perturbation_v0_2(
+        {"perturbation_id": "P1", "modality": "compound"}
+    )
+    assert any("chemical is required" in m for m in _error_messages(issues))
+    assert _warning_messages(issues) == []
+
+
+@pytest.mark.parametrize("modality", ["crispr", "orf", "shrna", "mirna", "sirna"])
+def test_genetic_modality_without_genetic_block_still_fails(modality):
+    issues = validate_perturbation_v0_2({"perturbation_id": "P1", "modality": modality})
+    assert any("genetic is required" in m for m in _error_messages(issues))
+
+
+@pytest.mark.parametrize(
+    "fingerprint",
+    [
+        ASPIRIN_MORGAN_FINGERPRINT[:511],
+        ASPIRIN_MORGAN_FINGERPRINT + "0",
+        ASPIRIN_MORGAN_FINGERPRINT.upper().replace("0", "A"),
+        ASPIRIN_MORGAN_FINGERPRINT[:-1] + "g",
+        "NA",
+    ],
+    ids=["511-chars", "513-chars", "uppercase", "non-hex", "uppercase-NA"],
+)
+def test_malformed_morgan_fingerprint_fails(fingerprint):
+    issues = validate_perturbation_v0_2(_chemical(morgan_fingerprint=fingerprint))
+    assert any(
+        "morgan_fingerprint" in i.loc for i in issues if i.severity is Severity.ERROR
+    )
+
+
+@pytest.mark.parametrize("cid", ["2244", "PubChem:", "pubchem:2244", "N/A", "NA"])
+def test_malformed_pubchem_cid_fails(cid):
+    issues = validate_perturbation_v0_2(_chemical(pubchem_cid=cid))
+    assert any("pubchem_cid" in i.loc for i in issues if i.severity is Severity.ERROR)
+
+
+@pytest.mark.parametrize("modality", ["crispr", "orf", "shrna", "mirna", "sirna"])
+def test_genetic_modality_without_ensembl_gene_id_warns(modality):
+    issues = validate_perturbation_v0_2(_genetic(modality, ensembl_gene_id=None))
+    assert _error_messages(issues) == []
+    assert _warning_messages(issues) == [
+        f"genetic.ensembl_gene_id is missing for modality '{modality}' "
+        "(beta in v0.2; required from v0.3)"
+    ]
+
+
+def test_na_counts_as_populated_for_every_beta_identifier():
+    assert validate_perturbation_v0_2(_genetic(ensembl_gene_id="na")) == []
+    assert (
+        validate_perturbation_v0_2(_chemical(pubchem_cid="na", morgan_fingerprint="na"))
+        == []
+    )
+
+
+@pytest.mark.parametrize(
+    "ensembl_gene_id",
+    [
+        TP53_ENSEMBL_GENE_ID,
+        "ensembl:ENSMUSG00000059552",
+        "ensembl:ENSDARG00000068096",
+        "ensembl:FBgn0003996",
+        "ensembl:WBGene00006759",
+        "ensembl:YFL039C",
+    ],
+    ids=["human", "mouse", "zebrafish", "fly", "worm", "yeast"],
+)
+def test_ensembl_gene_id_pattern_accepts_every_species(ensembl_gene_id):
+    assert validate_perturbation_v0_2(_genetic(ensembl_gene_id=ensembl_gene_id)) == []
+
+
+@pytest.mark.parametrize(
+    "ensembl_gene_id",
+    [
+        "ENSG00000141510",
+        "ensembl:",
+        "ensembl:-FBgn0003996",
+        "ensembl:TP 53",
+        "Ensembl:ENSG00000141510",
+        "ensembl:LRG_321",
+        "NA",
+    ],
+    ids=[
+        "no-prefix",
+        "empty-id",
+        "leading-dash",
+        "space",
+        "prefix-case",
+        "lrg",
+        "uppercase-NA",
+    ],
+)
+def test_ensembl_gene_id_pattern_rejects_malformed_ids(ensembl_gene_id):
+    issues = validate_perturbation_v0_2(_genetic(ensembl_gene_id=ensembl_gene_id))
+    assert any(
+        "ensembl_gene_id" in i.loc for i in issues if i.severity is Severity.ERROR
+    )
+
+
+@pytest.mark.parametrize("modality", ["physical", "biological", "other", "unknown"])
+def test_other_modalities_require_no_typed_ids(modality):
+    assert (
+        validate_perturbation_v0_2({"perturbation_id": "P1", "modality": modality})
+        == []
+    )
+
+
+def test_well_perturbation_missing_ids_warn_on_definition_and_cotreatment():
+    row = _well_row(
+        definition=_chemical(morgan_fingerprint=None),
+        cotreatment=_genetic(ensembl_gene_id=None),
+    )
+    issues = validate_well_perturbation_v0_2(row)
+    assert _error_messages(issues) == []
+    assert [m.split(" ")[0] for m in _warning_messages(issues)] == [
+        "definition.chemical.morgan_fingerprint",
+        "cotreatment.genetic.ensembl_gene_id",
+    ]
+
+
+def test_a_cotreatment_warning_does_not_mask_a_missing_definition():
+    row = _well_row(cotreatment=_genetic(ensembl_gene_id=None))
+    issues = validate_well_perturbation_v0_2(row)
+    assert any("definition is required" in m for m in _error_messages(issues))
 
 
 def test_perturbation_paths_join_provenance_coverage():
@@ -321,7 +541,10 @@ def _compound(**overrides) -> dict:
     pert = {
         "perturbation_id": "Broad:BRD-K12345678",
         "modality": "compound",
-        "chemical": {"pubchem_cid": "PubChem:2244"},
+        "chemical": {
+            "pubchem_cid": ASPIRIN_PUBCHEM_CID,
+            "morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT,
+        },
     }
     pert.update(overrides)
     return pert

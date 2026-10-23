@@ -2,6 +2,7 @@
 
 import copy
 import importlib
+import sys
 
 import pytest
 
@@ -59,9 +60,17 @@ def min_dca_block(**sections) -> dict:
 def replay_registry(monkeypatch) -> RegistryReplay:
     """Serve recorded registry responses wherever ``propose`` makes an HTTP call."""
     replay = RegistryReplay()
-    propose_module = importlib.import_module("dca_helpers.metadata.propose")
-    monkeypatch.setattr(propose_module, "_get_with_retry", replay)
+    for name in ("propose", "perturbation_ids"):
+        module = importlib.import_module(f"dca_helpers.metadata.{name}")
+        monkeypatch.setattr(module, "_get_with_retry", replay)
     monkeypatch.setattr(ontology_lookup, "_get_with_retry", replay)
     ontology_lookup.lookup_ols.cache_clear()
     yield replay
     ontology_lookup.lookup_ols.cache_clear()
+
+
+@pytest.fixture
+def hide_rdkit(monkeypatch) -> None:
+    """Make ``import rdkit`` fail, as it does without the ``chem`` extra."""
+    for name in ("rdkit", "rdkit.Chem", "rdkit.DataStructs"):
+        monkeypatch.setitem(sys.modules, name, None)

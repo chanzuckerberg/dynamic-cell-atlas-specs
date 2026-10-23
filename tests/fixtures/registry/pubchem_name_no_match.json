@@ -1,0 +1,18 @@
+{
+ "body": {
+  "Fault": {
+   "Code": "PUGREST.NotFound",
+   "Details": [
+    "No CID found that matches the given name"
+   ],
+   "Message": "No CID found"
+  }
+ },
+ "request": {
+  "params": {
+   "name": "not a real compound name"
+  },
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/cids/JSON"
+ },
+ "status_code": 404
+}

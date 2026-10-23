@@ -1,0 +1,20 @@
+{
+ "body": [
+  {
+   "id": "ENSG00000141510",
+   "type": "gene"
+  },
+  {
+   "id": "LRG_321",
+   "type": "gene"
+  }
+ ],
+ "request": {
+  "params": {
+   "content-type": "application/json",
+   "object_type": "gene"
+  },
+  "url": "https://rest.ensembl.org/xrefs/symbol/homo_sapiens/TP53"
+ },
+ "status_code": 200
+}

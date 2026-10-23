@@ -1,6 +1,7 @@
-"""Replay recorded Cellosaurus and OLS responses at the HTTP boundary.
+"""Replay recorded registry responses at the HTTP boundary.
 
-Each file in ``tests/fixtures/registry`` holds one real response and the request
+Registries: Cellosaurus, OLS, Ensembl and PubChem. Each file in
+``tests/fixtures/registry`` holds one real response and the request
 (URL plus params) that produced it. An unrecorded request raises, so a test can
 never pass on an empty answer.
 """

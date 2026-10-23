@@ -38,7 +38,11 @@ dev = [
     # cross-checks the runtime Pydantic rules against the generated JSON Schema.
     # Not a runtime dependency — the validator enforces the Pydantic models.
     "jsonschema>=4.18",
+    # Test-only: the Morgan fingerprint tests need RDKit, the optional `chem` extra.
+    "dca_helpers[chem]",
 ]
+# RDKit computes the pinned Morgan fingerprint (dca_helpers.metadata.morgan_fingerprint).
+chem = ["rdkit>=2024.3"]
 docs = [
     "sphinx>=5.0",
     "pydata-sphinx-theme",

@@ -19,6 +19,11 @@ import importlib.util
 import pytest
 
 from dca_helpers.validation.result import Severity
+from tests.conftest import (
+    ASPIRIN_MORGAN_FINGERPRINT,
+    ASPIRIN_PUBCHEM_CID,
+    TP53_ENSEMBL_GENE_ID,
+)
 from tests.validation.json_schema_oracle import (
     ROOT_CLASS,
     experimental_block_keys,
@@ -58,6 +63,35 @@ def test_compound_modality_requires_chemical_block():
 def test_genetic_modality_requires_genetic_block():
     for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
         assert _requires({"modality": modality}, "Perturbation", "genetic"), modality
+
+
+def test_typed_ids_are_not_required_by_the_json_schema():
+    # Beta in v0.2: the runtime validator warns, the JSON Schema requires nothing.
+    compound = {"modality": "compound", "chemical": {"inchikey": "X"}}
+    assert not _requires(compound, "Perturbation", "pubchem_cid")
+    assert not _requires(compound, "Perturbation", "morgan_fingerprint")
+    for modality in ("crispr", "orf", "shrna", "mirna", "sirna"):
+        genetic = {"modality": modality, "genetic": {"gene_symbol": "TP53"}}
+        assert not _requires(genetic, "Perturbation", "ensembl_gene_id"), modality
+
+
+@pytest.mark.parametrize(
+    "block, slot",
+    [
+        ({"chemical": {"pubchem_cid": "na"}}, "pubchem_cid"),
+        ({"chemical": {"morgan_fingerprint": "na"}}, "morgan_fingerprint"),
+        ({"genetic": {"ensembl_gene_id": "na"}}, "ensembl_gene_id"),
+        ({"chemical": {"pubchem_cid": ASPIRIN_PUBCHEM_CID}}, "pubchem_cid"),
+        (
+            {"chemical": {"morgan_fingerprint": ASPIRIN_MORGAN_FINGERPRINT}},
+            "morgan_fingerprint",
+        ),
+        ({"genetic": {"ensembl_gene_id": TP53_ENSEMBL_GENE_ID}}, "ensembl_gene_id"),
+    ],
+)
+def test_typed_id_patterns_accept_curies_and_na(block, slot):
+    msgs = _messages({"modality": "other", **block}, "Perturbation")
+    assert not any(slot in m or "does not match" in m for m in msgs), msgs
 
 
 def test_physical_modality_requires_neither_reagent_block():

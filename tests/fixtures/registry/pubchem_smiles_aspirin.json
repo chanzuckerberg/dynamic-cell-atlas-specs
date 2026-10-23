@@ -1,0 +1,16 @@
+{
+ "body": {
+  "IdentifierList": {
+   "CID": [
+    2244
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "smiles": "CC(=O)Oc1ccccc1C(=O)O"
+  },
+  "url": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/cids/JSON"
+ },
+ "status_code": 200
+}

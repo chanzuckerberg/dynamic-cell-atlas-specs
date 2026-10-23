@@ -34,8 +34,9 @@ Three things here are not obvious from the code:
 
     ``WellPerturbation`` remains a root object that this container never nests (it is
     the well-level *placement* of the same assignment), so its rules stay reachable
-    via the standalone ``validate_well_perturbation_v0_2`` — which the store walk
-    still does not call (see validator.rst). ``validate_perturbation_v0_2`` likewise
+    via the standalone ``validate_well_perturbation_v0_2``, which the store walk calls
+    on each well group's ``dca.well_perturbation`` block for the experimental spec
+    versions (``validator._process_one_well``). ``validate_perturbation_v0_2`` likewise
     stays for validating a bare codebook entry.
 
   * Why ``provenance`` map values need ``field_path`` injected before validation:
@@ -94,6 +95,11 @@ _JUMP_CP_DATASET = re.compile(r".*[Jj][Uu][Mm][Pp][ _-]?[Cc][Pp].*")
 _GENETIC_MODALITIES: frozenset[str] = frozenset(
     {"crispr", "orf", "shrna", "mirna", "sirna"}
 )
+
+# Identifiers each typed block SHOULD carry: beta in v0.2 (a warning), required from
+# v0.3. The ``na`` sentinel (a reagent with no identifier) counts as populated.
+_COMPOUND_BETA_IDS: tuple[str, ...] = ("pubchem_cid", "morgan_fingerprint")
+_GENETIC_BETA_IDS: tuple[str, ...] = ("ensembl_gene_id",)
 
 # Cross-modality v1.1.0 keys the development-stage ontology to the organism. It names a
 # stage ontology for exactly these five; every other organism falls back to a UBERON
@@ -370,6 +376,9 @@ class _PerturbationV0_2(_PerturbationBase):  # type: ignore[misc, valid-type]
     (``crispr`` / ``orf`` / ``shrna`` / ``mirna`` / ``sirna``) requires the
     ``genetic`` block. The remaining modalities (``physical`` / ``biological`` /
     ``other`` / ``unknown``) require neither.
+
+    The identifiers inside those blocks are SHOULDs in v0.2; see
+    ``_missing_beta_ids``.
     """
 
     @model_validator(mode="after")
@@ -390,6 +399,38 @@ class _PerturbationV0_2(_PerturbationBase):  # type: ignore[misc, valid-type]
                 f"(crispr / orf / shrna / mirna / sirna; got modality='{modality}')"
             )
         return self
+
+
+def _missing_beta_ids(perturbation: object, prefix: str = "") -> list[str]:
+    """One ``[SHOULD]`` line per identifier the modality's block lacks.
+
+    Beta in v0.2 (``chemical.pubchem_cid`` / ``chemical.morgan_fingerprint`` for
+    ``compound``, ``genetic.ensembl_gene_id`` for a genetic modality); promote to MUST
+    in v0.3. The ``na`` sentinel counts as populated. A missing block yields nothing here, since
+    ``_PerturbationV0_2`` already rejects it.
+
+    Not a ``Perturbation`` validator: raised from a nested model, a SHOULD fails that
+    model's construction and so skips the parent's MUST rules (a treated row with no
+    ``definition`` would pass on a warning about its ``cotreatment``). The assignment
+    raises these after its own MUST instead, and ``validate_perturbation_v0_2`` adds
+    them for a bare codebook entry.
+    """
+    modality = _enum_value(getattr(perturbation, "modality", None))
+    if modality == "compound":
+        block_name, fields = "chemical", _COMPOUND_BETA_IDS
+    elif modality in _GENETIC_MODALITIES:
+        block_name, fields = "genetic", _GENETIC_BETA_IDS
+    else:
+        return []
+    block = getattr(perturbation, block_name, None)
+    if not _is_populated(block):
+        return []
+    return [
+        f"[SHOULD] {prefix}{block_name}.{field} is missing for modality "
+        f"'{modality}' (beta in v0.2; required from v0.3)"
+        for field in fields
+        if not _is_populated(getattr(block, field, None))
+    ]
 
 
 class _PerturbationAssignmentV0_2(_PerturbationAssignmentBase):  # type: ignore[misc, valid-type]
@@ -416,6 +457,20 @@ class _PerturbationAssignmentV0_2(_PerturbationAssignmentBase):  # type: ignore[
                     "definition is required when control_class is not 'empty' "
                     "(treated and control material must name a perturbation)"
                 )
+        return self
+
+    # Declared after the MUST rule above so the accumulator cannot mask it (see
+    # _BiosampleV0_2).
+    @model_validator(mode="after")
+    def _beta_identifier_warnings(self):
+        """Warn for each beta identifier ``definition`` / ``cotreatment`` lacks."""
+        warnings = [
+            line
+            for slot in ("definition", "cotreatment")
+            for line in _missing_beta_ids(getattr(self, slot, None), f"{slot}.")
+        ]
+        if warnings:
+            raise ValueError("\n".join(warnings))
         return self
 
 
@@ -691,19 +746,28 @@ def validate_perturbation_v0_2(obj: dict) -> list[Issue]:
 
     Enforces the ``modality`` ⇒ typed-block rules (``compound`` ⇒ ``chemical``,
     genetic ⇒ ``genetic``) on top of the generated model's type / enum / required
-    checks. Empty list when the object fully conforms. For a bare codebook entry:
-    a ``Perturbation`` reached through ``ExperimentalMetadata.perturbation`` is
-    already checked by ``validate_experimental_metadata_v0_2``.
+    checks, and warns when the block lacks its beta identifiers. Empty list when the
+    object fully conforms. For a bare codebook entry: a ``Perturbation`` reached
+    through ``ExperimentalMetadata.perturbation`` is already checked by
+    ``validate_experimental_metadata_v0_2``.
     """
     import pydantic
 
+    from dca_helpers.validation.result import Issue, Severity
     from dca_helpers.validation.validator import _convert_errors
 
     try:
-        _PerturbationV0_2.model_validate(obj)
+        perturbation = _PerturbationV0_2.model_validate(obj)
     except pydantic.ValidationError as exc:
         return _convert_errors(exc)
-    return []
+    return [
+        Issue(
+            loc=(),
+            message=line[len("[SHOULD]") :].strip(),
+            severity=Severity.WARNING,
+        )
+        for line in _missing_beta_ids(perturbation)
+    ]
 
 
 def validate_well_perturbation_v0_2(obj: dict) -> list[Issue]:
