@@ -1,6 +1,13 @@
 """Shared helpers for the DCA metadata test suite."""
 
 import copy
+import importlib
+
+import pytest
+
+from dca_helpers.validation import ontology_lookup
+
+from ._registry import RegistryReplay
 
 #: The canonical minimal valid DCA v0.2 block in ``[dca.*]`` shape
 #: (U2OS / CVCL:0042). Never handed out directly (use :func:`min_dca_block`).
@@ -46,3 +53,15 @@ def min_dca_block(**sections) -> dict:
     block = copy.deepcopy(_DCA_MIN)
     block.update(sections)
     return block
+
+
+@pytest.fixture
+def replay_registry(monkeypatch) -> RegistryReplay:
+    """Serve recorded registry responses wherever ``propose`` makes an HTTP call."""
+    replay = RegistryReplay()
+    propose_module = importlib.import_module("dca_helpers.metadata.propose")
+    monkeypatch.setattr(propose_module, "_get_with_retry", replay)
+    monkeypatch.setattr(ontology_lookup, "_get_with_retry", replay)
+    ontology_lookup.lookup_ols.cache_clear()
+    yield replay
+    ontology_lookup.lookup_ols.cache_clear()
