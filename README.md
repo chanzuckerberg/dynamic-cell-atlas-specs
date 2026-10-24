@@ -102,19 +102,12 @@ Validate every FOV before writing any. A bad FOV found after half the store is w
 | `cellosaurus` | `biosample.cell_line_id`, `biosample.tissue` | `biosample.cell_line_name` |
 | `ols_label` | any `*.label` | the sibling `*.ontology_term_id` |
 | `ncbitaxon` | `perturbation.definition.perturbation_id` | `perturbation.definition.name` |
-| `ensembl` | `perturbation.definition.genetic.ensembl_gene_id` | `...genetic.ncbi_gene_id`, then `...genetic.gene_symbol` (optional `species`) |
-| `pubchem` | `perturbation.definition.chemical.pubchem_cid` | `...chemical.smiles`, `.inchikey` or `perturbation.definition.name` |
-| `morgan` | `perturbation.definition.chemical.morgan_fingerprint` | `...chemical.smiles` |
 
 ```bash
 dca-propose --field biosample.cell_line_id --hint biosample.cell_line_name=U2OS
-dca-propose --offline --output json --field perturbation.definition.chemical.morgan_fingerprint \
-    --hint perturbation.definition.chemical.smiles='CC(=O)Oc1ccccc1C(=O)O'
 ```
 
-`--offline` skips registry lookups. `morgan` runs offline and needs RDKit from the `chem` extra. Install it from a checkout with `pip install ".[chem]"`, or pin a release with `pip install "dca_helpers[chem] @ git+https://github.com/chanzuckerberg/dynamic-cell-atlas-specs.git@<tag>"`.
-
-The same lookups are importable from `dca_helpers.metadata`: `search_ensembl(symbol, species=...)`, `ensembl_from_ncbi_gene`, `search_pubchem` (exactly one keyword: `name=`, `smiles=` or `inchikey=`) and `morgan_fingerprint(smiles)`. The first three return CURIE lists. The fingerprint is pinned to the RDKit Morgan generator with radius 2, 2048 bits and no chirality, encoded as FPS hex.
+`--offline` skips registry lookups and reports each field as skipped. The same lookups are importable from `dca_helpers.metadata` as `search_cellosaurus(name)` and `search_ncbitaxon(name)`, which return `(CURIE, label)` pairs.
 
 ## Building the Documentation
 
