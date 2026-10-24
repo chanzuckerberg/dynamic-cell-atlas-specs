@@ -799,34 +799,36 @@ class DCAStoreSpecV0_2(BaseModel):
     # ------------------------------------------------------------------
     # channel-metadata.rst § Location in Zarr store — SHOULD
     # channels SHOULD include metadata for each channel in the image.
-    # ------------------------------------------------------------------
-
-    @model_validator(mode="after")
-    def check_channel_count_matches_c_axis(self) -> "DCAStoreSpecV0_2":
-        if self.dca is None or not self.levels:
-            return self
-        c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
-        n_channel_entries = len(self.dca.channels)
-        if n_channel_entries != c_axis_size:
-            suffix = "y" if n_channel_entries == 1 else "ies"
-            raise ValueError(
-                f"[SHOULD] dca.channels has {n_channel_entries} entr{suffix} "
-                f"but the C axis at level 0 has size {c_axis_size}. "
-                f"channels SHOULD cover all {c_axis_size} channels "
-                f"(channel-metadata.rst § Location in Zarr store)."
-            )
-        return self
-
-    # ------------------------------------------------------------------
     # normalization-statistics.rst § Channel Normalization Fields — MUST
     # A present timepoint_statistics MUST have an entry for every timepoint, and
     # its keys are timepoint indices, so it MUST have no others.
+    # One accumulating validator: pydantic stops the chain at the first raise, so
+    # separate validators would let the SHOULD hide the MUST.
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def check_timepoint_statistics_match(self) -> "DCAStoreSpecV0_2":
+    def check_dca_matches_arrays(self) -> "DCAStoreSpecV0_2":
         if self.dca is None or not self.levels:
             return self
+        errors = self._channel_count_errors() + self._timepoint_statistics_errors()
+        if errors:
+            raise ValueError("\n".join(errors))
+        return self
+
+    def _channel_count_errors(self) -> list[str]:
+        c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
+        n_channel_entries = len(self.dca.channels)
+        if n_channel_entries == c_axis_size:
+            return []
+        suffix = "y" if n_channel_entries == 1 else "ies"
+        return [
+            f"[SHOULD] dca.channels has {n_channel_entries} entr{suffix} "
+            f"but the C axis at level 0 has size {c_axis_size}. "
+            f"channels SHOULD cover all {c_axis_size} channels "
+            f"(channel-metadata.rst § Location in Zarr store)."
+        ]
+
+    def _timepoint_statistics_errors(self) -> list[str]:
         n_timepoints = self.levels[0].shape[0]
         expected = {str(t) for t in range(n_timepoints)}
         errors: list[str] = []
@@ -859,9 +861,7 @@ class DCAStoreSpecV0_2(BaseModel):
                     "zero-based timepoint indices of the dataset "
                     "(normalization-statistics.rst § Channel Normalization Fields)."
                 )
-        if errors:
-            raise ValueError("\n".join(errors))
-        return self
+        return errors
 
 
 # ---------------------------------------------------------------------------

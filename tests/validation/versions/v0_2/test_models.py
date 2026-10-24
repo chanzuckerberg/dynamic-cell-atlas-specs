@@ -1659,3 +1659,36 @@ class TestTimepointStatisticsNoExtraKeysMust:
         assert len(messages) == 2
         assert any("missing 1 of 3 timepoints" in m for m in messages)
         assert any("first unexpected: '7'" in m for m in messages)
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsNotHiddenByChannelCount:
+    def test_channel_count_warning_does_not_hide_missing_timepoints(self):
+        store = timepoint_store(100, range(50))
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert any(
+            i.severity == Severity.WARNING and "dca.channels has 0 entries" in i.message
+            for i in issues
+        )
+        assert any(
+            i.severity == Severity.ERROR and "missing 50 of 100 timepoints" in i.message
+            for i in issues
+        )
+
+    def test_channel_count_warning_does_not_hide_unexpected_keys(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "9")
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert any(i.severity == Severity.WARNING for i in issues)
+        assert any(
+            i.severity == Severity.ERROR and "first unexpected: '9'" in i.message
+            for i in issues
+        )
+
+    def test_channel_count_warning_alone_stays_a_warning(self):
+        store = timepoint_store(4, range(4))
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert errors(issues) == []
+        assert len([i for i in issues if i.severity == Severity.WARNING]) == 1
