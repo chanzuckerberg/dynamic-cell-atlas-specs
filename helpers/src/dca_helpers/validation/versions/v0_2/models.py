@@ -797,11 +797,9 @@ class DCAStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # channel-metadata.rst § Location in Zarr store — SHOULD
-    # channels SHOULD include metadata for each channel in the image.
+    # channel-metadata.rst § Location in Zarr store — SHOULD (channel count)
     # normalization-statistics.rst § Channel Normalization Fields — MUST
-    # A present timepoint_statistics MUST have an entry for every timepoint, and
-    # its keys are timepoint indices, so it MUST have no others.
+    # (timepoint_statistics keys)
     # One accumulating validator: pydantic stops the chain at the first raise, so
     # separate validators would let the SHOULD hide the MUST.
     # ------------------------------------------------------------------
@@ -810,14 +808,15 @@ class DCAStoreSpecV0_2(BaseModel):
     def check_dca_matches_arrays(self) -> "DCAStoreSpecV0_2":
         if self.dca is None or not self.levels:
             return self
-        errors = self._channel_count_errors() + self._timepoint_statistics_errors()
+        errors = self._channel_count_errors(self.dca)
+        errors += self._timepoint_statistics_errors(self.dca)
         if errors:
             raise ValueError("\n".join(errors))
         return self
 
-    def _channel_count_errors(self) -> list[str]:
+    def _channel_count_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
         c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
-        n_channel_entries = len(self.dca.channels)
+        n_channel_entries = len(dca.channels)
         if n_channel_entries == c_axis_size:
             return []
         suffix = "y" if n_channel_entries == 1 else "ies"
@@ -828,13 +827,11 @@ class DCAStoreSpecV0_2(BaseModel):
             f"(channel-metadata.rst § Location in Zarr store)."
         ]
 
-    def _timepoint_statistics_errors(self) -> list[str]:
+    def _timepoint_statistics_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
         n_timepoints = self.levels[0].shape[0]
         expected = {str(t) for t in range(n_timepoints)}
         errors: list[str] = []
-        for channel, entry in (
-            self.dca.normalization_statistics.model_extra or {}
-        ).items():
+        for channel, entry in (dca.normalization_statistics.model_extra or {}).items():
             tp_stats = (
                 entry.get("timepoint_statistics") if isinstance(entry, dict) else None
             )

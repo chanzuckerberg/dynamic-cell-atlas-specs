@@ -1550,7 +1550,6 @@ class TestVariableTimeSampling:
 
 # ---------------------------------------------------------------------------
 # normalization-statistics.rst § Channel Normalization Fields — MUST
-# timepoint_statistics, if present, covers every timepoint
 # ---------------------------------------------------------------------------
 
 
@@ -1608,13 +1607,13 @@ class TestTimepointStatisticsCompleteMust:
         assert any("first missing: '0'" in m for m in messages)
         assert any("first unexpected: '1'" in m for m in messages)
 
-    def test_malformed_timepoint_statistics_is_not_a_completeness_error(self):
+    @pytest.mark.parametrize("bad", [[], "x", 5])
+    def test_malformed_timepoint_statistics_is_reported_by_the_field_type(self, bad):
         store = timepoint_store(3, range(3))
-        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = []
-        assert not any(
-            "timepoints" in e.message and "MUST contain" in e.message
-            for e in errors(validate_store(store))
-        )
+        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = bad
+        messages = [e.message for e in errors(validate_store(store))]
+        assert any("timepoint_statistics" in m for m in messages)
+        assert not any("MUST contain entries" in m for m in messages)
 
 
 def with_extra_timepoint_key(store, key):
