@@ -467,3 +467,52 @@ class TestSpecVersion:
         data["spec_version"] = "0.2"
         with pytest.raises(pydantic.ValidationError):
             DCAStoreSpecV0_1.model_validate(data)
+
+
+@pytest.mark.unit
+class TestLevelRulesAreReportedTogether:
+    BIG_ARRAY = [1, 1, 512, 1024, 1024]
+    SMALL_SHARD = [1, 1, 128, 128, 128]
+
+    def test_chunk_warning_does_not_hide_shard_error(self):
+        issues = validate_level(
+            valid_level(
+                shape=self.BIG_ARRAY,
+                chunk_shape=[1, 1, 64, 64, 64],
+                shard_shape=self.SMALL_SHARD,
+            )
+        )
+        assert any("recommended 1 MB" in i.message for i in warnings(issues))
+        assert any("shard size" in i.message for i in errors(issues))
+
+    def test_channel_chunk_warning_does_not_hide_shard_error(self):
+        issues = validate_level(
+            valid_level(
+                shape=[1, 2, 512, 1024, 1024],
+                chunk_shape=[1, 2, 128, 128, 128],
+                shard_shape=[1, 2, 128, 128, 128],
+            )
+        )
+        assert any("Channel chunk size" in i.message for i in warnings(issues))
+        assert any("shard size" in i.message for i in errors(issues))
+
+    def test_every_warning_and_error_is_reported(self):
+        issues = validate_level(
+            valid_level(
+                shape=self.BIG_ARRAY,
+                chunk_shape=[1, 2, 32, 32, 64],
+                shard_shape=self.SMALL_SHARD,
+                codec_level=9,
+                dtype="int32",
+            )
+        )
+        messages = [i.message for i in issues]
+        for fragment in (
+            "recommended 1 MB",
+            "Channel chunk size",
+            "shard size",
+            "Compression level",
+            "dtype",
+        ):
+            assert any(fragment in m for m in messages), fragment
+        assert len(errors(issues)) == 1
