@@ -276,10 +276,11 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 | Level-0 `t` scale is 1 when sampling is `variable` | MUST | new |
 | `dca` key present | MUST | new |
 | Channel count matches C axis size | SHOULD | new |
+| `normalization_statistics[*].timepoint_statistics`, when present, has keys exactly `"0"` to `"T-1"` as strings (T read from the level-0 shape) | MUST | new |
 
 **`DCAGroupMetadataV0_2`** (the `dca` root object): `version: Literal["0.2"], url, channels: list[DCAChannelMetadataV0_2], normalization_statistics`. Channel `index` values must be unique. Each channel carries `channel_type` (SHOULD be in `{fluorescence, labelfree, predicted}`, and SHOULD have `biological_annotation` when fluorescence/predicted) and an optional `biological_annotation.marker_type` (SHOULD be in a fixed vocabulary).
 
-**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes). `normalization_statistics.timepoint_statistics` keys are not checked for covering all T timepoints — partial coverage passes silently.
+**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes).
 
 **Experimental metadata** (`dca.study`/`dca.biosample`/`dca.provenance`/etc.) is validated separately by `versions/v0_2/experimental_metadata.py` against a LinkML-generated model, enforcing conditional rules (e.g. `source_kind: agent ⇒ citation` required) that `gen-pydantic` records but doesn't itself enforce, plus a provenance-coverage check with no LinkML equivalent. See that module's docstring for why each piece is structured the way it is — it's a self-contained sub-design, not part of the core array/channel pipeline described here.
 
