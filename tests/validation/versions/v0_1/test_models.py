@@ -516,3 +516,10 @@ class TestLevelRulesAreReportedTogether:
         ):
             assert any(fragment in m for m in messages), fragment
         assert len(errors(issues)) == 1
+
+    def test_shard_error_does_not_hide_shard_warnings(self):
+        shard = [64, 1, 4096, 4096, 4096]
+        issues = validate_level(valid_level(shape=shard, shard_shape=shard))
+        assert any("must be < 5 TB" in i.message for i in errors(issues))
+        assert any("recommended 5 GB" in i.message for i in warnings(issues))
+        assert any("Shard size in z" in i.message for i in warnings(issues))

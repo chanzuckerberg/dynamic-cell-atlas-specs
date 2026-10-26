@@ -175,18 +175,20 @@ class DCAScaleLevelSpec(BaseModel):
         shard_bytes = _nbytes(self.shard_shape, self.dtype)
         array_bytes = _nbytes(self.shape, self.dtype)
 
+        errors: list[str] = []
+
         # MUST: < 5 TB
         if shard_bytes >= SHARD_MAX_BYTES:
-            return [
+            errors.append(
                 f"Uncompressed shard size {shard_bytes / 1024**4:.1f} TB must be < 5 TB"
-            ]
+            )
 
         # MUST: >= 1 GB when array itself >= 1 GB
         if array_bytes >= SHARD_MIN_BYTES and shard_bytes < SHARD_MIN_BYTES:
-            return [
+            errors.append(
                 f"Uncompressed shard size {shard_bytes / 1024**3:.2f} GB must be >= 1 GB "
                 f"for arrays >= 1 GB (array is {array_bytes / 1024**3:.2f} GB)"
-            ]
+            )
 
         warnings: list[str] = []
 
@@ -216,7 +218,7 @@ class DCAScaleLevelSpec(BaseModel):
                 f"minimum of {TIME_SHARD_MIN_RECOMMENDED}"
             )
 
-        return warnings
+        return errors + warnings
 
     # ------------------------------------------------------------------
     # Compression recommendations — SHOULD
@@ -403,49 +405,4 @@ class DCAStoreSpecV0_1(BaseModel):
         messages = downsampling_factor_messages(self.levels)
         if messages:
             raise ValueError("\n".join(messages))
-        return self
-
-        must_errors: list[str] = []
-        should_warnings: list[str] = []
-
-        for i in range(len(self.levels) - 1):
-            fine = self.levels[i].shape
-            coarse = self.levels[i + 1].shape
-            chunks = self.levels[i].chunk_shape
-
-            for dim_idx, dim_name in enumerate(AXES_REQUIRED):
-                fine_dim = fine[dim_idx]
-                coarse_dim = coarse[dim_idx]
-                chunk_dim = chunks[dim_idx]
-
-                # Avoid divide-by-zero for degenerate dims
-                if coarse_dim == 0:
-                    continue
-
-                factor = fine_dim / coarse_dim
-
-                if dim_name in NON_SPATIAL_AXES:
-                    # MUST: t and c must not be downsampled
-                    if fine_dim != coarse_dim:
-                        must_errors.append(
-                            f"Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
-                        )
-                else:
-                    # SHOULD: spatial dims should have factor 2. Downsampling
-                    # legitimately stops once an axis reaches its chunk floor, so
-                    # skip when fine_dim is already <= its chunk size.
-                    if fine_dim > chunk_dim and not math.isclose(
-                        factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
-                    ):
-                        should_warnings.append(
-                            f"[SHOULD] Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"should be {DOWNSAMPLING_FACTOR_RECOMMENDED} "
-                            f"(got {fine_dim}/{coarse_dim}≈{factor:.2f})"
-                        )
-
-        all_issues = must_errors + should_warnings
-        if all_issues:
-            raise ValueError("\n".join(all_issues))
-
         return self

@@ -19,7 +19,12 @@ import pytest
 
 from dca_helpers.validation.result import Severity
 
-from .test_models import valid_store, validate_store
+from .test_models import (
+    valid_label_store,
+    valid_store,
+    validate_label_store,
+    validate_store,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -204,3 +209,19 @@ def test_every_level_spec_rule_is_reported_together():
 @pytest.mark.xfail(strict=True, reason=SLICE_2)
 def test_all_defects_are_reported_together():
     assert unreported(DEFECTS) == []
+
+
+def test_label_store_reports_every_rule_together():
+    store = copy.deepcopy(valid_label_store())
+    for level, size in zip(store["levels"], (16384, 8192, 4096)):
+        level["shape"][2:] = [size, size, size]
+    store["levels"][1]["shape"][0] = 2
+    store["levels"][2]["shape"][2] = store["levels"][1]["shape"][2] // 4
+    issues = validate_label_store(store)
+    expected = [
+        (Severity.ERROR, "No scale level has all spatial"),
+        (Severity.ERROR, "downsampling factor for 't'"),
+        (Severity.WARNING, "downsampling factor for 'z'"),
+    ]
+    for severity, marker in expected:
+        assert any(i.severity == severity and marker in i.message for i in issues)

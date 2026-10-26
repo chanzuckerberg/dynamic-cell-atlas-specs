@@ -608,7 +608,7 @@ class DCAStoreSpecV0_2(BaseModel):
             # Relaxed to SHOULD for a declared variable-rate acquisition: OME-NGFF
             # v0.5 has no 'frame' unit, so a store whose frames are unevenly spaced
             # cannot name one honestly. The declaration is not free — it pulls in the
-            # timestamps MUSTs in check_variable_time_sampling below.
+            # timestamps MUSTs in _variable_time_sampling_errors below.
             if self._declares_variable_sampling():
                 errors.append(
                     "[SHOULD] Temporal axis 't' has no unit, which "
