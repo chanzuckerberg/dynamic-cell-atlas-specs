@@ -26,7 +26,7 @@ METADATA = {
 
 
 def test_value_is_used_directly():
-    assert resolve({"value": "LINCS Cell Painting"}, METADATA) == "LINCS Cell Painting"
+    assert resolve({"value": "Example screen"}, METADATA) == "Example screen"
 
 
 def test_column_reads_the_group_s_metadata():
@@ -58,7 +58,7 @@ def test_map_canonicalises_a_numeric_cell_to_its_string_key(cell):
 
     A base read from a `column` keeps its dtype, so `binning = 2` (int, or an integral
     float) never matched the string key `"2"` the config authored — the miss raised "not
-    in its map" (`config/jump_cp.toml`'s `binning`). `_map_lookup` canonicalises to `str`.
+    in its map" for a `binning` column. `_map_lookup` canonicalises to `str`.
     """
     node = {"column": "binning", "map": {"1": "none", "2": "binned_2x2"}}
     assert resolve(node, {"binning": cell}) == "binned_2x2"
@@ -103,7 +103,7 @@ def test_a_nested_spec_inside_value_resolves():
 @pytest.mark.parametrize(
     ("node", "expected"),
     [
-        pytest.param([{"value": "LINCS"}], "LINCS", id="one-item-leaf-collapses"),
+        pytest.param([{"value": "screen"}], "screen", id="one-item-leaf-collapses"),
         pytest.param(
             [{"value": "a"}, {"value": "b"}], ["a", "b"], id="multi-item-stays"
         ),
@@ -152,7 +152,7 @@ def test_a_schema_object_with_a_value_field_is_not_a_leaf():
 # Blank cells decline, and take their subtree with them
 # ---------------------------------------------------------------------------
 
-# The LINCS shape: a definition whose id and mechanism come from columns, beside a
+# A compound-screen shape: a definition whose id and mechanism come from columns, beside a
 # literal `modality` that the spec makes conditional on a `chemical` block.
 DEFINITION = {
     "perturbation_id": {"column": "broad_sample"},
@@ -384,7 +384,7 @@ def test_an_empty_provenance_table_stays_empty():
     assert resolve_dca({"provenance": {}}, {}) == {"provenance": {}}
 
 
-# The idr0022 empty-well shape: two column-gated records that blank together beside
+# An empty-well shape: two column-gated records that blank together beside
 # literal records for fields that never prune. The gates are load-bearing — a record
 # whose field pruned is a MUST error — but before the per-record exemption their
 # blanks aggregated up and pruned the WHOLE map, literal records included, failing
@@ -558,7 +558,7 @@ def test_a_should_severity_finding_warns_and_the_build_proceeds(
 
     Two of v0.2.4's rules are SHOULDs that `dca_helpers` implements as a *raising* model
     validator. `validate_dca` used to construct the model to normalise the block and
-    treat any raise as fatal, so those two aborted the whole manifest build — on JUMP-CP,
+    treat any raise as fatal, so those two aborted the whole manifest build —
     on a human-reviewed `tissue` term, with a message reading `[SHOULD]`. Both rules live
     in the same raising validator, so covering only one would let a narrower fix pass —
     hence the parametrization over both.
