@@ -41,8 +41,8 @@ DCAScaleLevelSpecV0_2 inherits them directly without modification.
 
 from __future__ import annotations
 
-import math
-from typing import Literal
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numpy as np
 import pydantic
@@ -51,14 +51,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from dca_helpers.validation.versions.v0_1.models import (
     AXES_ACCEPTED,
     AXES_REQUIRED,
-    DOWNSAMPLING_FACTOR_RECOMMENDED,
     LABEL_DTYPE_RECOMMENDED,
-    NON_SPATIAL_AXES,
     SPATIAL_AXES,
 )
 from dca_helpers.validation.versions.v0_1.models import (
     DCAScaleLevelSpec as DCAScaleLevelSpecV0_1,
 )
+from dca_helpers.validation.versions.v0_1.models import downsampling_factor_messages
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -226,15 +225,14 @@ class DCALabelScaleLevelSpecV0_2(DCAScaleLevelSpecV0_2):
     """
 
     # array-standard.rst § Data Types — SHOULD (label-specific override)
-    @model_validator(mode="after")
-    def check_dtype_recommendation(self) -> "DCALabelScaleLevelSpecV0_2":
+    def _dtype_messages(self) -> list[str]:
         normalized = str(np.dtype(self.dtype))
         if normalized != LABEL_DTYPE_RECOMMENDED:
-            raise ValueError(
+            return [
                 f"[SHOULD] dtype '{self.dtype}' is unusual for a label array; "
                 f"label arrays should use {LABEL_DTYPE_RECOMMENDED}"
-            )
-        return self
+            ]
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -508,6 +506,30 @@ class DCAGroupMetadataV0_2(BaseModel):
         return self
 
 
+def coarse_level_messages(levels: Sequence[Any]) -> list[str]:
+    """MUST message when no level has every spatial dimension within the cap.
+
+    ``levels`` is any sequence of objects with ``path`` and ``shape`` in
+    [t, c, z, y, x] order. Shared by the image and label store models.
+    """
+    for level in levels:
+        _t, _c, z, y, x = level.shape
+        if (
+            z <= COARSE_LEVEL_MAX_SPATIAL
+            and y <= COARSE_LEVEL_MAX_SPATIAL
+            and x <= COARSE_LEVEL_MAX_SPATIAL
+        ):
+            return []
+    shapes = [(lv.path, lv.shape) for lv in levels]
+    return [
+        f"No scale level has all spatial dimensions ≤ "
+        f"{COARSE_LEVEL_MAX_SPATIAL}. "
+        f"MUST include a level-of-detail where every spatial dim ≤ "
+        f"{COARSE_LEVEL_MAX_SPATIAL} "
+        f"(array-standard.rst § Multiresolution). Level shapes: {shapes}"
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Store-level model (root entry point)
 # ---------------------------------------------------------------------------
@@ -559,93 +581,12 @@ class DCAStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # array-standard.rst § Multiresolution — MUST
-    # Replaces v0.1's "≥ 3 levels" rule with a size-based requirement:
-    # at least one level must have every spatial dimension ≤ 2048.
-    # ------------------------------------------------------------------
-
-    @model_validator(mode="after")
-    def check_coarse_level_exists(self) -> "DCAStoreSpecV0_2":
-        for level in self.levels:
-            _t, _c, z, y, x = level.shape
-            if (
-                z <= COARSE_LEVEL_MAX_SPATIAL
-                and y <= COARSE_LEVEL_MAX_SPATIAL
-                and x <= COARSE_LEVEL_MAX_SPATIAL
-            ):
-                return self
-        shapes = [(lv.path, lv.shape) for lv in self.levels]
-        raise ValueError(
-            f"No scale level has all spatial dimensions ≤ "
-            f"{COARSE_LEVEL_MAX_SPATIAL}. "
-            f"MUST include a level-of-detail where every spatial dim ≤ "
-            f"{COARSE_LEVEL_MAX_SPATIAL} "
-            f"(array-standard.rst § Multiresolution). Level shapes: {shapes}"
-        )
-
-    # ------------------------------------------------------------------
-    # array-standard.rst § Multiresolution — MUST (t/c), SHOULD (spatial)
-    # Downsampling factors: t and c MUST be 1; spatial SHOULD be ≈ 2.
-    # ------------------------------------------------------------------
-
-    @model_validator(mode="after")
-    def check_downsampling_factors(self) -> "DCAStoreSpecV0_2":
-        if len(self.levels) < 2:
-            return self
-
-        must_errors: list[str] = []
-        should_warnings: list[str] = []
-
-        for i in range(len(self.levels) - 1):
-            fine = self.levels[i].shape
-            coarse = self.levels[i + 1].shape
-            chunks = self.levels[i].chunk_shape
-
-            for dim_idx, dim_name in enumerate(AXES_REQUIRED):
-                fine_dim = fine[dim_idx]
-                coarse_dim = coarse[dim_idx]
-                chunk_dim = chunks[dim_idx]
-
-                if coarse_dim == 0:
-                    continue
-
-                factor = fine_dim / coarse_dim
-
-                if dim_name in NON_SPATIAL_AXES:
-                    # array-standard.rst § Multiresolution — MUST:
-                    # t and c not downsampled
-                    if fine_dim != coarse_dim:
-                        must_errors.append(
-                            f"Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
-                        )
-                else:
-                    # array-standard.rst § Multiresolution — SHOULD: spatial factor ≈ 2.
-                    # Downsampling legitimately stops once an axis reaches its chunk
-                    # floor, so skip when fine_dim is already <= its chunk size.
-                    if fine_dim > chunk_dim and not math.isclose(
-                        factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
-                    ):
-                        should_warnings.append(
-                            f"[SHOULD] Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"should be {DOWNSAMPLING_FACTOR_RECOMMENDED} "
-                            f"(got {fine_dim}/{coarse_dim}≈{factor:.2f})"
-                        )
-
-        all_issues = must_errors + should_warnings
-        if all_issues:
-            raise ValueError("\n".join(all_issues))
-
-        return self
-
-    # ------------------------------------------------------------------
     # ome-zarr-metadata.rst § Units — MUST
     # Spatial (z, y, x) and temporal (t) axes must declare units from the
     # OME-NGFF v0.5 vocabulary. Channel axis (c) has no unit requirement.
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_axis_units(self) -> "DCAStoreSpecV0_2":
+    def _axis_unit_messages(self) -> list[str]:
         units_lower = {k.lower(): v for k, v in self.axis_units.items()}
         errors: list[str] = []
         for ax in sorted(SPATIAL_AXES):
@@ -690,15 +631,8 @@ class DCAStoreSpecV0_2(BaseModel):
                 "temporal unit vocabulary "
                 "(ome-zarr-metadata.rst § Units)."
             )
-        # Folded into this validator rather than added as a second one: pydantic
-        # aborts the remaining mode="after" validators at the first raise, so a
-        # variable-sampling store would emit the SHOULD above and never reach the
-        # timestamps MUSTs — losing exactly the checks that make the relaxation
-        # verifiable. One accumulating validator reports both.
         errors.extend(self._variable_time_sampling_errors())
-        if errors:
-            raise ValueError("\n".join(errors))
-        return self
+        return errors
 
     def _acquisition(self) -> DCAAcquisitionViewV0_2 | None:
         """This group's ``dca.acquisition`` view, when it carries one."""
@@ -797,21 +731,26 @@ class DCAStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # channel-metadata.rst § Location in Zarr store — SHOULD (channel count)
-    # normalization-statistics.rst § Channel Normalization Fields — MUST
-    # (timepoint_statistics keys)
-    # One accumulating validator: pydantic stops the chain at the first raise, so
-    # separate validators would let the SHOULD hide the MUST.
+    # Every store-level rule, in one validator. Pydantic stops the after-validator
+    # chain at the first raise, so separate validators would let an earlier
+    # message hide a later MUST.
+    #   array-standard.rst § Multiresolution (coarse level; downsampling)
+    #   ome-zarr-metadata.rst § Units
+    #   channel-metadata.rst § Location in Zarr store (channel count)
+    #   normalization-statistics.rst § Channel Normalization Fields
+    #     (timepoint_statistics keys)
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def check_dca_matches_arrays(self) -> "DCAStoreSpecV0_2":
-        if self.dca is None or not self.levels:
-            return self
-        errors = self._channel_count_errors(self.dca)
-        errors += self._timepoint_statistics_errors(self.dca)
-        if errors:
-            raise ValueError("\n".join(errors))
+    def check_store_rules(self) -> "DCAStoreSpecV0_2":
+        messages = coarse_level_messages(self.levels)
+        messages += downsampling_factor_messages(self.levels)
+        messages += self._axis_unit_messages()
+        if self.dca is not None and self.levels:
+            messages += self._channel_count_errors(self.dca)
+            messages += self._timepoint_statistics_errors(self.dca)
+        if messages:
+            raise ValueError("\n".join(messages))
         return self
 
     def _channel_count_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
@@ -903,76 +842,14 @@ class DCALabelStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # array-standard.rst § Multiresolution — MUST
-    # At least one level must have every spatial dimension ≤ 2048.
+    # array-standard.rst § Multiresolution — MUST (coarse level; t/c factor),
+    # SHOULD (spatial factor). One validator, for the same reason as the image store.
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def check_coarse_level_exists(self) -> "DCALabelStoreSpecV0_2":
-        for level in self.levels:
-            _t, _c, z, y, x = level.shape
-            if (
-                z <= COARSE_LEVEL_MAX_SPATIAL
-                and y <= COARSE_LEVEL_MAX_SPATIAL
-                and x <= COARSE_LEVEL_MAX_SPATIAL
-            ):
-                return self
-        shapes = [(lv.path, lv.shape) for lv in self.levels]
-        raise ValueError(
-            f"No scale level has all spatial dimensions ≤ "
-            f"{COARSE_LEVEL_MAX_SPATIAL}. "
-            f"MUST include a level-of-detail where every spatial dim ≤ "
-            f"{COARSE_LEVEL_MAX_SPATIAL} "
-            f"(array-standard.rst § Multiresolution). Level shapes: {shapes}"
-        )
-
-    # ------------------------------------------------------------------
-    # array-standard.rst § Multiresolution — MUST (t/c), SHOULD (spatial)
-    # ------------------------------------------------------------------
-
-    @model_validator(mode="after")
-    def check_downsampling_factors(self) -> "DCALabelStoreSpecV0_2":
-        if len(self.levels) < 2:
-            return self
-
-        must_errors: list[str] = []
-        should_warnings: list[str] = []
-
-        for i in range(len(self.levels) - 1):
-            fine = self.levels[i].shape
-            coarse = self.levels[i + 1].shape
-            chunks = self.levels[i].chunk_shape
-
-            for dim_idx, dim_name in enumerate(AXES_REQUIRED):
-                fine_dim = fine[dim_idx]
-                coarse_dim = coarse[dim_idx]
-                chunk_dim = chunks[dim_idx]
-
-                if coarse_dim == 0:
-                    continue
-
-                factor = fine_dim / coarse_dim
-
-                if dim_name in NON_SPATIAL_AXES:
-                    if fine_dim != coarse_dim:
-                        must_errors.append(
-                            f"Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
-                        )
-                else:
-                    # Downsampling legitimately stops once an axis reaches its chunk
-                    # floor, so skip when fine_dim is already <= its chunk size.
-                    if fine_dim > chunk_dim and not math.isclose(
-                        factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
-                    ):
-                        should_warnings.append(
-                            f"[SHOULD] Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"should be {DOWNSAMPLING_FACTOR_RECOMMENDED} "
-                            f"(got {fine_dim}/{coarse_dim}≈{factor:.2f})"
-                        )
-
-        all_issues = must_errors + should_warnings
-        if all_issues:
-            raise ValueError("\n".join(all_issues))
-
+    def check_store_rules(self) -> "DCALabelStoreSpecV0_2":
+        messages = coarse_level_messages(self.levels)
+        messages += downsampling_factor_messages(self.levels)
+        if messages:
+            raise ValueError("\n".join(messages))
         return self
