@@ -184,6 +184,39 @@ class TestPerChannelForm:
         channels = {"a": {"method": "slice"}}
         _invalid(_per_channel(channels=channels), "MUST give z_start")
 
+    def test_stepped_window_records_first_plane_kept(self):
+        # focus 19, 20 planes below, step 2: planes -1, 1, 3, ... -> kept from 1.
+        channels = {"n": {"method": "mean", "z_start": 1, "z_end": 59, "z_step": 2}}
+        _valid(_per_channel(channels=channels, focus=None))
+
+    def test_focus_not_found_is_null(self):
+        _valid(_per_channel(focus={"channel": "Phase3D", "per": "fov", "z": None}))
+        _valid(
+            _per_channel(
+                focus={
+                    "channel": "Phase3D",
+                    "per": "timepoint",
+                    "z_per_t": [19, None, 20],
+                }
+            )
+        )
+
+    def test_focus_plane_outside_the_source_errors(self):
+        _invalid(
+            _per_channel(focus={"channel": "Phase3D", "per": "fov", "z": 90}),
+            "outside the 86-plane source",
+        )
+        _invalid(
+            _per_channel(
+                focus={
+                    "channel": "Phase3D",
+                    "per": "timepoint",
+                    "z_per_t": [19, 99, 20],
+                }
+            ),
+            "outside the 86-plane source",
+        )
+
     def test_focus_per_fov_needs_its_plane(self):
         _invalid(_per_channel(focus={"channel": "Phase3D", "per": "fov"}), "focus.z")
 

@@ -840,6 +840,10 @@ def _image_facts(node_dict: dict, dca: object) -> "ImageFacts | None":
     if "shape" not in level0 or "dtype" not in level0 or "axes" not in node_dict:
         return None
     projection = dca.get("projection") if isinstance(dca, dict) else None
+    image_data = dca.get("image_data") if isinstance(dca, dict) else None
+    image_data = image_data if isinstance(image_data, dict) else {}
+    steps = image_data.get("processing_variant")
+    description = image_data.get("processing_description")
     return ImageFacts(
         axes=tuple(a.lower() for a in node_dict["axes"]),
         level0_shape=tuple(level0["shape"]),
@@ -853,6 +857,12 @@ def _image_facts(node_dict: dict, dca: object) -> "ImageFacts | None":
             for c in ((dca.get("channels") if isinstance(dca, dict) else None) or [])
             if isinstance(c, dict) and isinstance(c.get("name"), str)
         ),
+        processing_variant=(
+            tuple(steps)
+            if isinstance(steps, list) and all(isinstance(x, str) for x in steps)
+            else None
+        ),
+        processing_description=description if isinstance(description, str) else None,
     )
 
 

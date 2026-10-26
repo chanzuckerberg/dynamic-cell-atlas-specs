@@ -8,7 +8,8 @@ with its source using the ImageFacts collected during validation, so it needs no
 second read of either store.
 
 A store named after a 3D sibling in the run (``plate_01_proj.ome.zarr`` /
-``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``) is a projection of it, so its
+``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``, or the same with ``.zarr``) is
+a projection of it, so its
 image groups MUST carry ``dca.projection`` with ``source_store`` → otherwise ERROR. A
 projection that names no source and has no such sibling was projected before deposit,
 and none of the checks below apply to it.
@@ -32,6 +33,9 @@ For each projection store that names a ``source_store``:
     name) is a source channel; ``focus.channel`` is a source channel → otherwise ERROR;
   - dtype equals the source's when every method is ``max`` / ``slice``,
     and is otherwise the source's or a floating-point type → otherwise ERROR.
+  - processing record: ``processing_variant`` starts with the source's steps and
+    continues with projection steps only, and ``processing_description`` equals the
+    source's → otherwise ERROR.
   A source with z of size 1 → WARNING (nothing to project).
 
 With ``require_projection`` (``dca-validate --require-projection``), additionally:
@@ -53,15 +57,29 @@ from dataclasses import dataclass, field
 
 from dca_helpers.validation.discovery import is_zarr_store
 from dca_helpers.validation.result import Issue, Severity, ZarrNodeValidationResult
+from dca_helpers.validation.versions.v0_3.experimental_metadata import PROJECTION_STEPS
 from dca_helpers.validation.versions.v0_3.models import (
     VALUE_PRESERVING_METHODS,
     projection_methods,
 )
 from dca_helpers.validation.zarr_node import ZarrNodeType
 
+# Store extensions in use: DCA writes .ome.zarr; some producers (e.g. biahub) write .zarr.
+STORE_EXTENSIONS = (".ome.zarr", ".zarr")
 PROJECTION_STORE_SUFFIX = "_proj.ome.zarr"
 # Accepted for a projection whose every channel uses max (the v0.2-era name).
 MAX_PROJECTION_STORE_SUFFIX = "_mip.ome.zarr"
+
+
+def _split_projection_name(base: str) -> "tuple[str, str, str] | None":
+    """``plate_01_proj.ome.zarr`` -> (``plate_01``, ``_proj``, ``.ome.zarr``); ``None``
+    when the name has no projection marker before a known extension."""
+    for ext in STORE_EXTENSIONS:
+        for marker in ("_proj", "_mip"):
+            if base.endswith(marker + ext):
+                return base[: -len(marker + ext)], marker, ext
+    return None
+
 
 # Results that are not image stores and never take part in pairing.
 _NON_IMAGE_NODE_TYPES = frozenset(
@@ -232,6 +250,7 @@ def _compare_image(
                 f"{where}: level-0 '{ax}' scale {mv} differs from the source's "
                 f"{sv}; it MUST be equal.",
             )
+    _compare_image_data(where, mip, m, s)
     z_dim_source = (m.projection or {}).get("z_dim_source")
     if isinstance(z_dim_source, int) and z_dim_source != src_z:
         _add(
@@ -240,6 +259,48 @@ def _compare_image(
             ("dca", "projection", "z_dim_source"),
             f"{where}: z_dim_source is {z_dim_source} but the source's level-0 z "
             f"is {src_z}.",
+        )
+
+
+def _compare_image_data(where, mip, m, s) -> None:
+    """The projection's processing record extends its source's (projections.rst §
+    Processing variant): the source's steps first, then only projection steps; and
+    ``processing_description`` copied unchanged."""
+    src_steps = list(s.processing_variant or [])
+    if m.processing_variant is not None and s.processing_variant is not None:
+        # "raw" means no processing, so a projection of a raw stack lists only its
+        # projection steps.
+        prefix = [] if src_steps == ["raw"] else src_steps
+        steps = list(m.processing_variant)
+        if steps[: len(prefix)] != prefix:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("dca", "image_data", "processing_variant"),
+                f"{where}: processing_variant {steps} does not start with the source's "
+                f"steps {prefix}; a projection MUST list its source's steps followed by "
+                "its projection steps.",
+            )
+        else:
+            extra = [x for x in steps[len(prefix) :] if x not in PROJECTION_STEPS]
+            if extra:
+                _add(
+                    mip,
+                    Severity.ERROR,
+                    ("dca", "image_data", "processing_variant"),
+                    f"{where}: processing_variant lists {extra} after the source's steps; "
+                    "only projection steps may follow them.",
+                )
+    if (
+        s.processing_description is not None
+        and m.processing_description != s.processing_description
+    ):
+        _add(
+            mip,
+            Severity.ERROR,
+            ("dca", "image_data", "processing_description"),
+            f"{where}: processing_description differs from the source's; a projection "
+            "MUST copy it unchanged.",
         )
 
 
@@ -333,20 +394,15 @@ def _check_projection_store(
         )
     )
     max_only = store_methods == {"max"}
-    if not (
-        base.endswith(PROJECTION_STORE_SUFFIX)
-        or (max_only and base.endswith(MAX_PROJECTION_STORE_SUFFIX))
-    ):
+    parts = _split_projection_name(base)
+    if parts is None or (parts[1] == "_mip" and not max_only):
         _add(
             anchor,
             Severity.WARNING,
             ("projection", "store_name"),
-            f"Projection store name should end in '{PROJECTION_STORE_SUFFIX}'"
-            + (
-                f" (or '{MAX_PROJECTION_STORE_SUFFIX}', as every channel uses max)"
-                if max_only
-                else ""
-            )
+            "Projection store name should insert '_proj' before its extension "
+            f"(e.g. '{PROJECTION_STORE_SUFFIX}')"
+            + (" or '_mip', as every channel uses max" if max_only else "")
             + " (projections.rst § Store Layout).",
         )
 
@@ -409,21 +465,29 @@ def _check_projection_store(
     return target
 
 
+def _projection_name_for(source_base: str) -> str:
+    """The recommended projection store name for a source store name."""
+    for ext in STORE_EXTENSIONS:
+        if source_base.endswith(ext):
+            return source_base[: -len(ext)] + "_proj" + ext
+    return source_base + "_proj"
+
+
 def _sibling_source(root: str, stores: dict[str, _Store]) -> str | None:
     """The 3D store in the run that ``root`` is named after, if any.
 
     ``plate_01_proj.ome.zarr`` / ``plate_01_mip.ome.zarr`` next to a 3D, non-projection
-    ``plate_01.ome.zarr`` (projections.rst § Projections made before deposit).
+    ``plate_01.ome.zarr``, or the same with ``.zarr`` (projections.rst § Projections made
+    before deposit).
     """
-    base = posixpath.basename(root)
-    for suffix in (PROJECTION_STORE_SUFFIX, MAX_PROJECTION_STORE_SUFFIX):
-        if base.endswith(suffix):
-            candidate = posixpath.join(
-                posixpath.dirname(root), base[: -len(suffix)] + ".ome.zarr"
-            )
-            source = stores.get(candidate)
-            if source is not None and source.is_3d and not source.projection_images:
-                return candidate
+    parts = _split_projection_name(posixpath.basename(root))
+    if parts is None:
+        return None
+    stem, _, ext = parts
+    candidate = posixpath.join(posixpath.dirname(root), stem + ext)
+    source = stores.get(candidate)
+    if source is not None and source.is_3d and not source.projection_images:
+        return candidate
     return None
 
 
@@ -496,6 +560,5 @@ def check_projection_pairs(
             ("projection", "require_projection"),
             "3D image store has no projection in this run naming it as "
             "dca.projection.source_store (--require-projection). Expected e.g. "
-            f"'{posixpath.basename(root).removesuffix('.ome.zarr')}"
-            f"{PROJECTION_STORE_SUFFIX}' next to it.",
+            f"'{_projection_name_for(posixpath.basename(root))}' next to it.",
         )

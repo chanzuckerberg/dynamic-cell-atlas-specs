@@ -52,6 +52,8 @@ class ImageFacts:
     level0_scale: dict[str, "float | None"]  # by lowercased axis name
     projection: "dict | None"  # raw dca.projection, when present
     channel_names: tuple[str, ...] = ()  # dca.channels[].name, in c order
+    processing_variant: "tuple[str, ...] | None" = None  # dca.image_data steps
+    processing_description: "str | None" = None  # dca.image_data free text
 
 
 @dataclass

@@ -295,7 +295,9 @@ class TestPerChannel:
         make_pair(
             tmp_path,
             mip_name="plate_proj.ome.zarr",
-            edit_mip=_per_channel(channels, [MEAN_STEP], dtype="float32"),
+            edit_mip=_per_channel(
+                channels, ["deconvolved", MEAN_STEP], dtype="float32"
+            ),
         )
         assert _messages(_run(tmp_path)) == []
 
@@ -314,7 +316,7 @@ class TestPerChannel:
         make_pair(
             tmp_path,
             mip_name="plate_proj.ome.zarr",
-            edit_mip=_per_channel(channels, [MIP_STEP]),
+            edit_mip=_per_channel(channels, ["deconvolved", MIP_STEP]),
         )
         assert _messages(_run(tmp_path)) == []
 
@@ -337,7 +339,9 @@ class TestPerChannel:
         make_pair(
             tmp_path,
             mip_name="plate_proj.ome.zarr",
-            edit_mip=_per_channel(channels, [MEAN_STEP], dtype="float32", focus=focus),
+            edit_mip=_per_channel(
+                channels, ["deconvolved", MEAN_STEP], dtype="float32", focus=focus
+            ),
         )
         assert any("focus.channel 'Phase3D'" in m for m in _messages(_run(tmp_path)))
 
@@ -347,7 +351,9 @@ class TestPerChannel:
         make_pair(
             tmp_path,
             mip_name="plate_proj.ome.zarr",
-            edit_mip=_per_channel(channels, [MEAN_STEP], dtype="float32", focus=focus),
+            edit_mip=_per_channel(
+                channels, ["deconvolved", MEAN_STEP], dtype="float32", focus=focus
+            ),
         )
         assert _messages(_run(tmp_path)) == []
 
@@ -419,3 +425,83 @@ class TestSourceInDataset:
         run = _run(tmp_path)
         assert _issues(run) == []
         assert run.summary.stores_failed == 0
+
+
+@pytest.mark.functional
+class TestPlainZarrNames:
+    """biahub (and others) name stores .zarr rather than .ome.zarr."""
+
+    def test_zarr_projection_of_a_sibling_without_block_is_error(self, tmp_path):
+        make_pair(
+            tmp_path,
+            source_name="plate.zarr",
+            mip_name="plate_proj.zarr",
+            edit_mip=_drop_projection,
+        )
+        run = _run(tmp_path)
+        assert any("is a projection of 'plate.zarr'" in m for m in _messages(run))
+
+    def test_zarr_pair_with_block_passes_without_name_warning(self, tmp_path):
+        make_pair(tmp_path, source_name="plate.zarr", mip_name="plate_proj.zarr")
+        run = _run(tmp_path, require_projection=True)
+        assert _issues(run) == []
+
+
+def _set_image_data(**fields):
+    def edit(mip):
+        edit_field_attrs(mip, lambda a: a["dca"]["image_data"].update(fields))
+
+    return edit
+
+
+@pytest.mark.functional
+class TestProcessingRecord:
+    """The projection's processing_variant / processing_description extend the source's."""
+
+    def test_source_steps_must_come_first(self, tmp_path):
+        make_pair(
+            tmp_path,
+            edit_mip=_set_image_data(processing_variant=["registered", MIP_STEP]),
+        )
+        assert any(
+            "does not start with the source's steps" in m
+            for m in _messages(_run(tmp_path))
+        )
+
+    def test_only_projection_steps_may_follow(self, tmp_path):
+        make_pair(
+            tmp_path,
+            edit_mip=_set_image_data(
+                processing_variant=["deconvolved", MIP_STEP, "cropped"]
+            ),
+        )
+        assert any(
+            "only projection steps may follow" in m for m in _messages(_run(tmp_path))
+        )
+
+    def test_projection_of_a_raw_stack_lists_only_its_step(self, tmp_path):
+        make_pair(
+            tmp_path,
+            steps=("raw",),
+            edit_mip=_set_image_data(processing_variant=[MIP_STEP]),
+        )
+        assert _messages(_run(tmp_path)) == []
+
+    def test_description_must_be_copied(self, tmp_path):
+        make_pair(
+            tmp_path,
+            edit_source=_set_image_data(
+                processing_description="deconvolved, pipeline v2"
+            ),
+            edit_mip=_set_image_data(processing_description="something else"),
+        )
+        assert any("MUST copy it unchanged" in m for m in _messages(_run(tmp_path)))
+
+    def test_copied_description_passes(self, tmp_path):
+        text = "deconvolved, pipeline v2"
+        make_pair(
+            tmp_path,
+            edit_source=_set_image_data(processing_description=text),
+            edit_mip=_set_image_data(processing_description=text),
+        )
+        assert _messages(_run(tmp_path)) == []

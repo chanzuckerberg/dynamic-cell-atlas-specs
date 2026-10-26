@@ -136,30 +136,42 @@ class ProjectionChannelV0_3(BaseModel):
 
 
 class ProjectionFocusV0_3(BaseModel):
-    """``dca.projection.focus`` — how the in-focus plane used to choose planes was found."""
+    """``dca.projection.focus`` — how the in-focus plane used to choose planes was found.
+
+    ``z`` / ``z_per_t`` entries are ``None`` (JSON ``null``) where no in-focus plane was
+    found; the field itself must still be present when ``per`` requires it.
+    """
 
     model_config = ConfigDict(extra="allow")
 
     channel: str = Field(min_length=1)
     per: Literal["fov", "timepoint"]
     z: int | None = Field(default=None, ge=0)
-    z_per_t: list[int] | None = None
+    z_per_t: list[int | None] | None = None
     parameters: dict | None = None
 
     @model_validator(mode="after")
     def check_planes_recorded(self) -> "ProjectionFocusV0_3":
-        if self.per == "fov" and self.z is None:
+        if self.per == "fov" and "z" not in self.model_fields_set:
             raise ValueError(
-                "focus.per is 'fov' but focus.z, the in-focus plane, is missing"
+                "focus.per is 'fov' but focus.z, the in-focus plane (null if none was "
+                "found), is missing"
             )
         if self.per == "timepoint" and self.z_per_t is None:
             raise ValueError(
                 "focus.per is 'timepoint' but focus.z_per_t, the in-focus plane of each "
-                "timepoint, is missing"
+                "timepoint (null where none was found), is missing"
             )
-        if self.z_per_t is not None and any(z < 0 for z in self.z_per_t):
-            raise ValueError("focus.z_per_t entries MUST be plane indices >= 0")
+        if self.z_per_t is not None and any(
+            z is not None and z < 0 for z in self.z_per_t
+        ):
+            raise ValueError("focus.z_per_t entries MUST be plane indices >= 0 or null")
         return self
+
+    def planes(self) -> list[int]:
+        """The in-focus planes that were found (nulls left out)."""
+        found = [self.z] if self.z is not None else []
+        return found + [z for z in (self.z_per_t or []) if z is not None]
 
 
 class DCAProjectionV0_3(BaseModel):
@@ -217,6 +229,14 @@ class DCAProjectionV0_3(BaseModel):
             errors.extend(
                 _plane_range_errors(where, method, z0, z1, step, self.z_dim_source)
             )
+        if self.focus is not None and self.z_dim_source is not None:
+            outside = sorted({z for z in self.focus.planes() if z >= self.z_dim_source})
+            if outside:
+                errors.append(
+                    f"focus plane(s) {outside} are outside the {self.z_dim_source}-plane "
+                    "source; in-focus planes MUST lie within the source stack "
+                    "(projections.rst § Focus)"
+                )
         if errors:
             raise ValueError("\n".join(errors))
         return self
