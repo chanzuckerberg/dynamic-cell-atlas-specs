@@ -4,7 +4,7 @@ The config carries the DCA metadata in the schema's own shape. A leaf says where
 value comes from:
 
     [[dca.study.dataset_name]]
-    value = "LINCS Cell Painting"                     # curated
+    value = "Example screen"                          # curated
     [[dca.perturbation.control_class]]
     column = "pert_type"                              # from source metadata
     map = { DMSO_control = "negcon", compound = "treatment" }
@@ -260,8 +260,7 @@ def _resolve_channels(
     leaf resolves blank is declined by the all-blank rule, and under the previous
     whole-tree resolve the survivors silently closed the gap and renumbered — so a
     config routing a per-channel column that happens to be empty in every row deleted
-    channels and still exited 0 (the hazard ``config/jump_cp.toml`` warns about at
-    length). Here it is an error that says which channel and why.
+    channels and still exited 0. Here it is an error that says which channel and why.
     """
     selected = []
     for key in channel_keys:
@@ -724,7 +723,7 @@ def validate_dca(block: dict, *, where: str, warnings: list[str] | None = None) 
     These used to be **one** ``model_validate`` call, which made the gate a side effect
     of the transform. Pydantic cannot coerce a value without first constructing the
     model, so a SHOULD-severity validator that raises took the coercion down with it and
-    aborted the whole manifest build — for JUMP-CP, on a human-reviewed ``tissue`` term,
+    aborted the whole manifest build — on a human-reviewed ``tissue`` term,
     with a message that read ``[SHOULD]``. The issue list had already classified that
     same finding as a warning, because it runs the identical ``model_validate`` and maps
     severity from the message prefix. So the second call added no coverage and only
