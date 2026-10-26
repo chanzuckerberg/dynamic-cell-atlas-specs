@@ -4,142 +4,62 @@
    "facet_fields": {
     "isDefiningOntology": [
      "true",
-     "6"
+     "1"
     ],
     "isObsolete": [
      "false",
-     "6"
+     "1"
     ],
     "ontologyId": [
-     "ncit",
-     "17",
-     "medgen",
-     "12",
-     "mesh",
-     "7",
-     "ncbitaxon",
-     "6",
-     "snomed",
-     "6",
      "ictv",
-     "5",
-     "ontoneo",
-     "4",
-     "pr",
-     "3",
-     "mondo",
-     "3",
-     "apollo_sv",
-     "2",
-     "efo",
-     "2",
-     "ecto",
-     "2",
-     "pride",
-     "2",
-     "omit",
-     "2",
-     "doid",
-     "2",
-     "oae",
-     "1",
-     "enm",
-     "1",
-     "upheno",
      "1",
      "eupath",
      "1",
+     "ontoneo",
+     "1",
+     "apollo_sv",
+     "1",
+     "ncit",
+     "1",
+     "mesh",
+     "1",
+     "snomed",
+     "1",
      "valuesets",
      "1",
-     "slm",
+     "mondo",
      "1",
-     "chebi",
+     "ecto",
      "1",
-     "ordo",
+     "pr",
      "1",
-     "hp",
+     "omit",
+     "1",
+     "ncbitaxon",
      "1"
     ],
     "ontologyIri": [
      "http://purl.obolibrary.org/obo/ncbitaxon.owl",
-     "6"
+     "1"
     ],
     "ontologyPreferredPrefix": [
      "NCBITaxon",
-     "6"
+     "1"
     ],
     "type": [
      "class",
-     "6"
+     "1"
     ]
    }
   },
   "response": {
    "docs": [
     {
-     "broad_synonyms": [
-      "ZIKV"
-     ],
-     "description": [],
-     "iri": "http://purl.obolibrary.org/obo/NCBITaxon_64320",
      "label": "Zika virus",
-     "obo_id": "NCBITaxon:64320",
-     "ontology_name": "ncbitaxon",
-     "ontology_prefix": "NCBITaxon",
-     "short_form": "NCBITaxon_64320",
-     "type": "class"
-    },
-    {
-     "description": [],
-     "exact_synonyms": [
-      "Zika virus isolate ZIKV/H.sapiens/FrenchPolynesia/10087PF/2013"
-     ],
-     "iri": "http://purl.obolibrary.org/obo/NCBITaxon_2043570",
-     "label": "Zika virus ZIKV/H. sapiens/FrenchPolynesia/10087PF/2013",
-     "obo_id": "NCBITaxon:2043570",
-     "ontology_name": "ncbitaxon",
-     "ontology_prefix": "NCBITaxon",
-     "short_form": "NCBITaxon_2043570",
-     "type": "class"
-    },
-    {
-     "description": [],
-     "exact_synonyms": [
-      "Zika virus (isolate ZIKV/Human/Cambodia/FSS13025/2010)"
-     ],
-     "iri": "http://purl.obolibrary.org/obo/NCBITaxon_2316109",
-     "label": "Zika virus ZIKV/Human/Cambodia/FSS13025/2010",
-     "obo_id": "NCBITaxon:2316109",
-     "ontology_name": "ncbitaxon",
-     "ontology_prefix": "NCBITaxon",
-     "short_form": "NCBITaxon_2316109",
-     "type": "class"
-    },
-    {
-     "description": [],
-     "exact_synonyms": [
-      "Zika virus MR 766"
-     ],
-     "iri": "http://purl.obolibrary.org/obo/NCBITaxon_3087233",
-     "label": "Zika virus MR766",
-     "obo_id": "NCBITaxon:3087233",
-     "ontology_name": "ncbitaxon",
-     "ontology_prefix": "NCBITaxon",
-     "short_form": "NCBITaxon_3087233",
-     "type": "class"
-    },
-    {
-     "description": [],
-     "iri": "http://purl.obolibrary.org/obo/NCBITaxon_1879016",
-     "label": "Zika virus vector pZIKV-ICD",
-     "obo_id": "NCBITaxon:1879016",
-     "ontology_name": "ncbitaxon",
-     "ontology_prefix": "NCBITaxon",
-     "short_form": "NCBITaxon_1879016",
-     "type": "class"
+     "obo_id": "NCBITaxon:64320"
     }
    ],
-   "numFound": 6,
+   "numFound": 1,
    "start": 0
   },
   "responseHeader": {
@@ -150,9 +70,12 @@
  "request": {
   "params": {
    "exact": "true",
+   "fieldList": "obo_id,label",
    "ontology": "ncbitaxon",
    "q": "Zika virus",
-   "rows": 5
+   "queryFields": "label,synonym",
+   "rows": 20,
+   "type": "class"
   },
   "url": "https://www.ebi.ac.uk/ols4/api/search"
  },

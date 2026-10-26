@@ -11,6 +11,7 @@ from typing import Any
 
 import requests
 
+from dca_helpers.metadata import ols_client
 from dca_helpers.validation import ontology_lookup
 from dca_helpers.validation.ontology_lookup import (
     CELLOSAURUS_BASE_URL,
@@ -84,16 +85,9 @@ def search_cellosaurus(name: str) -> list[tuple[str, str]]:
 
 
 def search_ncbitaxon(name: str) -> list[tuple[str, str]]:
-    """Return ``(curie, label)`` NCBITaxon candidates for an exact organism name."""
-    resp = _get_with_retry(
-        f"{OLS_BASE_URL}/search",
-        {"q": name, "ontology": "ncbitaxon", "exact": "true", "rows": 5},
-    )
-    resp.raise_for_status()
-    docs = resp.json().get("response", {}).get("docs", [])
-    return [
-        (d["obo_id"], d["label"]) for d in docs if d.get("obo_id") and d.get("label")
-    ]
+    """Return ``(curie, label)`` NCBITaxon candidates whose label or synonym is ``name``."""
+    matches = ols_client.resolve(name, "ncbitaxon", exact=True)
+    return [(m["curie"], m["label"]) for m in matches][:_MAX_CANDIDATES]
 
 
 def _ols_names(curie: str) -> list[tuple[str, str]]:

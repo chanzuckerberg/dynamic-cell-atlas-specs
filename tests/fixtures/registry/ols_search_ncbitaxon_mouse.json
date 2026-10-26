@@ -1,0 +1,117 @@
+{
+ "body": {
+  "facet_counts": {
+   "facet_fields": {
+    "isDefiningOntology": [
+     "true",
+     "2"
+    ],
+    "isObsolete": [
+     "false",
+     "2"
+    ],
+    "ontologyId": [
+     "foodon",
+     "3",
+     "ohpi",
+     "2",
+     "go",
+     "2",
+     "efo",
+     "2",
+     "uberon",
+     "2",
+     "fovt",
+     "2",
+     "pride",
+     "2",
+     "cido",
+     "2",
+     "hcao",
+     "2",
+     "maxo",
+     "2",
+     "pcl",
+     "2",
+     "cl",
+     "2",
+     "rbo",
+     "2",
+     "ecao",
+     "2",
+     "ncbitaxon",
+     "2",
+     "epio",
+     "1",
+     "ado",
+     "1",
+     "emapa",
+     "1",
+     "ncit",
+     "1",
+     "txpo",
+     "1",
+     "mro",
+     "1",
+     "idomal",
+     "1",
+     "mesh",
+     "1",
+     "sio",
+     "1",
+     "snomed",
+     "1",
+     "valuesets",
+     "1",
+     "bao",
+     "1",
+     "vo",
+     "1"
+    ],
+    "ontologyIri": [
+     "http://purl.obolibrary.org/obo/ncbitaxon.owl",
+     "2"
+    ],
+    "ontologyPreferredPrefix": [
+     "NCBITaxon",
+     "2"
+    ],
+    "type": [
+     "class",
+     "2"
+    ]
+   }
+  },
+  "response": {
+   "docs": [
+    {
+     "label": "Mus musculus",
+     "obo_id": "NCBITaxon:10090"
+    },
+    {
+     "label": "Mus <genus>",
+     "obo_id": "NCBITaxon:10088"
+    }
+   ],
+   "numFound": 2,
+   "start": 0
+  },
+  "responseHeader": {
+   "QTime": 0,
+   "status": 0
+  }
+ },
+ "request": {
+  "params": {
+   "exact": "true",
+   "fieldList": "obo_id,label",
+   "ontology": "ncbitaxon",
+   "q": "mouse",
+   "queryFields": "label,synonym",
+   "rows": 20,
+   "type": "class"
+  },
+  "url": "https://www.ebi.ac.uk/ols4/api/search"
+ },
+ "status_code": 200
+}
