@@ -36,9 +36,10 @@ Store Layout
   **MUST NOT** be written into the source store (for example as an extra resolution
   level or a ``labels/`` entry).
 * The projection store name **SHOULD** be the source store name with ``_proj`` inserted
-  before the ``.ome.zarr`` extension, e.g. ``plate_01.ome.zarr`` →
-  ``plate_01_proj.ome.zarr``. A projection whose every channel uses ``max`` **MAY** use
-  ``_mip`` instead, as stores written before this version do.
+  before its extension (``.ome.zarr`` or ``.zarr``), e.g. ``plate_01.ome.zarr`` →
+  ``plate_01_proj.ome.zarr`` or ``plate_01.zarr`` → ``plate_01_proj.zarr``. A projection
+  whose every channel uses ``max`` **MAY** use ``_mip`` instead, as stores written before
+  this version do.
 * The projection store **MUST** mirror the hierarchy of its source. For an HCS plate
   this means the same ``ome.plate`` rows, columns, wells and field-of-view paths, so
   that ``A/3/0`` in the projection is the projection of ``A/3/0`` in the source.
@@ -163,11 +164,17 @@ Plane ranges
 Both forms record the planes used with the same fields, as absolute source ``z``
 indices:
 
-* ``z_start``: first plane used (0-based, inclusive).
-* ``z_end``: last plane used, exclusive, so ``z_end - z_start`` planes are spanned and
-  ``0 <= z_start < z_end <= z_dim_source``.
-* ``z_step``: every ``z_step``-th plane of the range was used (default 1). **MUST NOT**
-  be given without ``z_start`` and ``z_end``.
+* ``z_start``: the first plane actually used (0-based).
+* ``z_end``: the exclusive upper bound, with ``0 <= z_start < z_end <= z_dim_source``.
+* ``z_step``: the spacing between the planes used (default 1). **MUST NOT** be given
+  without ``z_start`` and ``z_end``.
+
+The planes used are exactly ``z_start, z_start + z_step, …``, every one below ``z_end``
+(Python's ``range(z_start, z_end, z_step)``). ``z_start`` **MUST** be the first plane
+actually used, not a bound that was clipped to the stack: with a step, clipping can shift
+which planes are used. For example, a window from 20 planes below an in-focus plane of 19
+with ``z_step = 2`` starts at plane -1, so the planes inside the stack are 1, 3, 5, …, and
+``z_start`` is 1, not 0.
 
 ``z_start`` and ``z_end`` **MUST** be given together. For ``slice`` they **MUST** be given,
 with ``z_end - z_start = 1``. When they are absent the planes used are not known; readers
@@ -270,27 +277,35 @@ ones in ``z_start`` / ``z_end``, and nothing else depends on this block.
      - ``"fov"``: one in-focus plane for the whole field of view (e.g. the median over
        timepoints). ``"timepoint"``: one plane per timepoint.
    * - ``z``
-     - integer
+     - integer or ``null``
      - **MUST** when ``per`` is ``"fov"``
-     - The in-focus plane.
+     - The in-focus plane, or ``null`` when none was found.
    * - ``z_per_t``
-     - list of integers
+     - list of integers or ``null``
      - **MUST** when ``per`` is ``"timepoint"``; MAY otherwise
-     - The in-focus plane of each timepoint, one entry per level-0 timepoint.
+     - The in-focus plane of each timepoint, one entry per level-0 timepoint; ``null``
+       for a timepoint where none was found.
    * - ``parameters``
      - object
      - MAY
      - Settings of the focus-finding method (e.g. a detection numerical aperture,
        illumination wavelength or crop), recorded as given by the tool.
 
+When no in-focus plane was found, a tool typically falls back to another plane (e.g.
+the middle of the stack). That fallback **SHOULD** be recorded as ``null`` rather than
+as if it had been found, so a reader can tell a detected focus from a fallback; the
+planes the projection used, fallback included, are still the ones in ``z_start`` /
+``z_end``. A plane that is given **MUST** lie within the source stack (below
+``z_dim_source`` when that is given).
+
 Relation to biahub
 ~~~~~~~~~~~~~~~~~~
 
 biahub's ``project`` command uses the same four methods (``max``, ``mean``, ``sum``,
 ``slice``) and projects each output channel separately, so its output fits the
-per-channel form. Its settings describe how to choose planes (a range, or a window
-around a fixed or detected in-focus plane); ``dca.projection`` records the planes that
-choice resolved to. For a ``project`` run:
+per-channel form. Its settings describe how to choose planes (absolute ``start`` /
+``stop``, or ``below`` / ``above`` planes around a fixed or detected in-focus plane);
+``dca.projection`` records the planes that choice resolved to. For a ``project`` run:
 
 .. list-table::
    :header-rows: 1
@@ -299,14 +314,17 @@ choice resolved to. For a ``project`` run:
      - ``dca.projection``
    * - ``channels.<name>.method``
      - ``channels.<name>.method``
-   * - ``channels.<name>.z`` (``range``, ``center``, ``step``)
-     - ``channels.<name>.z_start`` / ``z_end`` (resolved and clipped to the stack; lists
-       when the window follows a per-timepoint focus), ``z_step``
+   * - ``channels.<name>.z`` (``start`` / ``stop``, or ``center`` with ``below`` /
+       ``above``; ``step``)
+     - ``channels.<name>.z_start`` / ``z_end`` / ``z_step``: the planes the selection kept
+       after dropping those outside the stack, with ``z_start`` the first plane kept
+       (see `Plane ranges`_); lists when the window follows a per-timepoint focus
    * - ``focus.channel``, ``focus.per``
      - ``focus.channel``, ``focus.per``
-   * - ``focus_z``, ``focus_z_per_t`` (recorded per position)
-     - ``focus.z``, ``focus.z_per_t``
-   * - focus-finding settings (``na_det``, ``lambda_ill``, ``center_crop_xy``)
+   * - ``focus.z``, ``focus.z_per_t`` (recorded per position)
+     - ``focus.z``, ``focus.z_per_t``, with ``null`` where no focus was found
+   * - focus-finding settings recorded beside them (``na_det``, ``lambda_ill``,
+       ``center_crop_xy``)
      - ``focus.parameters``
    * - (not recorded)
      - ``source_store``, ``z_dim_source``
@@ -326,9 +344,10 @@ apply, and ``dca.projection`` is not required.
   left out of ``channels``.
 
 Whether a projection's 3D source is in the DCA is decided when a dataset is validated as
-a whole: a projection store named after a 3D sibling (``plate_01_mip.ome.zarr`` or
-``plate_01_proj.ome.zarr`` next to ``plate_01.ome.zarr``) is a projection of that store,
-and **MUST** then carry ``dca.projection`` with ``source_store``.
+a whole: a projection store named after a 3D sibling (``plate_01_proj.ome.zarr`` or
+``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``, or ``plate_01_proj.zarr`` next to
+``plate_01.zarr``) is a projection of that store, and **MUST** then carry
+``dca.projection`` with ``source_store``.
 
 Normalization Statistics
 ~~~~~~~~~~~~~~~~~~~~~~~~

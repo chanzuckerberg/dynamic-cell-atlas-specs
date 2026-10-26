@@ -451,6 +451,40 @@
               "z_end"
             ]
           }
+        },
+        {
+          "if": {
+            "required": [
+              "channels"
+            ],
+            "properties": {
+              "channels": {
+                "not": {
+                  "additionalProperties": {
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "z_start"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "z_end"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "z_dim_source"
+            ]
+          }
         }
       ]
     },
@@ -562,15 +596,23 @@
           ]
         },
         "z": {
-          "type": "integer",
-          "minimum": 0
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The in-focus plane, or null when none was found."
         },
         "z_per_t": {
           "type": "array",
           "items": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "minimum": 0
-          }
+          },
+          "description": "The in-focus plane of each level-0 timepoint; null where none was found."
         },
         "parameters": {
           "type": "object"

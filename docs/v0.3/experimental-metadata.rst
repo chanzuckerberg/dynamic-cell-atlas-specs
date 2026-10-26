@@ -468,7 +468,8 @@ array, as an ordered list in the order they were applied (e.g. ``["raw"]``,
 ``["deconvolved", "registered"]``, ``["deconvolved", "maximum intensity projection"]``).
 Items **SHOULD** come from the ``ProcessingStep`` vocabulary in the LinkML schema
 (``raw``, ``denoised``, ``deconvolved``, ``registered``, ``stitched``, ``cropped``,
-``flat-field corrected``, ``background subtracted``, ``maximum intensity projection``);
+``flat-field corrected``, ``background subtracted``, ``maximum intensity projection``,
+``mean intensity projection``, ``sum intensity projection``, ``z slice``);
 an item outside it is a warning. ``raw`` means no processing and **MUST** be the only
 item when present. Qualifying detail (a pipeline version, a frame range) belongs in
 ``image_data.processing_description`` (new in v0.3, free text in the source's own
