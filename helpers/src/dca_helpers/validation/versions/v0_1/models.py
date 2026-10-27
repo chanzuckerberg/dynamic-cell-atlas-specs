@@ -21,7 +21,14 @@ from types import SimpleNamespace
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import InitErrorDetails
 
 # ---------------------------------------------------------------------------
 # Constants from the spec
@@ -61,6 +68,30 @@ DOWNSAMPLING_FACTOR_RECOMMENDED = 2  # SHOULD — spatial dims
 
 def _nbytes(shape: list[int], dtype: str) -> int:
     return math.prod(shape) * np.dtype(dtype).itemsize
+
+
+def merge_validation_error(
+    exc: ValidationError, data: object, messages: list[str]
+) -> ValidationError:
+    lines: list[InitErrorDetails] = [
+        {
+            "type": error["type"],
+            "loc": error["loc"],
+            "input": error["input"],
+            "ctx": error.get("ctx", {}),
+        }
+        for error in exc.errors(include_url=False)
+    ]
+    lines += [
+        {
+            "type": "value_error",
+            "loc": (),
+            "input": data,
+            "ctx": {"error": ValueError(message)},
+        }
+        for message in messages
+    ]
+    return ValidationError.from_exception_data(exc.title, lines)
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +335,17 @@ class DCAScaleLevelSpec(BaseModel):
     def dtype_rule(level: Any) -> list[str]:
         return dtype_messages(level)
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def collect_array_rules_on_field_failure(cls, data: Any, handler: Any) -> Any:
+        try:
+            return handler(data)
+        except ValidationError as exc:
+            messages = raw_array_rule_messages(data, cls.dtype_rule)
+            if not messages:
+                raise
+            raise merge_validation_error(exc, data, messages) from None
+
     # ------------------------------------------------------------------
     # One validator for every array rule. Pydantic stops the after-validator
     # chain at the first raise, so separate validators would let an earlier
@@ -485,6 +527,18 @@ class DCAStoreSpecV0_1(BaseModel):
                 f"At least {MULTISCALE_MIN_LEVELS} spatial scales are required; found {v}"
             )
         return v
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def collect_downsampling_on_field_failure(cls, data: Any, handler: Any) -> Any:
+        try:
+            return handler(data)
+        except ValidationError as exc:
+            levels = data.get("levels") if isinstance(data, dict) else None
+            messages = raw_downsampling_messages(levels)
+            if not messages:
+                raise
+            raise merge_validation_error(exc, data, messages) from None
 
     # ------------------------------------------------------------------
     # Downsampling factors across levels — MUST be 1 for t/c, SHOULD be 2 for spatial

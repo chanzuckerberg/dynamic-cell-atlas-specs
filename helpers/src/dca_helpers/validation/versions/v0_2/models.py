@@ -48,7 +48,14 @@ from typing import Any, Literal
 
 import numpy as np
 import pydantic
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from dca_helpers.validation.versions.v0_1.models import (
     AXES_ACCEPTED,
@@ -61,6 +68,7 @@ from dca_helpers.validation.versions.v0_1.models import (
 )
 from dca_helpers.validation.versions.v0_1.models import (
     downsampling_factor_messages,
+    merge_validation_error,
     raw_shape_views,
 )
 
@@ -623,6 +631,13 @@ def raw_store_rule_messages(data: object) -> list[str]:
     return [] if inputs is None else store_rule_messages(inputs)
 
 
+def raw_label_store_rule_messages(data: object) -> list[str]:
+    levels = raw_shape_views(data.get("levels")) if isinstance(data, dict) else None
+    if not levels:
+        return []
+    return coarse_level_messages(levels) + downsampling_factor_messages(levels)
+
+
 # ------------------------------------------------------------------
 # ome-zarr-metadata.rst § Units — MUST
 # Spatial (z, y, x) and temporal (t) axes must declare units from the
@@ -885,6 +900,17 @@ class DCAStoreSpecV0_2(BaseModel):
             )
         return v
 
+    @model_validator(mode="wrap")
+    @classmethod
+    def collect_store_rules_on_field_failure(cls, data: Any, handler: Any) -> Any:
+        try:
+            return handler(data)
+        except ValidationError as exc:
+            messages = raw_store_rule_messages(data)
+            if not messages:
+                raise
+            raise merge_validation_error(exc, data, messages) from None
+
     # ------------------------------------------------------------------
     # Every store-level rule, in one validator. Pydantic stops the after-validator
     # chain at the first raise, so separate validators would let an earlier
@@ -944,6 +970,17 @@ class DCALabelStoreSpecV0_2(BaseModel):
                 "All datasets must be 5D with dimensions in t, c, z, y, x order."
             )
         return v
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def collect_store_rules_on_field_failure(cls, data: Any, handler: Any) -> Any:
+        try:
+            return handler(data)
+        except ValidationError as exc:
+            messages = raw_label_store_rule_messages(data)
+            if not messages:
+                raise
+            raise merge_validation_error(exc, data, messages) from None
 
     # ------------------------------------------------------------------
     # array-standard.rst § Multiresolution — MUST (coarse level; t/c factor),
