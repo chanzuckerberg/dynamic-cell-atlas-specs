@@ -837,13 +837,28 @@ def _run_dca_validation(
         ModelClass.model_validate(node_dict)
     except pydantic.ValidationError as exc:
         issues.extend(_convert_errors(exc))
+    except Exception as exc:
+        issues.append(_unexpected_error_issue("model validation", exc))
 
     if isinstance(dca, dict) and spec_version in _EXPERIMENTAL_SPEC_VERSIONS:
-        issues.extend(
-            validate_dca_experimental_metadata_v0_2(dca, check_ontology=check_ontology)
-        )
+        try:
+            issues.extend(
+                validate_dca_experimental_metadata_v0_2(
+                    dca, check_ontology=check_ontology
+                )
+            )
+        except Exception as exc:
+            issues.append(_unexpected_error_issue("experimental metadata", exc))
 
     return issues
+
+
+def _unexpected_error_issue(stage: str, exc: Exception) -> Issue:
+    return Issue(
+        loc=(stage,),
+        message=f"Unexpected {type(exc).__name__} during {stage}: {exc}",
+        severity=Severity.ERROR,
+    )
 
 
 # ---------------------------------------------------------------------------

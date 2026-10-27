@@ -25,6 +25,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     ValidationError,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -316,6 +317,32 @@ class DCAScaleLevelSpec(BaseModel):
     shard_shape: list[int] | None = None
     codec_id: str
     codec_level: int | None = None
+
+    # ------------------------------------------------------------------
+    # Dimensions — MUST be 5, in [t, c, z, y, x] order
+    # ------------------------------------------------------------------
+
+    @field_validator("shape", "chunk_shape", "shard_shape")
+    @classmethod
+    def array_must_be_5d(
+        cls, v: list[int] | None, info: ValidationInfo
+    ) -> list[int] | None:
+        if v is not None and len(v) != len(AXES_REQUIRED):
+            raise ValueError(
+                f"{info.field_name} has {len(v)} dimensions; arrays MUST have "
+                f"{len(AXES_REQUIRED)} dimensions in {AXES_REQUIRED} order "
+                "(array-standard.rst § Dimensions)."
+            )
+        return v
+
+    @field_validator("dtype")
+    @classmethod
+    def dtype_must_be_numpy(cls, v: str) -> str:
+        try:
+            np.dtype(v)
+        except (TypeError, ValueError):
+            raise ValueError(f"dtype '{v}' is not a valid NumPy dtype.") from None
+        return v
 
     # ------------------------------------------------------------------
     # Compression — MUST
