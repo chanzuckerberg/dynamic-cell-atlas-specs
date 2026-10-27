@@ -278,3 +278,17 @@ def test_store_level_defect_alone_is_reported_once(defect):
     messages = [m for m in messages_of([defect]) if defect.marker in m]
     assert len(messages) >= 1
     assert len(messages) == len(set(messages))
+
+
+def test_label_dtype_warning_does_not_hide_the_coarse_level_error():
+    store = copy.deepcopy(valid_label_store(n_levels=1))
+    store["levels"][0]["shape"][2:] = [4096, 4096, 4096]
+    store["levels"][0]["dtype"] = "uint16"
+    issues = validate_label_store(store)
+    assert any(
+        i.severity == Severity.WARNING and "label array" in i.message for i in issues
+    )
+    assert any(
+        i.severity == Severity.ERROR and "spatial dimensions" in i.message
+        for i in issues
+    )

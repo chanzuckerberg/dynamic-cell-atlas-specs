@@ -523,3 +523,17 @@ class TestLevelRulesAreReportedTogether:
         assert any("must be < 5 TB" in i.message for i in errors(issues))
         assert any("recommended 5 GB" in i.message for i in warnings(issues))
         assert any("Shard size in z" in i.message for i in warnings(issues))
+
+
+@pytest.mark.unit
+class TestLevelCountDoesNotHideDownsampling:
+    def test_both_findings_are_reported(self):
+        store = valid_store(n_levels=2)
+        store["levels"][1]["shape"][0] = 2
+        messages = [i.message for i in errors(validate_node(store))]
+        assert any("At least 3 spatial scales" in m for m in messages)
+        assert any("downsampling factor for 't'" in m for m in messages)
+
+    def test_level_count_alone_is_one_error(self):
+        messages = [i.message for i in errors(validate_node(valid_store(n_levels=2)))]
+        assert len(messages) == 1
