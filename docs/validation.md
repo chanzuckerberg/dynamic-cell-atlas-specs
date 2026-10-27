@@ -284,7 +284,7 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 
 **Experimental metadata** (`dca.study`/`dca.biosample`/`dca.provenance`/etc.) is validated separately by `versions/v0_2/experimental_metadata.py` against a LinkML-generated model, enforcing conditional rules (e.g. `source_kind: agent ⇒ citation` required) that `gen-pydantic` records but doesn't itself enforce, plus a provenance-coverage check with no LinkML equivalent. See that module's docstring for why each piece is structured the way it is — it's a self-contained sub-design, not part of the core array/channel pipeline described here.
 
-**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation, through the `_dtype_messages` hook: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`). The validator-ordering caveat above applies.
+**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation, through the `dtype_rule` hook: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`). The validator-ordering caveat above applies.
 
 ---
 

@@ -16,7 +16,8 @@ where `data` is a dict produced by validation.validator._build_node_dict().
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import numpy as np
@@ -60,6 +61,196 @@ DOWNSAMPLING_FACTOR_RECOMMENDED = 2  # SHOULD — spatial dims
 
 def _nbytes(shape: list[int], dtype: str) -> int:
     return math.prod(shape) * np.dtype(dtype).itemsize
+
+
+# ---------------------------------------------------------------------------
+# Array rules — plain functions of any object with the level fields
+# ---------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------
+# Chunk size — MUST >= 512 KB, SHOULD >= 1 MB
+# ------------------------------------------------------------------
+
+
+def chunk_size_messages(level: Any) -> list[str]:
+    # Chunk-size rules apply only to the base resolution level.
+    # See array-standard.rst § Chunk Size / Edge Cases.
+    if level.level_index > 0:
+        return []
+
+    channel_idx = AXES_REQUIRED.index("c")
+
+    nbytes = _nbytes(level.chunk_shape, level.dtype)
+    # When comparing chunk size with array size, ignore the channel dimension
+    # because chunk sizing should not be driven by channel count.
+    chunk_nbytes = _nbytes(
+        level.chunk_shape[:channel_idx] + level.chunk_shape[channel_idx + 1 :],
+        level.dtype,
+    )
+    total_nbytes = _nbytes(
+        level.shape[:channel_idx] + level.shape[channel_idx + 1 :], level.dtype
+    )
+    kb = nbytes / 1024
+
+    # Only enforce min chunk size if:
+    # chunk(minus channel) is smaller than the whole array (minus channel)
+    if nbytes < CHUNK_MIN_BYTES and chunk_nbytes < total_nbytes:
+        return [
+            f"Uncompressed chunk size {kb:.0f} KB is below the required 512 KB minimum "
+            f"(level={level.path!r}, chunk_shape={level.chunk_shape}, dtype={level.dtype}). "
+            "See array-standard.rst § Chunk Size edge cases."
+        ]
+
+    if nbytes < CHUNK_REC_BYTES and chunk_nbytes < total_nbytes:
+        return [
+            f"[SHOULD] Uncompressed chunk size {kb:.0f} KB is below the recommended "
+            f"1 MB (level={level.path!r}, chunk_shape={level.chunk_shape}, dtype={level.dtype})"
+        ]
+
+    return []
+
+
+# ------------------------------------------------------------------
+# Chunk shape recommendations — SHOULD
+# ------------------------------------------------------------------
+
+
+def chunk_shape_messages(level: Any) -> list[str]:
+    c = level.chunk_shape[1]  # channel dim (axes order [t, c, z, y, x])
+
+    if c != C_CHUNK_RECOMMENDED:
+        return [f"[SHOULD] Channel chunk size should be {C_CHUNK_RECOMMENDED}; got {c}"]
+    return []
+
+
+# ------------------------------------------------------------------
+# Shard size — MUST < 5 TB; MUST >= 1 GB when array >= 1 GB
+#              SHOULD < 5 GB; SHOULD spatial <= 2048; SHOULD time >= 16
+# ------------------------------------------------------------------
+
+
+def shard_size_messages(level: Any) -> list[str]:
+    if level.shard_shape is None or level.level_index > 0:
+        return []
+
+    shard_bytes = _nbytes(level.shard_shape, level.dtype)
+    array_bytes = _nbytes(level.shape, level.dtype)
+
+    errors: list[str] = []
+
+    # MUST: < 5 TB
+    if shard_bytes >= SHARD_MAX_BYTES:
+        errors.append(
+            f"Uncompressed shard size {shard_bytes / 1024**4:.1f} TB must be < 5 TB"
+        )
+
+    # MUST: >= 1 GB when array itself >= 1 GB
+    if array_bytes >= SHARD_MIN_BYTES and shard_bytes < SHARD_MIN_BYTES:
+        errors.append(
+            f"Uncompressed shard size {shard_bytes / 1024**3:.2f} GB must be >= 1 GB "
+            f"for arrays >= 1 GB (array is {array_bytes / 1024**3:.2f} GB)"
+        )
+
+    warnings: list[str] = []
+
+    # SHOULD: < 5 GB
+    if shard_bytes > SHARD_REC_BYTES:
+        warnings.append(
+            f"[SHOULD] Uncompressed shard size {shard_bytes / 1024**3:.1f} GB "
+            f"exceeds the recommended 5 GB"
+        )
+
+    # SHOULD: spatial shard dims <= 2048
+    _t, _c, z, y, x = level.shard_shape
+    for dim_name, dim_val in (("z", z), ("y", y), ("x", x)):
+        if dim_val > SPATIAL_SHARD_MAX_RECOMMENDED:
+            warnings.append(
+                f"[SHOULD] Shard size in {dim_name} ({dim_val}) exceeds "
+                f"the recommended maximum of {SPATIAL_SHARD_MAX_RECOMMENDED}"
+            )
+
+    # SHOULD: time shard >= 16, but only when the array has >= 16 timepoints
+    if _t < TIME_SHARD_MIN_RECOMMENDED and level.shape[0] >= TIME_SHARD_MIN_RECOMMENDED:
+        warnings.append(
+            f"[SHOULD] Time shard size ({_t}) is below the recommended "
+            f"minimum of {TIME_SHARD_MIN_RECOMMENDED}"
+        )
+
+    return errors + warnings
+
+
+# ------------------------------------------------------------------
+# Compression recommendations — SHOULD
+# ------------------------------------------------------------------
+
+
+def compression_messages(level: Any) -> list[str]:
+    warnings: list[str] = []
+    dtype_kind = np.dtype(
+        level.dtype
+    ).kind  # 'u' = unsigned int, 'i' = signed int, 'f' = float
+
+    if dtype_kind in ("u", "i"):
+        # Integers: SHOULD level <= 3
+        if (
+            level.codec_id == RECOMMENDED_CODEC
+            and level.codec_level is not None
+            and level.codec_level > RECOMMENDED_LEVEL_MAX
+        ):
+            warnings.append(
+                f"[SHOULD] Compression level {level.codec_level} exceeds the recommended "
+                f"maximum of {RECOMMENDED_LEVEL_MAX}"
+                " (high levels increase decompression overhead)"
+            )
+
+    elif dtype_kind == "f":
+        # Floats: SHOULD use byte shuffle + zstd (not blosc), level <= 3
+        if level.codec_id == "blosc":
+            warnings.append(
+                "[SHOULD] Float data should use byte shuffle + zstd (not blosc)"
+            )
+        if (
+            level.codec_id == RECOMMENDED_CODEC
+            and level.codec_level is not None
+            and level.codec_level > RECOMMENDED_LEVEL_MAX
+        ):
+            warnings.append(
+                f"[SHOULD] Compression level {level.codec_level} exceeds the recommended "
+                f"maximum of {RECOMMENDED_LEVEL_MAX}"
+            )
+
+    return warnings
+
+
+# ------------------------------------------------------------------
+# Data type recommendations — SHOULD
+# ------------------------------------------------------------------
+
+
+def dtype_messages(level: Any) -> list[str]:
+    normalized = str(np.dtype(level.dtype))
+    if (
+        normalized not in RAW_DTYPES_RECOMMENDED
+        and normalized != LABEL_DTYPE_RECOMMENDED
+    ):
+        return [
+            f"[SHOULD] dtype '{level.dtype}' is unusual; raw arrays should use "
+            f"uint8 or uint16, label arrays should use uint32"
+        ]
+    return []
+
+
+def array_rule_messages(
+    level: Any, dtype_rule: Callable[[Any], list[str]] = dtype_messages
+) -> list[str]:
+    return (
+        chunk_size_messages(level)
+        + chunk_shape_messages(level)
+        + shard_size_messages(level)
+        + compression_messages(level)
+        + dtype_rule(level)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -109,173 +300,9 @@ class DCAScaleLevelSpec(BaseModel):
             )
         return normalized
 
-    # ------------------------------------------------------------------
-    # Chunk size — MUST >= 512 KB, SHOULD >= 1 MB
-    # ------------------------------------------------------------------
-
-    def _chunk_size_messages(self) -> list[str]:
-        # Chunk-size rules apply only to the base resolution level.
-        # See array-standard.rst § Chunk Size / Edge Cases.
-        if self.level_index > 0:
-            return []
-
-        channel_idx = AXES_REQUIRED.index("c")
-
-        nbytes = _nbytes(self.chunk_shape, self.dtype)
-        # When comparing chunk size with array size, ignore the channel dimension
-        # because chunk sizing should not be driven by channel count.
-        chunk_nbytes = _nbytes(
-            self.chunk_shape[:channel_idx] + self.chunk_shape[channel_idx + 1 :],
-            self.dtype,
-        )
-        total_nbytes = _nbytes(
-            self.shape[:channel_idx] + self.shape[channel_idx + 1 :], self.dtype
-        )
-        kb = nbytes / 1024
-
-        # Only enforce min chunk size if:
-        # chunk(minus channel) is smaller than the whole array (minus channel)
-        if nbytes < CHUNK_MIN_BYTES and chunk_nbytes < total_nbytes:
-            return [
-                f"Uncompressed chunk size {kb:.0f} KB is below the required 512 KB minimum "
-                f"(level={self.path!r}, chunk_shape={self.chunk_shape}, dtype={self.dtype}). "
-                "See array-standard.rst § Chunk Size edge cases."
-            ]
-
-        if nbytes < CHUNK_REC_BYTES and chunk_nbytes < total_nbytes:
-            return [
-                f"[SHOULD] Uncompressed chunk size {kb:.0f} KB is below the recommended "
-                f"1 MB (level={self.path!r}, chunk_shape={self.chunk_shape}, dtype={self.dtype})"
-            ]
-
-        return []
-
-    # ------------------------------------------------------------------
-    # Chunk shape recommendations — SHOULD
-    # ------------------------------------------------------------------
-
-    def _chunk_shape_messages(self) -> list[str]:
-        c = self.chunk_shape[1]  # channel dim (axes order [t, c, z, y, x])
-
-        if c != C_CHUNK_RECOMMENDED:
-            return [
-                f"[SHOULD] Channel chunk size should be {C_CHUNK_RECOMMENDED}; got {c}"
-            ]
-        return []
-
-    # ------------------------------------------------------------------
-    # Shard size — MUST < 5 TB; MUST >= 1 GB when array >= 1 GB
-    #              SHOULD < 5 GB; SHOULD spatial <= 2048; SHOULD time >= 16
-    # ------------------------------------------------------------------
-
-    def _shard_size_messages(self) -> list[str]:
-        if self.shard_shape is None or self.level_index > 0:
-            return []
-
-        shard_bytes = _nbytes(self.shard_shape, self.dtype)
-        array_bytes = _nbytes(self.shape, self.dtype)
-
-        errors: list[str] = []
-
-        # MUST: < 5 TB
-        if shard_bytes >= SHARD_MAX_BYTES:
-            errors.append(
-                f"Uncompressed shard size {shard_bytes / 1024**4:.1f} TB must be < 5 TB"
-            )
-
-        # MUST: >= 1 GB when array itself >= 1 GB
-        if array_bytes >= SHARD_MIN_BYTES and shard_bytes < SHARD_MIN_BYTES:
-            errors.append(
-                f"Uncompressed shard size {shard_bytes / 1024**3:.2f} GB must be >= 1 GB "
-                f"for arrays >= 1 GB (array is {array_bytes / 1024**3:.2f} GB)"
-            )
-
-        warnings: list[str] = []
-
-        # SHOULD: < 5 GB
-        if shard_bytes > SHARD_REC_BYTES:
-            warnings.append(
-                f"[SHOULD] Uncompressed shard size {shard_bytes / 1024**3:.1f} GB "
-                f"exceeds the recommended 5 GB"
-            )
-
-        # SHOULD: spatial shard dims <= 2048
-        _t, _c, z, y, x = self.shard_shape
-        for dim_name, dim_val in (("z", z), ("y", y), ("x", x)):
-            if dim_val > SPATIAL_SHARD_MAX_RECOMMENDED:
-                warnings.append(
-                    f"[SHOULD] Shard size in {dim_name} ({dim_val}) exceeds "
-                    f"the recommended maximum of {SPATIAL_SHARD_MAX_RECOMMENDED}"
-                )
-
-        # SHOULD: time shard >= 16, but only when the array has >= 16 timepoints
-        if (
-            _t < TIME_SHARD_MIN_RECOMMENDED
-            and self.shape[0] >= TIME_SHARD_MIN_RECOMMENDED
-        ):
-            warnings.append(
-                f"[SHOULD] Time shard size ({_t}) is below the recommended "
-                f"minimum of {TIME_SHARD_MIN_RECOMMENDED}"
-            )
-
-        return errors + warnings
-
-    # ------------------------------------------------------------------
-    # Compression recommendations — SHOULD
-    # ------------------------------------------------------------------
-
-    def _compression_messages(self) -> list[str]:
-        warnings: list[str] = []
-        dtype_kind = np.dtype(
-            self.dtype
-        ).kind  # 'u' = unsigned int, 'i' = signed int, 'f' = float
-
-        if dtype_kind in ("u", "i"):
-            # Integers: SHOULD level <= 3
-            if (
-                self.codec_id == RECOMMENDED_CODEC
-                and self.codec_level is not None
-                and self.codec_level > RECOMMENDED_LEVEL_MAX
-            ):
-                warnings.append(
-                    f"[SHOULD] Compression level {self.codec_level} exceeds the recommended "
-                    f"maximum of {RECOMMENDED_LEVEL_MAX}"
-                    " (high levels increase decompression overhead)"
-                )
-
-        elif dtype_kind == "f":
-            # Floats: SHOULD use byte shuffle + zstd (not blosc), level <= 3
-            if self.codec_id == "blosc":
-                warnings.append(
-                    "[SHOULD] Float data should use byte shuffle + zstd (not blosc)"
-                )
-            if (
-                self.codec_id == RECOMMENDED_CODEC
-                and self.codec_level is not None
-                and self.codec_level > RECOMMENDED_LEVEL_MAX
-            ):
-                warnings.append(
-                    f"[SHOULD] Compression level {self.codec_level} exceeds the recommended "
-                    f"maximum of {RECOMMENDED_LEVEL_MAX}"
-                )
-
-        return warnings
-
-    # ------------------------------------------------------------------
-    # Data type recommendations — SHOULD
-    # ------------------------------------------------------------------
-
-    def _dtype_messages(self) -> list[str]:
-        normalized = str(np.dtype(self.dtype))
-        if (
-            normalized not in RAW_DTYPES_RECOMMENDED
-            and normalized != LABEL_DTYPE_RECOMMENDED
-        ):
-            return [
-                f"[SHOULD] dtype '{self.dtype}' is unusual; raw arrays should use "
-                f"uint8 or uint16, label arrays should use uint32"
-            ]
-        return []
+    @staticmethod
+    def dtype_rule(level: Any) -> list[str]:
+        return dtype_messages(level)
 
     # ------------------------------------------------------------------
     # One validator for every array rule. Pydantic stops the after-validator
@@ -285,13 +312,7 @@ class DCAScaleLevelSpec(BaseModel):
 
     @model_validator(mode="after")
     def check_array_rules(self) -> "DCAScaleLevelSpec":
-        messages = (
-            self._chunk_size_messages()
-            + self._chunk_shape_messages()
-            + self._shard_size_messages()
-            + self._compression_messages()
-            + self._dtype_messages()
-        )
+        messages = array_rule_messages(self, type(self).dtype_rule)
         if messages:
             raise ValueError("\n".join(messages))
         return self
@@ -341,6 +362,80 @@ def downsampling_factor_messages(levels: Sequence[Any]) -> list[str]:
                     )
 
     return must_errors + should_warnings
+
+
+def _is_int_list(value: object, length: int = 5) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == length
+        and all(isinstance(x, int) and not isinstance(x, bool) for x in value)
+    )
+
+
+def raw_shape_view(data: object) -> SimpleNamespace | None:
+    if not isinstance(data, dict):
+        return None
+    shape, chunk_shape = data.get("shape"), data.get("chunk_shape")
+    if not (_is_int_list(shape) and _is_int_list(chunk_shape)):
+        return None
+    return SimpleNamespace(
+        path=str(data.get("path", "")),
+        shape=list(shape),
+        chunk_shape=list(chunk_shape),
+    )
+
+
+def raw_shape_views(levels: object) -> list[SimpleNamespace] | None:
+    if not isinstance(levels, list):
+        return None
+    views = [raw_shape_view(level) for level in levels]
+    return None if any(view is None for view in views) else views
+
+
+def raw_level_view(data: object) -> SimpleNamespace | None:
+    view = raw_shape_view(data)
+    if view is None:
+        return None
+    shard_shape, dtype, codec_id = (
+        data.get("shard_shape"),
+        data.get("dtype"),
+        data.get("codec_id"),
+    )
+    level_index, codec_level = data.get("level_index", 0), data.get("codec_level")
+    if not (
+        isinstance(dtype, str)
+        and isinstance(codec_id, str)
+        and isinstance(level_index, int)
+        and not isinstance(level_index, bool)
+        and (shard_shape is None or _is_int_list(shard_shape))
+    ):
+        return None
+    try:
+        np.dtype(dtype)
+    except (TypeError, ValueError):
+        return None
+    view.level_index = level_index
+    view.dtype = dtype
+    view.shard_shape = None if shard_shape is None else list(shard_shape)
+    view.codec_id = codec_id.lower()
+    view.codec_level = (
+        codec_level
+        if isinstance(codec_level, int) and not isinstance(codec_level, bool)
+        else None
+    )
+    return view
+
+
+def raw_array_rule_messages(
+    data: object, dtype_rule: Callable[[Any], list[str]] = dtype_messages
+) -> list[str]:
+    view = raw_level_view(data)
+    return [] if view is None else array_rule_messages(view, dtype_rule)
+
+
+def raw_downsampling_messages(levels: object) -> list[str]:
+    views = raw_shape_views(levels)
+    return [] if views is None else downsampling_factor_messages(views)
 
 
 # ---------------------------------------------------------------------------

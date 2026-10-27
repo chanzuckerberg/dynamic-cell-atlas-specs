@@ -41,7 +41,9 @@ DCAScaleLevelSpecV0_2 inherits them directly without modification.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import numpy as np
@@ -57,7 +59,10 @@ from dca_helpers.validation.versions.v0_1.models import (
 from dca_helpers.validation.versions.v0_1.models import (
     DCAScaleLevelSpec as DCAScaleLevelSpecV0_1,
 )
-from dca_helpers.validation.versions.v0_1.models import downsampling_factor_messages
+from dca_helpers.validation.versions.v0_1.models import (
+    downsampling_factor_messages,
+    raw_shape_views,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -184,9 +189,8 @@ class DCAScaleLevelSpecV0_2(DCAScaleLevelSpecV0_1):
     Validates one scale level (one Zarr array) inside a DCA v0.2 multiscale store.
 
     All array-level rules are inherited unchanged from DCAScaleLevelSpecV0_1.
-    They are `_*_messages` methods collected by `check_array_rules`. Add a new
-    array rule as such a method, not as a separate validator, or it can hide
-    the other rules:
+    They are the functions collected by `array_rule_messages`. Add a new array
+    rule there, not as a separate validator, or it can hide the other rules:
       - array-standard.rst § Compression         (codec MUST / SHOULD)
       - array-standard.rst § Performance / Chunk Size      (chunk size MUST / SHOULD)
       - array-standard.rst § Performance / Shard Size      (shard size MUST / SHOULD)
@@ -219,24 +223,29 @@ class DCAScaleLevelSpecV0_2(DCAScaleLevelSpecV0_1):
         return raw
 
 
+def label_dtype_messages(level: Any) -> list[str]:
+    normalized = str(np.dtype(level.dtype))
+    if normalized != LABEL_DTYPE_RECOMMENDED:
+        return [
+            f"[SHOULD] dtype '{level.dtype}' is unusual for a label array; "
+            f"label arrays should use {LABEL_DTYPE_RECOMMENDED}"
+        ]
+    return []
+
+
 class DCALabelScaleLevelSpecV0_2(DCAScaleLevelSpecV0_2):
     """
     Validates one scale level inside a DCA v0.2 label image store.
 
     Inherits all array-level rules from DCAScaleLevelSpecV0_2 and overrides the
-    dtype recommendation through the `_dtype_messages` hook: label arrays SHOULD
+    dtype recommendation through the `dtype_rule` hook: label arrays SHOULD
     use uint32, not uint8/uint16.
     """
 
     # array-standard.rst § Data Types — SHOULD (label-specific override)
-    def _dtype_messages(self) -> list[str]:
-        normalized = str(np.dtype(self.dtype))
-        if normalized != LABEL_DTYPE_RECOMMENDED:
-            return [
-                f"[SHOULD] dtype '{self.dtype}' is unusual for a label array; "
-                f"label arrays should use {LABEL_DTYPE_RECOMMENDED}"
-            ]
-        return []
+    @staticmethod
+    def dtype_rule(level: Any) -> list[str]:
+        return label_dtype_messages(level)
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +538,282 @@ def coarse_level_messages(levels: Sequence[Any]) -> list[str]:
     ]
 
 
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _clean_map(value: object, accept: Callable[[object], bool]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {k: v for k, v in value.items() if isinstance(k, str) and accept(v)}
+
+
+def _raw_acquisition(dca: dict | None) -> SimpleNamespace | None:
+    acquisition = dca.get("acquisition") if dca else None
+    if not isinstance(acquisition, dict):
+        return None
+    time_sampling = acquisition.get("time_sampling")
+    timestamps = acquisition.get("timestamps")
+    return SimpleNamespace(
+        time_sampling=time_sampling if isinstance(time_sampling, str) else None,
+        timestamps=(
+            list(timestamps)
+            if isinstance(timestamps, list) and all(map(_is_number, timestamps))
+            else None
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class StoreRuleInputs:
+    levels: Sequence[Any]
+    axis_units: Mapping[str, Any]
+    axis_scales: Mapping[str, Any]
+    acquisition: Any | None = None
+    n_channels: int | None = None
+    channel_statistics: Mapping[str, Any] | None = None
+
+    @classmethod
+    def from_model(cls, store: "DCAStoreSpecV0_2") -> "StoreRuleInputs":
+        dca = store.dca
+        return cls(
+            levels=store.levels,
+            axis_units=store.axis_units,
+            axis_scales=store.axis_scales,
+            acquisition=getattr(dca, "acquisition", None) if dca else None,
+            n_channels=len(dca.channels) if dca is not None else None,
+            channel_statistics=(
+                (dca.normalization_statistics.model_extra or {})
+                if dca is not None
+                else None
+            ),
+        )
+
+    @classmethod
+    def from_raw(cls, data: object) -> "StoreRuleInputs | None":
+        if not isinstance(data, dict):
+            return None
+        levels = raw_shape_views(data.get("levels"))
+        if not levels:
+            return None
+        dca = data.get("dca")
+        dca = dca if isinstance(dca, dict) else None
+        channels = dca.get("channels") if dca else None
+        statistics = dca.get("normalization_statistics") if dca else None
+        return cls(
+            levels=levels,
+            axis_units=_clean_map(
+                data.get("axis_units"), lambda v: v is None or isinstance(v, str)
+            ),
+            axis_scales=_clean_map(
+                data.get("axis_scales"), lambda v: v is None or _is_number(v)
+            ),
+            acquisition=_raw_acquisition(dca),
+            n_channels=len(channels) if isinstance(channels, list) else None,
+            channel_statistics=(
+                {k: v for k, v in statistics.items() if k != "metadata"}
+                if isinstance(statistics, dict)
+                else None
+            ),
+        )
+
+
+def raw_store_rule_messages(data: object) -> list[str]:
+    inputs = StoreRuleInputs.from_raw(data)
+    return [] if inputs is None else store_rule_messages(inputs)
+
+
+# ------------------------------------------------------------------
+# ome-zarr-metadata.rst § Units — MUST
+# Spatial (z, y, x) and temporal (t) axes must declare units from the
+# OME-NGFF v0.5 vocabulary. Channel axis (c) has no unit requirement.
+# ------------------------------------------------------------------
+
+
+def axis_unit_messages(inputs: StoreRuleInputs) -> list[str]:
+    units_lower = {k.lower(): v for k, v in inputs.axis_units.items()}
+    errors: list[str] = []
+    for ax in sorted(SPATIAL_AXES):
+        unit = units_lower.get(ax)
+        if unit is None:
+            errors.append(
+                f"Spatial axis '{ax}' has no unit. "
+                "MUST use a unit from the OME-NGFF v0.5 spatial vocabulary "
+                "(ome-zarr-metadata.rst § Units)."
+            )
+        elif unit not in SPATIAL_UNIT_VOCABULARY:
+            errors.append(
+                f"Spatial axis '{ax}' unit '{unit}' is not in the OME-NGFF v0.5 "
+                "spatial unit vocabulary "
+                "(ome-zarr-metadata.rst § Units)."
+            )
+    unit = units_lower.get("t")
+    if unit is None:
+        # Relaxed to SHOULD for a declared variable-rate acquisition: OME-NGFF
+        # v0.5 has no 'frame' unit, so a store whose frames are unevenly spaced
+        # cannot name one honestly. The declaration is not free — it pulls in the
+        # timestamps MUSTs in variable_time_sampling_messages below.
+        if _declares_variable_sampling(inputs):
+            errors.append(
+                "[SHOULD] Temporal axis 't' has no unit, which "
+                "'acquisition.time_sampling = \"variable\"' permits. OME-NGFF "
+                "v0.5 has no 'frame' unit; the per-frame "
+                "'acquisition.timestamps' are authoritative "
+                "(ome-zarr-metadata.rst § Units)."
+            )
+        else:
+            errors.append(
+                "Temporal axis 't' has no unit. "
+                "MUST use a unit from the OME-NGFF v0.5 temporal vocabulary, or "
+                "declare 'acquisition.time_sampling = \"variable\"' with "
+                "'acquisition.timestamps' "
+                "(ome-zarr-metadata.rst § Units)."
+            )
+    elif unit not in TEMPORAL_UNIT_VOCABULARY:
+        errors.append(
+            f"Temporal axis 't' unit '{unit}' is not in the OME-NGFF v0.5 "
+            "temporal unit vocabulary "
+            "(ome-zarr-metadata.rst § Units)."
+        )
+    errors.extend(variable_time_sampling_messages(inputs))
+    return errors
+
+
+def _declares_variable_sampling(inputs: StoreRuleInputs) -> bool:
+    """Whether this group declares ``acquisition.time_sampling = "variable"``."""
+    return getattr(inputs.acquisition, "time_sampling", None) == "variable"
+
+
+# ------------------------------------------------------------------
+# ome-zarr-metadata.rst § Units / experimental-metadata.rst § Acquisition
+# Declaring variable sampling is an assertion about the data, so it carries
+# its own MUSTs. Everything here is inside the 'variable' branch: a store
+# that does not declare it is unaffected.
+# ------------------------------------------------------------------
+
+
+def timestamps_messages(inputs: StoreRuleInputs, timestamps: list[float]) -> list[str]:
+    """Shape rules for a present ``timestamps`` array, whatever the mode.
+
+    Applied whenever the array is there, not only under ``variable``: a
+    ``uniform`` group may carry per-frame times too, and a mis-sized or
+    out-of-order array is as wrong there as anywhere.
+    """
+    errors: list[str] = []
+    # Level 0's T. levels[0].shape is [t, c, z, y, x] per the axes MUST above,
+    # and is the same shape source the multiresolution rules read.
+    expected = inputs.levels[0].shape[0] if inputs.levels else None
+    if expected is not None and len(timestamps) != expected:
+        errors.append(
+            f"'acquisition.timestamps' has {len(timestamps)} entries but the "
+            f"level-0 array has T={expected}. Lengths MUST match: one "
+            "timestamp per timepoint."
+        )
+    if any(b < a for a, b in zip(timestamps, timestamps[1:])):
+        errors.append(
+            "'acquisition.timestamps' MUST be non-decreasing; frames are "
+            "recorded in acquisition order."
+        )
+    return errors
+
+
+def variable_time_sampling_messages(inputs: StoreRuleInputs) -> list[str]:
+    acquisition = inputs.acquisition
+    declared = getattr(acquisition, "time_sampling", None)
+    timestamps = getattr(acquisition, "timestamps", None)
+
+    if declared is None:
+        return timestamps_messages(inputs, timestamps) if timestamps else []
+    if declared not in TIME_SAMPLING_VALUES:
+        return [
+            f"'acquisition.time_sampling' is '{declared}', which is not one of "
+            f"{sorted(TIME_SAMPLING_VALUES)}."
+        ]
+    if declared != "variable":
+        return timestamps_messages(inputs, timestamps) if timestamps else []
+
+    errors: list[str] = []
+    if not timestamps:
+        errors.append(
+            "'acquisition.time_sampling' is 'variable' but "
+            "'acquisition.timestamps' is absent. Declaring variable sampling MUST "
+            "carry the per-frame timestamps it points at, otherwise the claim "
+            "cannot be checked."
+        )
+    else:
+        errors.extend(timestamps_messages(inputs, timestamps))
+
+    scales_lower = {k.lower(): v for k, v in inputs.axis_scales.items()}
+    t_scale = scales_lower.get("t")
+    if t_scale is not None and t_scale != 1.0:
+        errors.append(
+            f"'acquisition.time_sampling' is 'variable' but the level-0 't' scale "
+            f"is {t_scale}. It MUST be 1, so the axis carries frame indices "
+            "rather than a uniform duration the data does not have."
+        )
+    return errors
+
+
+def channel_count_messages(inputs: StoreRuleInputs) -> list[str]:
+    if inputs.n_channels is None or not inputs.levels:
+        return []
+    c_axis_size = inputs.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
+    if inputs.n_channels == c_axis_size:
+        return []
+    suffix = "y" if inputs.n_channels == 1 else "ies"
+    return [
+        f"[SHOULD] dca.channels has {inputs.n_channels} entr{suffix} "
+        f"but the C axis at level 0 has size {c_axis_size}. "
+        f"channels SHOULD cover all {c_axis_size} channels "
+        f"(channel-metadata.rst § Location in Zarr store)."
+    ]
+
+
+def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
+    if inputs.channel_statistics is None or not inputs.levels:
+        return []
+    n_timepoints = inputs.levels[0].shape[0]
+    expected = {str(t) for t in range(n_timepoints)}
+    errors: list[str] = []
+    for channel, entry in inputs.channel_statistics.items():
+        tp_stats = (
+            entry.get("timepoint_statistics") if isinstance(entry, dict) else None
+        )
+        if not isinstance(tp_stats, dict):
+            continue
+        missing = sorted(expected - set(tp_stats), key=int)
+        if missing:
+            errors.append(
+                f"normalization_statistics['{channel}'].timepoint_statistics is "
+                f"missing {len(missing)} of {n_timepoints} timepoints "
+                f"(first missing: '{missing[0]}'). If present, it MUST contain "
+                "entries for all timepoints in the dataset "
+                "(normalization-statistics.rst § Channel Normalization Fields)."
+            )
+        unexpected = sorted(
+            (k for k in tp_stats if k not in expected), key=lambda k: repr(k)
+        )
+        if unexpected:
+            errors.append(
+                f"normalization_statistics['{channel}'].timepoint_statistics has "
+                f"{len(unexpected)} keys that are not timepoint indices "
+                f"'0' to '{n_timepoints - 1}' as strings "
+                f"(first unexpected: {unexpected[0]!r}). Keys MUST be "
+                "zero-based timepoint indices of the dataset "
+                "(normalization-statistics.rst § Channel Normalization Fields)."
+            )
+    return errors
+
+
+def store_rule_messages(inputs: StoreRuleInputs) -> list[str]:
+    messages = coarse_level_messages(inputs.levels)
+    messages += downsampling_factor_messages(inputs.levels)
+    messages += axis_unit_messages(inputs)
+    messages += channel_count_messages(inputs)
+    messages += timepoint_statistics_messages(inputs)
+    return messages
+
+
 # ---------------------------------------------------------------------------
 # Store-level model (root entry point)
 # ---------------------------------------------------------------------------
@@ -580,135 +865,6 @@ class DCAStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # ome-zarr-metadata.rst § Units — MUST
-    # Spatial (z, y, x) and temporal (t) axes must declare units from the
-    # OME-NGFF v0.5 vocabulary. Channel axis (c) has no unit requirement.
-    # ------------------------------------------------------------------
-
-    def _axis_unit_messages(self) -> list[str]:
-        units_lower = {k.lower(): v for k, v in self.axis_units.items()}
-        errors: list[str] = []
-        for ax in sorted(SPATIAL_AXES):
-            unit = units_lower.get(ax)
-            if unit is None:
-                errors.append(
-                    f"Spatial axis '{ax}' has no unit. "
-                    "MUST use a unit from the OME-NGFF v0.5 spatial vocabulary "
-                    "(ome-zarr-metadata.rst § Units)."
-                )
-            elif unit not in SPATIAL_UNIT_VOCABULARY:
-                errors.append(
-                    f"Spatial axis '{ax}' unit '{unit}' is not in the OME-NGFF v0.5 "
-                    "spatial unit vocabulary "
-                    "(ome-zarr-metadata.rst § Units)."
-                )
-        unit = units_lower.get("t")
-        if unit is None:
-            # Relaxed to SHOULD for a declared variable-rate acquisition: OME-NGFF
-            # v0.5 has no 'frame' unit, so a store whose frames are unevenly spaced
-            # cannot name one honestly. The declaration is not free — it pulls in the
-            # timestamps MUSTs in _variable_time_sampling_errors below.
-            if self._declares_variable_sampling():
-                errors.append(
-                    "[SHOULD] Temporal axis 't' has no unit, which "
-                    "'acquisition.time_sampling = \"variable\"' permits. OME-NGFF "
-                    "v0.5 has no 'frame' unit; the per-frame "
-                    "'acquisition.timestamps' are authoritative "
-                    "(ome-zarr-metadata.rst § Units)."
-                )
-            else:
-                errors.append(
-                    "Temporal axis 't' has no unit. "
-                    "MUST use a unit from the OME-NGFF v0.5 temporal vocabulary, or "
-                    "declare 'acquisition.time_sampling = \"variable\"' with "
-                    "'acquisition.timestamps' "
-                    "(ome-zarr-metadata.rst § Units)."
-                )
-        elif unit not in TEMPORAL_UNIT_VOCABULARY:
-            errors.append(
-                f"Temporal axis 't' unit '{unit}' is not in the OME-NGFF v0.5 "
-                "temporal unit vocabulary "
-                "(ome-zarr-metadata.rst § Units)."
-            )
-        errors.extend(self._variable_time_sampling_errors())
-        return errors
-
-    def _acquisition(self) -> DCAAcquisitionViewV0_2 | None:
-        """This group's ``dca.acquisition`` view, when it carries one."""
-        return getattr(self.dca, "acquisition", None) if self.dca else None
-
-    def _declares_variable_sampling(self) -> bool:
-        """Whether this group declares ``acquisition.time_sampling = "variable"``."""
-        return getattr(self._acquisition(), "time_sampling", None) == "variable"
-
-    # ------------------------------------------------------------------
-    # ome-zarr-metadata.rst § Units / experimental-metadata.rst § Acquisition
-    # Declaring variable sampling is an assertion about the data, so it carries
-    # its own MUSTs. Everything here is inside the 'variable' branch: a store
-    # that does not declare it is unaffected.
-    # ------------------------------------------------------------------
-
-    def _timestamps_errors(self, timestamps: list[float]) -> list[str]:
-        """Shape rules for a present ``timestamps`` array, whatever the mode.
-
-        Applied whenever the array is there, not only under ``variable``: a
-        ``uniform`` group may carry per-frame times too, and a mis-sized or
-        out-of-order array is as wrong there as anywhere.
-        """
-        errors: list[str] = []
-        # Level 0's T. levels[0].shape is [t, c, z, y, x] per the axes MUST above,
-        # and is the same shape source the multiresolution rules read.
-        expected = self.levels[0].shape[0] if self.levels else None
-        if expected is not None and len(timestamps) != expected:
-            errors.append(
-                f"'acquisition.timestamps' has {len(timestamps)} entries but the "
-                f"level-0 array has T={expected}. Lengths MUST match: one "
-                "timestamp per timepoint."
-            )
-        if any(b < a for a, b in zip(timestamps, timestamps[1:])):
-            errors.append(
-                "'acquisition.timestamps' MUST be non-decreasing; frames are "
-                "recorded in acquisition order."
-            )
-        return errors
-
-    def _variable_time_sampling_errors(self) -> list[str]:
-        acquisition = self._acquisition()
-        declared = getattr(acquisition, "time_sampling", None)
-        timestamps = getattr(acquisition, "timestamps", None)
-
-        if declared is None:
-            return self._timestamps_errors(timestamps) if timestamps else []
-        if declared not in TIME_SAMPLING_VALUES:
-            return [
-                f"'acquisition.time_sampling' is '{declared}', which is not one of "
-                f"{sorted(TIME_SAMPLING_VALUES)}."
-            ]
-        if declared != "variable":
-            return self._timestamps_errors(timestamps) if timestamps else []
-
-        errors: list[str] = []
-        if not timestamps:
-            errors.append(
-                "'acquisition.time_sampling' is 'variable' but "
-                "'acquisition.timestamps' is absent. Declaring variable sampling MUST "
-                "carry the per-frame timestamps it points at, otherwise the claim "
-                "cannot be checked."
-            )
-        else:
-            errors.extend(self._timestamps_errors(timestamps))
-
-        scales_lower = {k.lower(): v for k, v in self.axis_scales.items()}
-        t_scale = scales_lower.get("t")
-        if t_scale is not None and t_scale != 1.0:
-            errors.append(
-                f"'acquisition.time_sampling' is 'variable' but the level-0 't' scale "
-                f"is {t_scale}. It MUST be 1, so the axis carries frame indices "
-                "rather than a uniform duration the data does not have."
-            )
-        return errors
-
-    # ------------------------------------------------------------------
     # channel-metadata.rst § Location in Zarr store — MUST
     # The 'dca' key must be present.
     # Use @field_validator (not @model_validator mode="after") so this runs
@@ -742,61 +898,10 @@ class DCAStoreSpecV0_2(BaseModel):
 
     @model_validator(mode="after")
     def check_store_rules(self) -> "DCAStoreSpecV0_2":
-        messages = coarse_level_messages(self.levels)
-        messages += downsampling_factor_messages(self.levels)
-        messages += self._axis_unit_messages()
-        if self.dca is not None and self.levels:
-            messages += self._channel_count_errors(self.dca)
-            messages += self._timepoint_statistics_errors(self.dca)
+        messages = store_rule_messages(StoreRuleInputs.from_model(self))
         if messages:
             raise ValueError("\n".join(messages))
         return self
-
-    def _channel_count_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
-        c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
-        n_channel_entries = len(dca.channels)
-        if n_channel_entries == c_axis_size:
-            return []
-        suffix = "y" if n_channel_entries == 1 else "ies"
-        return [
-            f"[SHOULD] dca.channels has {n_channel_entries} entr{suffix} "
-            f"but the C axis at level 0 has size {c_axis_size}. "
-            f"channels SHOULD cover all {c_axis_size} channels "
-            f"(channel-metadata.rst § Location in Zarr store)."
-        ]
-
-    def _timepoint_statistics_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
-        n_timepoints = self.levels[0].shape[0]
-        expected = {str(t) for t in range(n_timepoints)}
-        errors: list[str] = []
-        for channel, entry in (dca.normalization_statistics.model_extra or {}).items():
-            tp_stats = (
-                entry.get("timepoint_statistics") if isinstance(entry, dict) else None
-            )
-            if not isinstance(tp_stats, dict):
-                continue
-            missing = sorted(expected - set(tp_stats), key=int)
-            if missing:
-                errors.append(
-                    f"normalization_statistics['{channel}'].timepoint_statistics is "
-                    f"missing {len(missing)} of {n_timepoints} timepoints "
-                    f"(first missing: '{missing[0]}'). If present, it MUST contain "
-                    "entries for all timepoints in the dataset "
-                    "(normalization-statistics.rst § Channel Normalization Fields)."
-                )
-            unexpected = sorted(
-                (k for k in tp_stats if k not in expected), key=lambda k: repr(k)
-            )
-            if unexpected:
-                errors.append(
-                    f"normalization_statistics['{channel}'].timepoint_statistics has "
-                    f"{len(unexpected)} keys that are not timepoint indices "
-                    f"'0' to '{n_timepoints - 1}' as strings "
-                    f"(first unexpected: {unexpected[0]!r}). Keys MUST be "
-                    "zero-based timepoint indices of the dataset "
-                    "(normalization-statistics.rst § Channel Normalization Fields)."
-                )
-        return errors
 
 
 # ---------------------------------------------------------------------------
