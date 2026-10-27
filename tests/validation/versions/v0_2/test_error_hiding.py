@@ -22,6 +22,12 @@ SAMPLE_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
 NESTED_HIDING = "nested-model failures hide store-level rules"
 FIELD_LEVEL_HIDING = "field-level validator failures hide store-level rules"
 ALWAYS_REPORTED = ("dimension_names_mismatch", "channel_missing_name")
+XFAIL_NESTED = pytest.mark.xfail(
+    strict=True, raises=AssertionError, reason=NESTED_HIDING
+)
+XFAIL_FIELD_LEVEL = pytest.mark.xfail(
+    strict=True, raises=AssertionError, reason=FIELD_LEVEL_HIDING
+)
 
 
 @dataclass(frozen=True)
@@ -175,7 +181,7 @@ def pair_params():
     for a, b in itertools.combinations(DEFECTS, 2):
         marks = []
         if hides(a, b):
-            marks.append(pytest.mark.xfail(strict=True, reason=NESTED_HIDING))
+            marks.append(XFAIL_NESTED)
         yield pytest.param(a, b, marks=marks, id=f"{a.name}+{b.name}")
 
 
@@ -199,7 +205,7 @@ def test_every_level_spec_rule_is_reported_together():
     assert unreported(level_rules) == []
 
 
-@pytest.mark.xfail(strict=True, reason=NESTED_HIDING)
+@XFAIL_NESTED
 def test_all_defects_are_reported_together():
     assert unreported(DEFECTS) == []
 
@@ -239,7 +245,7 @@ def reorder_axes(store):
     store["axes"] = ["t", "c", "y", "x", "z"]
 
 
-@pytest.mark.xfail(strict=True, reason=FIELD_LEVEL_HIDING)
+@XFAIL_FIELD_LEVEL
 @pytest.mark.parametrize(
     "apply,marker",
     [(drop_dca, "Missing 'dca' key"), (reorder_axes, "Axes must be")],
