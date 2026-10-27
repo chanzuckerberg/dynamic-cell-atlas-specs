@@ -505,3 +505,140 @@ class TestProcessingRecord:
             edit_mip=_set_image_data(processing_description=text),
         )
         assert _messages(_run(tmp_path)) == []
+
+
+def _without_z_dim_source(mip):
+    edit_field_attrs(mip, lambda a: a["dca"]["projection"].pop("z_dim_source"))
+
+
+@pytest.mark.functional
+class TestFocusWithinSource:
+    """The source's own z bounds focus planes when the block gives no z_dim_source."""
+
+    def _pair(self, tmp_path, focus):
+        def edit(mip):
+            to_per_channel(
+                mip, {"GFP": {"method": "max"}}, ["deconvolved", MIP_STEP], focus=focus
+            )
+            _without_z_dim_source(mip)
+
+        make_pair(tmp_path, mip_name="plate_proj.ome.zarr", edit_mip=edit)
+        return _run(tmp_path)
+
+    def test_focus_beyond_the_source_is_error(self, tmp_path):
+        run = self._pair(tmp_path, {"channel": "DAPI", "per": "fov", "z": 66})
+        assert any(
+            "focus plane(s) [66] are outside the source's 16-plane stack" in m
+            for m in _messages(run)
+        )
+
+    def test_per_timepoint_focus_beyond_the_source_is_error(self, tmp_path):
+        focus = {"channel": "DAPI", "per": "timepoint", "z_per_t": [40]}
+        assert any("[40]" in m for m in _messages(self._pair(tmp_path, focus)))
+
+    def test_focus_within_the_source_passes(self, tmp_path):
+        run = self._pair(tmp_path, {"channel": "DAPI", "per": "fov", "z": 8})
+        assert _messages(run) == []
+
+
+@pytest.mark.functional
+class TestDescriptionWithoutSourceDescription:
+    def test_description_added_to_a_source_without_one_is_error(self, tmp_path):
+        make_pair(
+            tmp_path, edit_mip=_set_image_data(processing_description="max over z")
+        )
+        assert any(
+            "is set but the source has none" in m for m in _messages(_run(tmp_path))
+        )
+
+    def test_projected_before_deposit_may_describe_itself(self, tmp_path):
+        def described(mip):
+            def edit(a):
+                a["dca"]["projection"] = {
+                    "z_dim_source": 16,
+                    "channels": {"GFP": {"method": "max", "z_start": 0, "z_end": 16}},
+                }
+                a["dca"]["image_data"] = {
+                    "processing_variant": [MIP_STEP],
+                    "processing_description": "maximum projection of a 16-plane stack",
+                }
+
+            edit_field_attrs(mip, edit)
+
+        make_pair(tmp_path, mip_name="plate_2d.ome.zarr", edit_mip=described)
+        shutil.rmtree(tmp_path / "plate.ome.zarr")  # the stack is not shared
+        run = _run(tmp_path)
+        assert _issues(run) == []
+        assert run.summary.stores_failed == 0
+
+
+@pytest.mark.functional
+class TestMixedExtensions:
+    def test_zarr_projection_of_an_ome_zarr_sibling_without_block_is_error(
+        self, tmp_path
+    ):
+        make_pair(tmp_path, mip_name="plate_proj.zarr", edit_mip=_drop_projection)
+        run = _run(tmp_path)
+        assert any("is a projection of 'plate.ome.zarr'" in m for m in _messages(run))
+
+    def test_ome_zarr_projection_of_a_zarr_sibling_with_block_passes(self, tmp_path):
+        def name_source(mip):
+            edit_field_attrs(
+                mip,
+                lambda a: a["dca"]["projection"].update(source_store="plate.zarr"),
+            )
+
+        make_pair(
+            tmp_path,
+            source_name="plate.zarr",
+            mip_name="plate_proj.ome.zarr",
+            edit_mip=name_source,
+        )
+        assert _issues(_run(tmp_path, require_projection=True)) == []
+
+
+def _z_end_warnings(run):
+    return [m for m in _messages(run, Severity.WARNING) if "last plane used + 1" in m]
+
+
+@pytest.mark.functional
+class TestZEndSpelling:
+    """With a step, z_end SHOULD be the last plane used + 1."""
+
+    def _uniform(self, tmp_path, z_end, z_step):
+        def edit(mip):
+            def set_range(a):
+                p = a["dca"]["projection"]
+                p.pop("z_fraction")
+                p.update(z_start=0, z_end=z_end, z_step=z_step)
+
+            edit_field_attrs(mip, set_range)
+
+        make_pair(tmp_path, edit_mip=edit)
+        return _run(tmp_path)
+
+    def test_loose_z_end_warns_with_the_expected_value(self, tmp_path):
+        run = self._uniform(tmp_path, z_end=14, z_step=5)  # planes 0, 5, 10
+        assert any("(0, 14, 11)" in m for m in _z_end_warnings(run))
+        assert _messages(run) == []
+
+    def test_last_plane_plus_one_passes(self, tmp_path):
+        assert _z_end_warnings(self._uniform(tmp_path, z_end=11, z_step=5)) == []
+
+    def test_step_of_one_never_warns(self, tmp_path):
+        assert _z_end_warnings(self._uniform(tmp_path, z_end=14, z_step=1)) == []
+
+    def test_per_channel_per_timepoint_loose_z_end_warns(self, tmp_path):
+        channels = {
+            "GFP": {"method": "mean", "z_start": [1], "z_end": [15], "z_step": 2}
+        }
+        make_pair(
+            tmp_path,
+            mip_name="plate_proj.ome.zarr",
+            edit_mip=_per_channel(
+                channels, ["deconvolved", MEAN_STEP], dtype="float32"
+            ),
+        )
+        # planes 1, 3, ..., 13, so the recommended z_end is 14
+        warnings = _z_end_warnings(_run(tmp_path))
+        assert any("channels.GFP.z_end" in m and "(0, 15, 14)" in m for m in warnings)

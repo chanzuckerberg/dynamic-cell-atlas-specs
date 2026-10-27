@@ -439,4 +439,46 @@ def check_projection_v0_3(
                 f"({z1} - {z0}) / {zd} = {(z1 - z0) / zd:.3f}; z_start and z_end "
                 "are authoritative.",
             )
+
+    ranges = [((), projection)]
+    if isinstance(channels, dict):
+        ranges += [
+            (("channels", n), c) for n, c in channels.items() if isinstance(c, dict)
+        ]
+    for sub, spec in ranges:
+        loose = _loose_z_ends(
+            spec.get("z_start"), spec.get("z_end"), spec.get("z_step")
+        )
+        if loose:
+            prefix = ".".join(sub) + "." if sub else ""
+            warning(
+                ("dca", "projection", *sub, "z_end"),
+                f"{prefix}z_end should be the last plane used + 1, so each set of "
+                f"planes has one spelling; (t, z_end, expected) = {loose[:5]} "
+                "(projections.rst § Plane ranges).",
+            )
     return issues
+
+
+def _loose_z_ends(
+    z_start: object, z_end: object, z_step: object
+) -> "list[tuple[int, int, int]]":
+    """Valid ranges whose ``z_end`` is not the last plane used + 1, as
+    ``(t, z_end, expected)``. With a step, any ``z_end`` in (last, last + step] selects
+    the same planes; only last + 1 is the recommended spelling."""
+    if not isinstance(z_step, int) or isinstance(z_step, bool) or z_step <= 1:
+        return []
+    if isinstance(z_start, list) and isinstance(z_end, list):
+        pairs = list(zip(z_start, z_end))
+    elif isinstance(z_start, int) and isinstance(z_end, int):
+        pairs = [(z_start, z_end)]
+    else:
+        return []
+    loose = []
+    for t, (a, b) in enumerate(pairs):
+        if not (isinstance(a, int) and isinstance(b, int) and 0 <= a < b):
+            continue  # invalid ranges are reported by DCAProjectionV0_3
+        expected = a + (b - 1 - a) // z_step * z_step + 1
+        if b != expected:
+            loose.append((t, b, expected))
+    return loose

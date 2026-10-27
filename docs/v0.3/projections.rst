@@ -109,8 +109,11 @@ the methods it uses. An image **MAY** list a projection step without carrying
 ``dca.projection`` only when it was projected before deposit and its 3D source is not in
 the DCA (see `Projections made before deposit`_). A projection
 of an unprocessed stack lists only its projection steps, since ``"raw"`` means no
-processing at all. A projection copies its source's ``image_data.processing_description``
-unchanged, so the source's full description is available on the projection too.
+processing at all. A projection whose 3D source is in the DCA **MUST** copy the source's
+``image_data.processing_description`` unchanged, and has none when the source has none,
+so the description always matches the source; the projection's own parameters belong in
+``dca.projection``. An image projected before deposit has no source to copy from, and
+describes its own processing (see `Projections made before deposit`_).
 
 Projection block
 ~~~~~~~~~~~~~~~~
@@ -175,6 +178,11 @@ actually used, not a bound that was clipped to the stack: with a step, clipping 
 which planes are used. For example, a window from 20 planes below an in-focus plane of 19
 with ``z_step = 2`` starts at plane -1, so the planes inside the stack are 1, 3, 5, …, and
 ``z_start`` is 1, not 0.
+
+With a step, every ``z_end`` from the last plane used + 1 up to the last plane used +
+``z_step`` selects the same planes. ``z_end`` **SHOULD** be the last plane used + 1, so
+that each set of planes is written one way; e.g. planes 1, 3, …, 19 are ``z_start = 1``,
+``z_end = 20``, ``z_step = 2``.
 
 ``z_start`` and ``z_end`` **MUST** be given together. For ``slice`` they **MUST** be given,
 with ``z_end - z_start = 1``. When they are absent the planes used are not known; readers
@@ -346,8 +354,8 @@ apply, and ``dca.projection`` is not required.
 Whether a projection's 3D source is in the DCA is decided when a dataset is validated as
 a whole: a projection store named after a 3D sibling (``plate_01_proj.ome.zarr`` or
 ``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``, or ``plate_01_proj.zarr`` next to
-``plate_01.zarr``) is a projection of that store, and **MUST** then carry
-``dca.projection`` with ``source_store``.
+``plate_01.zarr``; the two extensions need not match) is a projection of that store, and
+**MUST** then carry ``dca.projection`` with ``source_store``.
 
 Normalization Statistics
 ~~~~~~~~~~~~~~~~~~~~~~~~

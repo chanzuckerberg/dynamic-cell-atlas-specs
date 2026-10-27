@@ -8,8 +8,8 @@ with its source using the ImageFacts collected during validation, so it needs no
 second read of either store.
 
 A store named after a 3D sibling in the run (``plate_01_proj.ome.zarr`` /
-``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``, or the same with ``.zarr``) is
-a projection of it, so its
+``plate_01_mip.ome.zarr`` next to ``plate_01.ome.zarr``, or the same with ``.zarr``, in
+either combination of extensions) is a projection of it, so its
 image groups MUST carry ``dca.projection`` with ``source_store`` → otherwise ERROR. A
 projection that names no source and has no such sibling was projected before deposit,
 and none of the checks below apply to it.
@@ -28,6 +28,8 @@ For each projection store that names a ``source_store``:
 * Per image group, against the source's level 0:
   - t, y, x sizes and t, y, x scales match, and ``z_dim_source`` (when given)
     equals the source's z → otherwise ERROR;
+  - ``focus`` planes lie within the source's z, which also covers a block that gives
+    no ``z_dim_source`` → otherwise ERROR;
   - channels: the uniform form keeps every source channel in order; in the
     per-channel form each projected output's ``source_channel`` (default: its own
     name) is a source channel; ``focus.channel`` is a source channel → otherwise ERROR;
@@ -35,7 +37,7 @@ For each projection store that names a ``source_store``:
     and is otherwise the source's or a floating-point type → otherwise ERROR.
   - processing record: ``processing_variant`` starts with the source's steps and
     continues with projection steps only, and ``processing_description`` equals the
-    source's → otherwise ERROR.
+    source's, absent when the source has none → otherwise ERROR.
   A source with z of size 1 → WARNING (nothing to project).
 
 With ``require_projection`` (``dca-validate --require-projection``), additionally:
@@ -251,7 +253,7 @@ def _compare_image(
                 f"{sv}; it MUST be equal.",
             )
     _compare_image_data(where, mip, m, s)
-    z_dim_source = (m.projection or {}).get("z_dim_source")
+    z_dim_source = projection.get("z_dim_source")
     if isinstance(z_dim_source, int) and z_dim_source != src_z:
         _add(
             mip,
@@ -260,6 +262,29 @@ def _compare_image(
             f"{where}: z_dim_source is {z_dim_source} but the source's level-0 z "
             f"is {src_z}.",
         )
+    if z_dim_source != src_z:
+        # The model checks focus planes only against z_dim_source; with no (or a
+        # wrong) z_dim_source the source's own z is the bound.
+        outside = sorted({z for z in _focus_planes(projection) if z >= src_z})
+        if outside:
+            _add(
+                mip,
+                Severity.ERROR,
+                ("dca", "projection", "focus"),
+                f"{where}: focus plane(s) {outside} are outside the source's "
+                f"{src_z}-plane stack; in-focus planes MUST lie within it.",
+            )
+
+
+def _focus_planes(projection: dict) -> list[int]:
+    """The in-focus planes ``focus`` records, nulls left out (as
+    ``ProjectionFocusV0_3.planes``, on the raw block)."""
+    focus = projection.get("focus")
+    if not isinstance(focus, dict):
+        return []
+    z_per_t = focus.get("z_per_t")
+    values = [focus.get("z"), *(z_per_t if isinstance(z_per_t, list) else [])]
+    return [z for z in values if isinstance(z, int) and not isinstance(z, bool)]
 
 
 def _compare_image_data(where, mip, m, s) -> None:
@@ -291,16 +316,19 @@ def _compare_image_data(where, mip, m, s) -> None:
                     f"{where}: processing_variant lists {extra} after the source's steps; "
                     "only projection steps may follow them.",
                 )
-    if (
-        s.processing_description is not None
-        and m.processing_description != s.processing_description
-    ):
+    if m.processing_description != s.processing_description:
+        what = (
+            "is set but the source has none"
+            if s.processing_description is None
+            else "differs from the source's"
+        )
         _add(
             mip,
             Severity.ERROR,
             ("dca", "image_data", "processing_description"),
-            f"{where}: processing_description differs from the source's; a projection "
-            "MUST copy it unchanged.",
+            f"{where}: processing_description {what}; a projection MUST copy it "
+            "unchanged (none when the source has none). Record projection parameters "
+            "in dca.projection.",
         )
 
 
@@ -477,17 +505,20 @@ def _sibling_source(root: str, stores: dict[str, _Store]) -> str | None:
     """The 3D store in the run that ``root`` is named after, if any.
 
     ``plate_01_proj.ome.zarr`` / ``plate_01_mip.ome.zarr`` next to a 3D, non-projection
-    ``plate_01.ome.zarr``, or the same with ``.zarr`` (projections.rst § Projections made
-    before deposit).
+    ``plate_01.ome.zarr``, or the same with ``.zarr``; the two extensions need not match
+    (projections.rst § Projections made before deposit).
     """
     parts = _split_projection_name(posixpath.basename(root))
     if parts is None:
         return None
     stem, _, ext = parts
-    candidate = posixpath.join(posixpath.dirname(root), stem + ext)
-    source = stores.get(candidate)
-    if source is not None and source.is_3d and not source.projection_images:
-        return candidate
+    # The same extension first, then the other one (plate_proj.zarr next to
+    # plate.ome.zarr).
+    for candidate_ext in (ext, *(e for e in STORE_EXTENSIONS if e != ext)):
+        candidate = posixpath.join(posixpath.dirname(root), stem + candidate_ext)
+        source = stores.get(candidate)
+        if source is not None and source.is_3d and not source.projection_images:
+            return candidate
     return None
 
 
