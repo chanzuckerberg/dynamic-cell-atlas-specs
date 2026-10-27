@@ -1,3 +1,4 @@
+import logging
 import threading
 
 import pytest
@@ -39,6 +40,15 @@ class TestRunDcaValidationGuard:
             ("experimental metadata",),
         ]
         assert "RuntimeError" in issues[1].message
+
+
+@pytest.mark.unit
+def test_unexpected_error_is_logged_with_its_traceback(caplog):
+    with caplog.at_level(logging.WARNING, logger=validator.logger.name):
+        validator._run_dca_validation({}, None, "0.2", ExplodingModel, False)
+    records = [r for r in caplog.records if "Unexpected TypeError" in r.getMessage()]
+    assert len(records) == 1
+    assert records[0].exc_info[0] is TypeError
 
 
 @pytest.mark.functional

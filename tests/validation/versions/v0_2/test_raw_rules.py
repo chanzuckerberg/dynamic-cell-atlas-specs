@@ -1,17 +1,27 @@
 import copy
+from types import SimpleNamespace
 
+import pydantic
 import pytest
 
-from dca_helpers.validation.versions.v0_1.models import raw_array_rule_messages
+from dca_helpers.validation.versions.v0_1 import models as models_v01
+from dca_helpers.validation.versions.v0_1.models import (
+    DCAScaleLevelSpec,
+    raw_array_rule_messages,
+)
+from dca_helpers.validation.versions.v0_2 import models as models_v02
 from dca_helpers.validation.versions.v0_2.models import (
     DCALabelScaleLevelSpecV0_2,
+    DCAStoreSpecV0_2,
     StoreRuleInputs,
     raw_store_rule_messages,
+    timepoint_statistics_messages,
 )
 
 from .test_error_hiding import BY_NAME, DEFECTS, build_store
 from .test_models import (
     valid_label_level,
+    valid_level,
     valid_store,
     validate_label_level,
     validate_store,
@@ -130,3 +140,37 @@ def test_label_level_raw_rules_use_the_label_dtype_rule():
     raw = raw_array_rule_messages(level, DCALabelScaleLevelSpecV0_2.dtype_rule)
     assert without_prefix(raw) == expected
     assert any("label array" in m for m in raw)
+
+
+def test_timepoint_rule_does_not_enumerate_every_timepoint():
+    levels = [SimpleNamespace(path="0", shape=[10**9, 1, 1, 1, 1], chunk_shape=[1] * 5)]
+    statistics = {"0": {"timepoint_statistics": {"0": {}, "7": {}, "x": {}}}}
+    inputs = StoreRuleInputs(
+        levels=levels, axis_units={}, axis_scales={}, channel_statistics=statistics
+    )
+    missing, unexpected = timepoint_statistics_messages(inputs)
+    assert "missing 999999998 of 1000000000 timepoints (first missing: '1')" in missing
+    assert "1 keys that are not timepoint indices" in unexpected
+    assert "first unexpected: 'x'" in unexpected
+
+
+def test_failing_store_raw_rule_keeps_the_original_errors(monkeypatch):
+    def failing_rule(data):
+        raise RuntimeError("rule bug")
+
+    monkeypatch.setattr(models_v02, "raw_store_rule_messages", failing_rule)
+    store = build_store([BY_NAME["no_coarse_level"]])
+    del store["dca"]
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCAStoreSpecV0_2.model_validate(store)
+    assert any("'dca' key" in error["msg"] for error in info.value.errors())
+
+
+def test_failing_level_raw_rule_keeps_the_original_errors(monkeypatch):
+    def failing_rule(data, dtype_rule):
+        raise RuntimeError("rule bug")
+
+    monkeypatch.setattr(models_v01, "raw_array_rule_messages", failing_rule)
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCAScaleLevelSpec.model_validate({**valid_level(), "codec_id": "bad"})
+    assert any("not permitted" in error["msg"] for error in info.value.errors())
