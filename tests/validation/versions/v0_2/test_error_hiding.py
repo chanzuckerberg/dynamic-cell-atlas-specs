@@ -7,7 +7,7 @@ here builds a valid store, applies one or more single-defect mutators, and
 asserts that every defect is reported with its own severity.
 
 Pairs that still lose a defect because a nested model failed first are marked
-as strict expected failures and tracked in issue 42.
+as strict expected failures.
 """
 
 import copy
@@ -29,7 +29,7 @@ from .test_models import (
 pytestmark = pytest.mark.unit
 
 SAMPLE_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
-SLICE_2 = "nested-model failures hide store-level rules (issue 42)"
+NESTED_HIDING = "nested-model failures hide store-level rules"
 
 
 @dataclass(frozen=True)
@@ -182,7 +182,9 @@ def hides(a, b):
 
 def pair_params():
     for a, b in itertools.combinations(DEFECTS, 2):
-        marks = [pytest.mark.xfail(strict=True, reason=SLICE_2)] if hides(a, b) else []
+        marks = []
+        if hides(a, b):
+            marks.append(pytest.mark.xfail(strict=True, reason=NESTED_HIDING))
         yield pytest.param(a, b, marks=marks, id=f"{a.name}+{b.name}")
 
 
@@ -206,7 +208,7 @@ def test_every_level_spec_rule_is_reported_together():
     assert unreported(level_rules) == []
 
 
-@pytest.mark.xfail(strict=True, reason=SLICE_2)
+@pytest.mark.xfail(strict=True, reason=NESTED_HIDING)
 def test_all_defects_are_reported_together():
     assert unreported(DEFECTS) == []
 
