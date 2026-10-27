@@ -41,6 +41,7 @@ DCAScaleLevelSpecV0_2 inherits them directly without modification.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -69,6 +70,7 @@ from dca_helpers.validation.versions.v0_1.models import (
 from dca_helpers.validation.versions.v0_1.models import (
     downsampling_factor_messages,
     merge_validation_error,
+    raw_rule_messages,
     raw_shape_views,
 )
 
@@ -631,11 +633,13 @@ def raw_store_rule_messages(data: object) -> list[str]:
     return [] if inputs is None else store_rule_messages(inputs)
 
 
+def label_store_rule_messages(levels: Sequence[Any]) -> list[str]:
+    return coarse_level_messages(levels) + downsampling_factor_messages(levels)
+
+
 def raw_label_store_rule_messages(data: object) -> list[str]:
     levels = raw_shape_views(data.get("levels")) if isinstance(data, dict) else None
-    if not levels:
-        return []
-    return coarse_level_messages(levels) + downsampling_factor_messages(levels)
+    return label_store_rule_messages(levels) if levels else []
 
 
 # ------------------------------------------------------------------
@@ -784,11 +788,20 @@ def channel_count_messages(inputs: StoreRuleInputs) -> list[str]:
     ]
 
 
+def _is_timepoint_key(key: object, n_timepoints: int) -> bool:
+    return (
+        isinstance(key, str)
+        and key.isascii()
+        and key.isdigit()
+        and str(int(key)) == key
+        and int(key) < n_timepoints
+    )
+
+
 def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
     if inputs.channel_statistics is None or not inputs.levels:
         return []
     n_timepoints = inputs.levels[0].shape[0]
-    expected = {str(t) for t in range(n_timepoints)}
     errors: list[str] = []
     for channel, entry in inputs.channel_statistics.items():
         tp_stats = (
@@ -796,17 +809,20 @@ def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
         )
         if not isinstance(tp_stats, dict):
             continue
-        missing = sorted(expected - set(tp_stats), key=int)
-        if missing:
+        present = {int(k) for k in tp_stats if _is_timepoint_key(k, n_timepoints)}
+        missing_count = max(0, n_timepoints - len(present))
+        if missing_count:
+            first_missing = next(t for t in itertools.count() if t not in present)
             errors.append(
                 f"normalization_statistics['{channel}'].timepoint_statistics is "
-                f"missing {len(missing)} of {n_timepoints} timepoints "
-                f"(first missing: '{missing[0]}'). If present, it MUST contain "
+                f"missing {missing_count} of {n_timepoints} timepoints "
+                f"(first missing: '{first_missing}'). If present, it MUST contain "
                 "entries for all timepoints in the dataset "
                 "(normalization-statistics.rst § Channel Normalization Fields)."
             )
         unexpected = sorted(
-            (k for k in tp_stats if k not in expected), key=lambda k: repr(k)
+            (k for k in tp_stats if not _is_timepoint_key(k, n_timepoints)),
+            key=lambda k: repr(k),
         )
         if unexpected:
             errors.append(
@@ -906,7 +922,7 @@ class DCAStoreSpecV0_2(BaseModel):
         try:
             return handler(data)
         except ValidationError as exc:
-            messages = raw_store_rule_messages(data)
+            messages = raw_rule_messages(raw_store_rule_messages, data)
             if not messages:
                 raise
             raise merge_validation_error(exc, data, messages) from None
@@ -977,7 +993,7 @@ class DCALabelStoreSpecV0_2(BaseModel):
         try:
             return handler(data)
         except ValidationError as exc:
-            messages = raw_label_store_rule_messages(data)
+            messages = raw_rule_messages(raw_label_store_rule_messages, data)
             if not messages:
                 raise
             raise merge_validation_error(exc, data, messages) from None
@@ -989,8 +1005,7 @@ class DCALabelStoreSpecV0_2(BaseModel):
 
     @model_validator(mode="after")
     def check_store_rules(self) -> "DCALabelStoreSpecV0_2":
-        messages = coarse_level_messages(self.levels)
-        messages += downsampling_factor_messages(self.levels)
+        messages = label_store_rule_messages(self.levels)
         if messages:
             raise ValueError("\n".join(messages))
         return self

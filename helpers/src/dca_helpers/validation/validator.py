@@ -25,6 +25,7 @@ parent_path set to the image/field path.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -53,6 +54,8 @@ from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     validate_well_perturbation_v0_2,
 )
 from dca_helpers.validation.zarr_node import ZarrNodeType, classify_group
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import zarr
@@ -854,6 +857,7 @@ def _run_dca_validation(
 
 
 def _unexpected_error_issue(stage: str, exc: Exception) -> Issue:
+    logger.warning("Unexpected %s during %s", type(exc).__name__, stage, exc_info=exc)
     return Issue(
         loc=(stage,),
         message=f"Unexpected {type(exc).__name__} during {stage}: {exc}",

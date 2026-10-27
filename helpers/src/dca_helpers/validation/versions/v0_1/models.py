@@ -15,6 +15,7 @@ where `data` is a dict produced by validation.validator._build_node_dict().
 
 from __future__ import annotations
 
+import logging
 import math
 from collections.abc import Callable, Sequence
 from types import SimpleNamespace
@@ -71,6 +72,14 @@ def _nbytes(shape: list[int], dtype: str) -> int:
     return math.prod(shape) * np.dtype(dtype).itemsize
 
 
+def raw_rule_messages(rule: Callable[..., list[str]], *args: Any) -> list[str]:
+    try:
+        return rule(*args)
+    except Exception:
+        logger.warning("Raw-input rule %s failed", rule.__name__, exc_info=True)
+        return []
+
+
 def merge_validation_error(
     exc: ValidationError, data: object, messages: list[str]
 ) -> ValidationError:
@@ -93,6 +102,9 @@ def merge_validation_error(
         for message in messages
     ]
     return ValidationError.from_exception_data(exc.title, lines)
+
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +380,7 @@ class DCAScaleLevelSpec(BaseModel):
         try:
             return handler(data)
         except ValidationError as exc:
-            messages = raw_array_rule_messages(data, cls.dtype_rule)
+            messages = raw_rule_messages(raw_array_rule_messages, data, cls.dtype_rule)
             if not messages:
                 raise
             raise merge_validation_error(exc, data, messages) from None
@@ -562,7 +574,7 @@ class DCAStoreSpecV0_1(BaseModel):
             return handler(data)
         except ValidationError as exc:
             levels = data.get("levels") if isinstance(data, dict) else None
-            messages = raw_downsampling_messages(levels)
+            messages = raw_rule_messages(raw_downsampling_messages, levels)
             if not messages:
                 raise
             raise merge_validation_error(exc, data, messages) from None
