@@ -842,7 +842,7 @@ class DCALabelStoreSpecV0_2(BaseModel):
 
     # ------------------------------------------------------------------
     # array-standard.rst § Multiresolution — MUST (coarse level; t/c factor),
-    # SHOULD (spatial factor). One validator, for the same reason as the image store.
+    # SHOULD (spatial factor)
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
