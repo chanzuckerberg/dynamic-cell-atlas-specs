@@ -511,11 +511,6 @@ class DCAGroupMetadataV0_2(BaseModel):
 
 
 def coarse_level_messages(levels: Sequence[Any]) -> list[str]:
-    """MUST message when no level has every spatial dimension within the cap.
-
-    ``levels`` is any sequence of objects with ``path`` and ``shape`` in
-    [t, c, z, y, x] order. Shared by the image and label store models.
-    """
     for level in levels:
         _t, _c, z, y, x = level.shape
         if (

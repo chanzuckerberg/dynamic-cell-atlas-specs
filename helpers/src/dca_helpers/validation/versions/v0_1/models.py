@@ -298,11 +298,6 @@ class DCAScaleLevelSpec(BaseModel):
 
 
 def downsampling_factor_messages(levels: Sequence[Any]) -> list[str]:
-    """MUST messages (t/c factor 1) followed by SHOULD messages (spatial factor 2).
-
-    ``levels`` is any sequence of objects with ``shape`` and ``chunk_shape``
-    lists in [t, c, z, y, x] order. Shared by every store model.
-    """
     if len(levels) < 2:
         return []
 
