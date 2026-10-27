@@ -4,7 +4,7 @@ Pipelines fill these reserved columns from their own stores, including ``store_n
 from their own naming convention.
 """
 
-#: Reserved column names the engine supplies for every store.
+#: Reserved column names every pipeline fills for each of its stores.
 STORE_COLUMNS: frozenset[str] = frozenset(
     {
         "store_dataset_name",
