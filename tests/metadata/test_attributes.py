@@ -35,6 +35,18 @@ def test_merge_stamps_version_and_url_and_keeps_existing_stats():
     assert attrs["ome"] == {}
 
 
+def test_merge_replaces_the_previous_block_and_keeps_only_stats():
+    attrs = {"ome": {}}
+    first = min_dca_block(perturbation={"control_class": "negcon"})
+    merge_dca_attributes(attrs, first, [{"index": 0, "name": "GFP", "description": "d"}])
+    write_normalization_statistics(attrs, STATS)
+    merge_dca_attributes(attrs, min_dca_block(), None)
+    assert "perturbation" not in attrs["dca"]
+    assert "channels" not in attrs["dca"]
+    assert attrs["dca"]["normalization_statistics"] == STATS
+    assert attrs["dca"]["study"] == min_dca_block()["study"]
+
+
 def test_merge_with_nothing_to_write_leaves_attrs_untouched():
     attrs = {"ome": {}}
     merge_dca_attributes(attrs, None, None)
