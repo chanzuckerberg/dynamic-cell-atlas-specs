@@ -183,7 +183,10 @@ class DCAScaleLevelSpecV0_2(DCAScaleLevelSpecV0_1):
     """
     Validates one scale level (one Zarr array) inside a DCA v0.2 multiscale store.
 
-    All array-level rules are inherited unchanged from DCAScaleLevelSpecV0_1:
+    All array-level rules are inherited unchanged from DCAScaleLevelSpecV0_1.
+    They are `_*_messages` methods collected by `check_array_rules`. Add a new
+    array rule as such a method, not as a separate validator, or it can hide
+    the other rules:
       - array-standard.rst § Compression         (codec MUST / SHOULD)
       - array-standard.rst § Performance / Chunk Size      (chunk size MUST / SHOULD)
       - array-standard.rst § Performance / Shard Size      (shard size MUST / SHOULD)
@@ -221,7 +224,8 @@ class DCALabelScaleLevelSpecV0_2(DCAScaleLevelSpecV0_2):
     Validates one scale level inside a DCA v0.2 label image store.
 
     Inherits all array-level rules from DCAScaleLevelSpecV0_2 and overrides the
-    dtype recommendation: label arrays SHOULD use uint32, not uint8/uint16.
+    dtype recommendation through the `_dtype_messages` hook: label arrays SHOULD
+    use uint32, not uint8/uint16.
     """
 
     # array-standard.rst § Data Types — SHOULD (label-specific override)
