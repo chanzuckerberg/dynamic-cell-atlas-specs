@@ -19,15 +19,7 @@ from .test_models import (
 pytestmark = pytest.mark.unit
 
 SAMPLE_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
-NESTED_HIDING = "nested-model failures hide store-level rules"
-FIELD_LEVEL_HIDING = "field-level validator failures hide store-level rules"
 ALWAYS_REPORTED = ("dimension_names_mismatch", "channel_missing_name")
-XFAIL_NESTED = pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason=NESTED_HIDING
-)
-XFAIL_FIELD_LEVEL = pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason=FIELD_LEVEL_HIDING
-)
 
 
 @dataclass(frozen=True)
@@ -151,6 +143,7 @@ DEFECTS = [
 ]
 
 BY_NAME = {d.name: d for d in DEFECTS}
+STORE_LEVEL_DEFECTS = [d for d in DEFECTS if not d.nested]
 
 
 def build_store(defects):
@@ -170,19 +163,9 @@ def unreported(defects):
     ]
 
 
-def hides(a, b):
-    if a.nested != b.nested:
-        return True
-    has_dimension_names = "dimension_names_mismatch" in {a.name, b.name}
-    return has_dimension_names and (a.level_rule or b.level_rule)
-
-
 def pair_params():
     for a, b in itertools.combinations(DEFECTS, 2):
-        marks = []
-        if hides(a, b):
-            marks.append(XFAIL_NESTED)
-        yield pytest.param(a, b, marks=marks, id=f"{a.name}+{b.name}")
+        yield pytest.param(a, b, id=f"{a.name}+{b.name}")
 
 
 @pytest.mark.parametrize("defect", DEFECTS, ids=lambda d: d.name)
@@ -205,7 +188,6 @@ def test_every_level_spec_rule_is_reported_together():
     assert unreported(level_rules) == []
 
 
-@XFAIL_NESTED
 def test_all_defects_are_reported_together():
     assert unreported(DEFECTS) == []
 
@@ -245,7 +227,6 @@ def reorder_axes(store):
     store["axes"] = ["t", "c", "y", "x", "z"]
 
 
-@XFAIL_FIELD_LEVEL
 @pytest.mark.parametrize(
     "apply,marker",
     [(drop_dca, "Missing 'dca' key"), (reorder_axes, "Axes must be")],
@@ -275,3 +256,25 @@ def test_label_level_reports_dtype_chunk_and_shard_together():
     ]
     for severity, marker in expected:
         assert any(i.severity == severity and marker in i.message for i in issues)
+
+
+def messages_of(defects):
+    return [i.message for i in validate_store(build_store(defects))]
+
+
+@pytest.mark.parametrize("a,b", pair_params())
+def test_no_message_is_reported_twice_for_a_pair(a, b):
+    messages = messages_of([a, b])
+    assert len(messages) == len(set(messages))
+
+
+def test_no_message_is_reported_twice_for_every_defect():
+    messages = messages_of(DEFECTS)
+    assert len(messages) == len(set(messages))
+
+
+@pytest.mark.parametrize("defect", STORE_LEVEL_DEFECTS, ids=lambda d: d.name)
+def test_store_level_defect_alone_is_reported_once(defect):
+    messages = [m for m in messages_of([defect]) if defect.marker in m]
+    assert len(messages) >= 1
+    assert len(messages) == len(set(messages))
