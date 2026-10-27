@@ -1,15 +1,3 @@
-"""
-Combination tests: one validation defect must never hide another.
-
-Pydantic stops a model's mode="after" validator chain at the first raise, and
-runs nested-model validation before the parent's after-validators. Each test
-here builds a valid store, applies one or more single-defect mutators, and
-asserts that every defect is reported with its own severity.
-
-Pairs that still lose a defect because a nested model failed first are marked
-as strict expected failures.
-"""
-
 import copy
 import itertools
 from collections.abc import Callable
@@ -20,8 +8,10 @@ import pytest
 from dca_helpers.validation.result import Severity
 
 from .test_models import (
+    valid_label_level,
     valid_label_store,
     valid_store,
+    validate_label_level,
     validate_label_store,
     validate_store,
 )
@@ -30,6 +20,8 @@ pytestmark = pytest.mark.unit
 
 SAMPLE_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
 NESTED_HIDING = "nested-model failures hide store-level rules"
+FIELD_LEVEL_HIDING = "field-level validator failures hide store-level rules"
+ALWAYS_REPORTED = ("dimension_names_mismatch", "channel_missing_name")
 
 
 @dataclass(frozen=True)
@@ -173,7 +165,6 @@ def unreported(defects):
 
 
 def hides(a, b):
-    """True when the validator is expected to still lose a defect for this pair."""
     if a.nested != b.nested:
         return True
     has_dimension_names = "dimension_names_mismatch" in {a.name, b.name}
@@ -224,6 +215,57 @@ def test_label_store_reports_every_rule_together():
         (Severity.ERROR, "No scale level has all spatial"),
         (Severity.ERROR, "downsampling factor for 't'"),
         (Severity.WARNING, "downsampling factor for 'z'"),
+    ]
+    for severity, marker in expected:
+        assert any(i.severity == severity and marker in i.message for i in issues)
+
+
+def pairs_with_always_reported():
+    for a, b in itertools.combinations(DEFECTS, 2):
+        if {a.name, b.name} & set(ALWAYS_REPORTED):
+            yield pytest.param(a, b, id=f"{a.name}+{b.name}")
+
+
+@pytest.mark.parametrize("a,b", pairs_with_always_reported())
+def test_field_level_error_is_always_reported(a, b):
+    assert set(unreported([a, b])) & set(ALWAYS_REPORTED) == set()
+
+
+def drop_dca(store):
+    del store["dca"]
+
+
+def reorder_axes(store):
+    store["axes"] = ["t", "c", "y", "x", "z"]
+
+
+@pytest.mark.xfail(strict=True, reason=FIELD_LEVEL_HIDING)
+@pytest.mark.parametrize(
+    "apply,marker",
+    [(drop_dca, "Missing 'dca' key"), (reorder_axes, "Axes must be")],
+    ids=["dca_missing", "axes_order"],
+)
+def test_field_level_failure_does_not_hide_store_rules(apply, marker):
+    store = build_store([BY_NAME["no_coarse_level"]])
+    apply(store)
+    messages = [i.message for i in validate_store(store)]
+    assert any(marker in m for m in messages)
+    assert any("No scale level has all spatial" in m for m in messages)
+
+
+def test_label_level_reports_dtype_chunk_and_shard_together():
+    issues = validate_label_level(
+        valid_label_level(
+            shape=[1, 1, 512, 1024, 1024],
+            chunk_shape=[1, 1, 64, 64, 64],
+            shard_shape=[1, 1, 128, 128, 128],
+            dtype="uint16",
+        )
+    )
+    expected = [
+        (Severity.WARNING, "dtype 'uint16'"),
+        (Severity.WARNING, "recommended 1 MB"),
+        (Severity.ERROR, "shard size"),
     ]
     for severity, marker in expected:
         assert any(i.severity == severity and marker in i.message for i in issues)
