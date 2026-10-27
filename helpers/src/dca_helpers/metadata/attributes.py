@@ -41,11 +41,14 @@ def merge_dca_attributes(
     *,
     run_attrs: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
-    """Merge a resolved DCA payload into *attrs* in place.
+    """Write a resolved DCA payload to ``attrs["dca"]`` in place.
 
-    ``update`` rather than assignment: the payload's top-level keys are exactly the ones
-    it owns (it is validated against a model with ``extra="forbid"``), so anything else
-    already on the node, ``normalization_statistics`` above all, survives.
+    The block is replaced, not merged: a section a re-run no longer resolves (one dropped
+    from the config, or one that pruned blank) must not survive from the previous write,
+    and neither do channels when *channels* is ``None``. Only
+    ``normalization_statistics`` is carried over, since
+    :func:`write_normalization_statistics` writes it separately; a payload that carries
+    its own replaces it.
 
     ``color`` is an omero field, not a DCA one; it rides in the same channel entry so a
     config declares each channel once, and is dropped on the way into ``dca``.
@@ -66,9 +69,11 @@ def merge_dca_attributes(
             attrs[key] = dict(value)
     if channels is None and not payload:
         return
-    dca = attrs.setdefault("dca", {})
-    dca["version"] = SPEC_VERSION
-    dca["url"] = DCA_SCHEMA_URL
+    dca: dict[str, Any] = {"version": SPEC_VERSION, "url": DCA_SCHEMA_URL}
+    previous = attrs.get("dca") or {}
+    if "normalization_statistics" in previous:
+        dca["normalization_statistics"] = previous["normalization_statistics"]
+    attrs["dca"] = dca
     if channels is not None:
         dca["channels"] = [
             {k: v for k, v in entry.items() if k != "color"} for entry in channels
