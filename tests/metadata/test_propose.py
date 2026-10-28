@@ -28,6 +28,17 @@ def test_cellosaurus_proposes_curie_and_tissue_term(replay_registry):
     ]
 
 
+def test_repeated_proposals_search_each_name_once(replay_registry):
+    fields = ["biosample.cell_line_id", "biosample.tissue"]
+    hints = {"biosample.cell_line_name": "A549"}
+    propose(fields, hints=hints)
+    propose(fields, hints=hints)
+    assert [params["q"] for _, params in replay_registry.requests] == [
+        'id:"A549"',
+        'sy:"A549"',
+    ]
+
+
 def test_cellosaurus_parent_line_beats_its_derivatives(replay_registry):
     p = _one("biosample.cell_line_id", hints={"biosample.cell_line_name": "HEK293"})
     assert (p.value, p.source) == ("CVCL:0045", "Cellosaurus CVCL:0045")
