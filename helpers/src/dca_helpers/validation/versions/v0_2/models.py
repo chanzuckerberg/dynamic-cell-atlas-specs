@@ -788,14 +788,17 @@ def channel_count_messages(inputs: StoreRuleInputs) -> list[str]:
     ]
 
 
+MAX_TIMEPOINT_KEY_DIGITS = 4000
+
+
 def _is_timepoint_key(key: object, n_timepoints: int) -> bool:
-    return (
-        isinstance(key, str)
-        and key.isascii()
-        and key.isdigit()
-        and str(int(key)) == key
-        and int(key) < n_timepoints
-    )
+    if not (
+        isinstance(key, str) and key.isascii() and key.isdigit() and n_timepoints > 0
+    ):
+        return False
+    if key != "0" and key.startswith("0"):
+        return False
+    return len(key) <= MAX_TIMEPOINT_KEY_DIGITS and int(key) < n_timepoints
 
 
 def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
@@ -809,7 +812,13 @@ def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
         )
         if not isinstance(tp_stats, dict):
             continue
-        present = {int(k) for k in tp_stats if _is_timepoint_key(k, n_timepoints)}
+        present: set[int] = set()
+        stray: list[object] = []
+        for key in tp_stats:
+            if _is_timepoint_key(key, n_timepoints):
+                present.add(int(key))
+            else:
+                stray.append(key)
         missing_count = max(0, n_timepoints - len(present))
         if missing_count:
             first_missing = next(t for t in itertools.count() if t not in present)
@@ -820,10 +829,7 @@ def timepoint_statistics_messages(inputs: StoreRuleInputs) -> list[str]:
                 "entries for all timepoints in the dataset "
                 "(normalization-statistics.rst § Channel Normalization Fields)."
             )
-        unexpected = sorted(
-            (k for k in tp_stats if not _is_timepoint_key(k, n_timepoints)),
-            key=lambda k: repr(k),
-        )
+        unexpected = sorted(stray, key=repr)
         if unexpected:
             errors.append(
                 f"normalization_statistics['{channel}'].timepoint_statistics has "

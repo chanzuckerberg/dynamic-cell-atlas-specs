@@ -32,6 +32,9 @@ from pydantic import (
 )
 from pydantic_core import InitErrorDetails
 
+logger = logging.getLogger(__name__)
+
+
 # ---------------------------------------------------------------------------
 # Constants from the spec
 # ---------------------------------------------------------------------------
@@ -102,9 +105,6 @@ def merge_validation_error(
         for message in messages
     ]
     return ValidationError.from_exception_data(exc.title, lines)
-
-
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
