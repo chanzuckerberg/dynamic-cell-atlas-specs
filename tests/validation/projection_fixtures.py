@@ -51,6 +51,8 @@ def _to_v03_source(store: Path, steps: list[str]) -> None:
     def upgrade(attrs: dict) -> None:
         attrs["dca"]["version"] = "0.3"
         attrs["dca"]["image_data"] = {"processing_variant": steps}
+        # Required on every v0.3 image group.
+        attrs["dca"].setdefault("perturbation", {"modality": "no perturbations"})
 
     edit_field_attrs(store, upgrade)
 

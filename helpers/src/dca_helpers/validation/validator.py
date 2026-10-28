@@ -50,6 +50,7 @@ from dca_helpers.validation.versions.v0_2.experimental_metadata import (
 )
 from dca_helpers.validation.versions.v0_3.experimental_metadata import (
     validate_dca_experimental_metadata_v0_3,
+    validate_well_perturbation_v0_3,
 )
 from dca_helpers.validation.versions.v0_3.models import check_projection_v0_3
 from dca_helpers.validation.zarr_node import ZarrNodeType, classify_group
@@ -443,7 +444,7 @@ def _process_one_well(
     node_path: str,
     well_path: str,
     valid_aq_ids: "set[int] | None",
-    check_well_perturbation: bool,
+    check_well_perturbation: "Callable[[dict], list[Issue]] | None",
     field_offset: int,
     field_slice_end: "int | None",
 ) -> "tuple[str, list[Issue], list[str], list[str], object]":
@@ -490,8 +491,8 @@ def _process_one_well(
     well_perturbation = (
         well_dca.get("well_perturbation") if isinstance(well_dca, dict) else None
     )
-    if check_well_perturbation and well_perturbation is not None:
-        for wp_issue in validate_well_perturbation_v0_2(well_perturbation):
+    if check_well_perturbation is not None and well_perturbation is not None:
+        for wp_issue in check_well_perturbation(well_perturbation):
             issues.append(
                 Issue(
                     loc=(
@@ -666,7 +667,7 @@ def _gather_plate_fields(
     field_paths: list[str] = []
     selected_field_paths: list[str] = []
     well_perturbation_by_well: dict[str, object] = {}
-    check_well_perturbation = spec_version in _EXPERIMENTAL_SPEC_VERSIONS
+    check_well_perturbation = _WELL_PERTURBATION_VALIDATORS.get(spec_version)
     field_slice_end = None if field_limit is None else field_offset + field_limit
 
     valid_aq_ids: set[int] | None = None
@@ -728,13 +729,18 @@ _SHOULD_MARKER = "[SHOULD]"
 
 # Spec versions whose dca block mirrors the experimental-metadata required floor
 # (validated against the generated JSON Schema). v0.1 predates experimental
-# metadata, so it is excluded. v0.3 changes only ImageData.processing_variant, so
-# its WellPerturbation rules are the v0.2 ones.
+# metadata, so it is excluded.
 _EXPERIMENTAL_VALIDATORS = {
     "0.2": validate_dca_experimental_metadata_v0_2,
     "0.3": validate_dca_experimental_metadata_v0_3,
 }
 _EXPERIMENTAL_SPEC_VERSIONS: frozenset[str] = frozenset(_EXPERIMENTAL_VALIDATORS)
+# The well-level dca.well_perturbation row of each of those versions. v0.3 has its
+# own: its modality vocabulary and "no perturbations" form differ from v0.2's.
+_WELL_PERTURBATION_VALIDATORS = {
+    "0.2": validate_well_perturbation_v0_2,
+    "0.3": validate_well_perturbation_v0_3,
+}
 
 # Spec versions that define dca.projection (projections.rst, new in v0.3).
 PROJECTION_SPEC_VERSIONS: frozenset[str] = frozenset({"0.3"})

@@ -458,15 +458,8 @@
                     ]
                 },
                 "perturbation": {
-                    "anyOf": [
-                        {
-                            "$ref": "#/$defs/PerturbationAssignment"
-                        },
-                        {
-                            "type": "null"
-                        }
-                    ],
-                    "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). CONDITIONALLY REQUIRED: present for every image group of a dataset that has perturbations, absent for a dataset that has none. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
+                    "$ref": "#/$defs/PerturbationAssignment",
+                    "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). REQUIRED on every image group. An image group whose material had nothing applied records ``{\"modality\": \"no perturbations\"}`` and nothing else. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
                 },
                 "provenance": {
                     "additionalProperties": {
@@ -497,6 +490,7 @@
                 "study",
                 "biosample",
                 "specimen",
+                "perturbation",
                 "study_component",
                 "provenance"
             ],
@@ -842,6 +836,14 @@
             "title": "MicroscopeType",
             "type": "string"
         },
+        "NoPerturbations": {
+            "description": "The single value of ``PerturbationAssignment.modality``: nothing was applied to this image group's material (CxG ``no perturbations``).",
+            "enum": [
+                "no perturbations"
+            ],
+            "title": "NoPerturbations",
+            "type": "string"
+        },
         "Objective": {
             "additionalProperties": false,
             "description": "Objective lens. Maps to OME Objective.",
@@ -982,7 +984,16 @@
                             "modality": {
                                 "anyOf": [
                                     {
-                                        "const": "crispr"
+                                        "const": "CRISPR activation screen"
+                                    },
+                                    {
+                                        "const": "CRISPR interference screen"
+                                    },
+                                    {
+                                        "const": "CRISPR knockout mutant"
+                                    },
+                                    {
+                                        "const": "CRISPR knockout screen"
                                     },
                                     {
                                         "const": "orf"
@@ -1041,7 +1052,7 @@
                             "type": "null"
                         }
                     ],
-                    "description": "Genetic-target identifiers \u2014 present when ``modality`` is crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target)."
+                    "description": "Genetic-target identifiers \u2014 present when ``modality`` is one of the four CRISPR values or orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target)."
                 },
                 "mechanism": {
                     "description": "Mechanism of action (free text).",
@@ -1081,23 +1092,215 @@
         },
         "PerturbationAssignment": {
             "additionalProperties": false,
-            "description": "The ASSIGNMENT of a :class:`Perturbation` to imaged material \u2014 the dosing / control / timing that turns a reusable codebook entry into \"what was done to this sample\". The entry itself is the ``definition`` slot (plus an optional ``cotreatment``); everything else here is the assignment. Carries no plate / well key, so it is placement-agnostic: it is the ``perturbation`` block of :class:`ExperimentalMetadata` (image level, alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key. Required-when-present: a dataset with perturbations MUST carry the required fields below; a dataset with none simply has no ``perturbation`` block. (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)",
-            "if": {
-                "properties": {
-                    "control_class": {
+            "allOf": [
+                {
+                    "if": {
                         "not": {
-                            "anyOf": [
-                                {
-                                    "const": "empty"
-                                }
+                            "required": [
+                                "modality"
                             ]
+                        },
+                        "properties": {
+                            "modality": {}
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "control_class": {}
+                        },
+                        "required": [
+                            "control_class"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "control_class"
+                            ]
+                        },
+                        "properties": {
+                            "control_class": {}
                         }
                     }
                 },
-                "required": [
-                    "control_class"
-                ]
-            },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "definition"
+                            ]
+                        },
+                        "properties": {
+                            "definition": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "cotreatment"
+                            ]
+                        },
+                        "properties": {
+                            "cotreatment": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "concentration"
+                            ]
+                        },
+                        "properties": {
+                            "concentration": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "solvent"
+                            ]
+                        },
+                        "properties": {
+                            "solvent": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "duration_h"
+                            ]
+                        },
+                        "properties": {
+                            "duration_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "timepoint_primary_h"
+                            ]
+                        },
+                        "properties": {
+                            "timepoint_primary_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "timepoint_secondary_h"
+                            ]
+                        },
+                        "properties": {
+                            "timepoint_secondary_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "control_class": {
+                                "not": {
+                                    "anyOf": [
+                                        {
+                                            "const": "empty"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": [
+                            "control_class"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "definition": {}
+                        },
+                        "required": [
+                            "definition"
+                        ]
+                    }
+                }
+            ],
+            "description": "The ASSIGNMENT of a :class:`Perturbation` to imaged material \u2014 the dosing / control / timing that turns a reusable codebook entry into \"what was done to this sample\". The entry itself is the ``definition`` slot (plus an optional ``cotreatment``); everything else here is the assignment. Carries no plate / well key, so it is placement-agnostic: it is the ``perturbation`` block of :class:`ExperimentalMetadata` (image level, alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key. It has two forms. Material that had nothing applied carries only ``modality: \"no perturbations\"``. Everything else carries ``control_class`` and, unless that is ``empty``, a ``definition``; ``modality`` is then absent (the kind of each perturbation is its ``definition.modality``). (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)",
             "properties": {
                 "concentration": {
                     "anyOf": [
@@ -1110,7 +1313,8 @@
                     ]
                 },
                 "control_class": {
-                    "$ref": "#/$defs/PerturbationControlClass"
+                    "$ref": "#/$defs/PerturbationControlClass",
+                    "description": "Required unless ``modality`` is ``no perturbations`` (enforced by the class rule above)."
                 },
                 "cotreatment": {
                     "anyOf": [
@@ -1140,6 +1344,10 @@
                         "number",
                         "null"
                     ]
+                },
+                "modality": {
+                    "$ref": "#/$defs/NoPerturbations",
+                    "description": "``no perturbations`` when nothing was applied to this image group's material; the block then carries nothing else. Absent otherwise: the kind of an applied perturbation is ``definition.modality``."
                 },
                 "provenance": {
                     "anyOf": [
@@ -1172,17 +1380,6 @@
                     ]
                 }
             },
-            "required": [
-                "control_class"
-            ],
-            "then": {
-                "properties": {
-                    "definition": {}
-                },
-                "required": [
-                    "definition"
-                ]
-            },
             "title": "PerturbationAssignment",
             "type": "object"
         },
@@ -1198,18 +1395,24 @@
             "type": "string"
         },
         "PerturbationModality": {
-            "description": "How the perturbation acts. Normalized superset of CellPainting Gallery ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), with values lowercased.",
+            "description": "How the perturbation acts. Normalized superset of CellPainting Gallery ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), aligned with CELLxGENE schema 7.1 so that CxG's ``perturbation_types`` and ``genetic_perturbation_strategy`` are derived from it rather than curated: ``compound`` maps to the CxG type ``chemical``; the four CRISPR values and ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` map to ``genetic``, with the CRISPR values also naming the CxG strategy; ``diet`` / ``protein`` / ``temperature`` map to the CxG type of the same name. The other values are DCA extensions of the CxG vocabulary. \"Nothing was applied\" is not a modality of a perturbation; it is the ``no perturbations`` value of ``PerturbationAssignment.modality``.",
             "enum": [
                 "compound",
                 "orf",
-                "crispr",
+                "CRISPR activation screen",
+                "CRISPR interference screen",
+                "CRISPR knockout mutant",
+                "CRISPR knockout screen",
                 "shrna",
                 "mirna",
                 "sirna",
+                "diet",
+                "protein",
+                "temperature",
                 "physical",
                 "biological",
-                "other",
-                "unknown"
+                "not reported",
+                "other"
             ],
             "title": "PerturbationModality",
             "type": "string"
@@ -1603,23 +1806,215 @@
         },
         "WellPerturbation": {
             "additionalProperties": false,
-            "description": "Per-well perturbation assignment for an ARRAYED HCS screen \u2014 one row per ``(plate, well)``, written to ``zarr.json`` (well level). A :class:`PerturbationAssignment` plus the ``(plate, well)`` key that resolves it to a well group. This form is DERIVED: ``ExperimentalMetadata.perturbation`` on the image group is authoritative, and this is a plate-shaped index over it that exists so a plate's design can be enumerated without opening every field of view. It is unavailable to a plateless ``image_collection`` store (see the ``perturbation`` block for those). The two MUST agree; because the direction is defined, a disagreement is repaired by re-deriving this row from the image groups, never the other way round. The validator checks this row's own contents when present (dispatched to ``validate_well_perturbation_v0_2``), and separately cross-checks it against the consensus ``perturbation`` value of its own well's field(s) of view, reporting a mismatch as an error (see validator.rst). The non-``empty`` \u21d2 ``definition`` rule is inherited from the parent.",
-            "if": {
-                "properties": {
-                    "control_class": {
+            "allOf": [
+                {
+                    "if": {
                         "not": {
-                            "anyOf": [
-                                {
-                                    "const": "empty"
-                                }
+                            "required": [
+                                "modality"
                             ]
+                        },
+                        "properties": {
+                            "modality": {}
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "control_class": {}
+                        },
+                        "required": [
+                            "control_class"
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "control_class"
+                            ]
+                        },
+                        "properties": {
+                            "control_class": {}
                         }
                     }
                 },
-                "required": [
-                    "control_class"
-                ]
-            },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "definition"
+                            ]
+                        },
+                        "properties": {
+                            "definition": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "cotreatment"
+                            ]
+                        },
+                        "properties": {
+                            "cotreatment": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "concentration"
+                            ]
+                        },
+                        "properties": {
+                            "concentration": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "solvent"
+                            ]
+                        },
+                        "properties": {
+                            "solvent": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "duration_h"
+                            ]
+                        },
+                        "properties": {
+                            "duration_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "timepoint_primary_h"
+                            ]
+                        },
+                        "properties": {
+                            "timepoint_primary_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "modality": {}
+                        },
+                        "required": [
+                            "modality"
+                        ]
+                    },
+                    "then": {
+                        "not": {
+                            "required": [
+                                "timepoint_secondary_h"
+                            ]
+                        },
+                        "properties": {
+                            "timepoint_secondary_h": {}
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "control_class": {
+                                "not": {
+                                    "anyOf": [
+                                        {
+                                            "const": "empty"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "required": [
+                            "control_class"
+                        ]
+                    },
+                    "then": {
+                        "properties": {
+                            "definition": {}
+                        },
+                        "required": [
+                            "definition"
+                        ]
+                    }
+                }
+            ],
+            "description": "Per-well perturbation assignment for an ARRAYED HCS screen \u2014 one row per ``(plate, well)``, written to ``zarr.json`` (well level). A :class:`PerturbationAssignment` plus the ``(plate, well)`` key that resolves it to a well group. This form is DERIVED: ``ExperimentalMetadata.perturbation`` on the image group is authoritative, and this is a plate-shaped index over it that exists so a plate's design can be enumerated without opening every field of view. It is unavailable to a plateless ``image_collection`` store (see the ``perturbation`` block for those). The two MUST agree; because the direction is defined, a disagreement is repaired by re-deriving this row from the image groups, never the other way round. The validator checks this row's own contents when present (dispatched to ``validate_well_perturbation_v0_2``), and separately cross-checks it against the consensus ``perturbation`` value of its own well's field(s) of view, reporting a mismatch as an error (see validator.rst). The non-``empty`` \u21d2 ``definition`` rule is inherited from the parent.",
             "properties": {
                 "concentration": {
                     "anyOf": [
@@ -1632,7 +2027,8 @@
                     ]
                 },
                 "control_class": {
-                    "$ref": "#/$defs/PerturbationControlClass"
+                    "$ref": "#/$defs/PerturbationControlClass",
+                    "description": "Required unless ``modality`` is ``no perturbations`` (enforced by the class rule above)."
                 },
                 "cotreatment": {
                     "anyOf": [
@@ -1662,6 +2058,10 @@
                         "number",
                         "null"
                     ]
+                },
+                "modality": {
+                    "$ref": "#/$defs/NoPerturbations",
+                    "description": "``no perturbations`` when nothing was applied to this image group's material; the block then carries nothing else. Absent otherwise: the kind of an applied perturbation is ``definition.modality``."
                 },
                 "plate": {
                     "description": "Plate identifier. Together with ``well`` this is the link to the image arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in ``zarr.json``) so a row resolves to a well group in the store.",
@@ -1704,17 +2104,8 @@
             },
             "required": [
                 "plate",
-                "well",
-                "control_class"
+                "well"
             ],
-            "then": {
-                "properties": {
-                    "definition": {}
-                },
-                "required": [
-                    "definition"
-                ]
-            },
             "title": "WellPerturbation",
             "type": "object"
         }
@@ -1749,15 +2140,8 @@
             ]
         },
         "perturbation": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/PerturbationAssignment"
-                },
-                {
-                    "type": "null"
-                }
-            ],
-            "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). CONDITIONALLY REQUIRED: present for every image group of a dataset that has perturbations, absent for a dataset that has none. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
+            "$ref": "#/$defs/PerturbationAssignment",
+            "description": "The perturbation applied to this image group's material \u2014 dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). REQUIRED on every image group. An image group whose material had nothing applied records ``{\"modality\": \"no perturbations\"}`` and nothing else. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key \u2014 and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block."
         },
         "provenance": {
             "additionalProperties": {
@@ -1788,6 +2172,7 @@
         "study",
         "biosample",
         "specimen",
+        "perturbation",
         "study_component",
         "provenance"
     ],

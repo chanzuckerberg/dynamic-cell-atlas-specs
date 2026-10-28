@@ -365,7 +365,18 @@ v0.3 inherits every v0.2 image and label rule unchanged and adds projections (`d
 
 The relational rules are a standalone function, `check_projection_v0_3`, called from `validator._run_dca_validation`, rather than more `mode="after"` validators on `DCAStoreSpecV0_3`: pydantic stops a model's after-validators at the first raise, so an inherited v0.2 SHOULD would otherwise skip them.
 
-**Experimental metadata** (`versions/v0_3/experimental_metadata.py`): the v0.3 LinkML schema differs from v0.2 only in `ImageData.processing_variant` (a non-empty list) and the new `ProcessingStep` vocabulary, so the module reuses the v0.2 rule classes and overrides only `image_data`. A test fails if the generated v0.3 schema ever differs from v0.2 anywhere else. Added rules: `raw` alone (MUST); items in `ProcessingStep` (SHOULD).
+**Experimental metadata** (`versions/v0_3/experimental_metadata.py`): the v0.3 LinkML schema differs from v0.2 in `ImageData.processing_variant` (a non-empty list, with the new `ProcessingStep` vocabulary) and in the perturbation classes (the CELLxGENE-aligned `PerturbationModality`, the new `NoPerturbations` value of `PerturbationAssignment.modality`, and `perturbation` required). The module reuses the v0.2 rule classes and overrides only `image_data` and the perturbation classes; a test fails if the generated v0.3 schema differs from v0.2 anywhere else. Added rules:
+
+| Rule | Severity |
+|---|---|
+| `processing_variant`: `raw` alone | MUST |
+| `processing_variant` items in `ProcessingStep` | SHOULD |
+| `perturbation` present on every image group | MUST |
+| `perturbation.modality` (`no perturbations`) carries no other field | MUST |
+| Without it, `control_class` is present, and a non-`empty` one names a `definition` | MUST |
+| `compound` ⇒ `chemical`; a genetic modality (the four CRISPR values, `orf`, `shrna`, `mirna`, `sirna`) ⇒ `genetic` | MUST |
+
+The plate walk checks each well's `dca.well_perturbation` row with the rules of the spec version being validated (`validate_well_perturbation_v0_3` for v0.3).
 
 **Across stores** (`pairing.py`, run once by `runner.validate()` after every store is validated): a store named after a 3D sibling in the run (`<name>_proj.ome.zarr` / `<name>_mip.ome.zarr` next to `<name>.ome.zarr`, or the same with `.zarr`, in either combination of extensions) is its projection and must carry `dca.projection` with `source_store` on every image group. A projection that names no source and has no such sibling was projected before deposit, and the rest is skipped. Otherwise, each projection's `source_store` resolves to a store (a bare name is a sibling; a URL or absolute path is used as given, falling back to a same-named sibling in the run for local mirrors); the projection mirrors the source's image groups; and per image group the t/y/x sizes and t/y/x scales match the source's level 0, `z_dim_source` matches its z, `focus` planes lie within its z (which also covers a block without `z_dim_source`), the uniform form keeps every source channel in order, each per-channel `source_channel` (default: the output name) and `focus.channel` is a source channel, the dtype equals the source's when every method is `max`/`slice` (otherwise the source's or a float type), `processing_variant` starts with the source's steps followed only by projection steps, and `processing_description` equals the source's (absent when the source has none). The store name should insert `_proj` before its extension (`.ome.zarr` or `.zarr`; `_mip` is accepted when every channel uses `max`). A missing source is an error; a source that exists but is not part of the run is a warning, since the comparison needs both stores in one run. The comparison reads `ImageFacts` recorded on each result during validation, so it costs no extra I/O; `ImageFacts` is excluded from reports.
 

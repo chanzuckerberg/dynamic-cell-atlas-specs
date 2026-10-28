@@ -2,11 +2,19 @@
 v0.3 ``ExperimentalMetadata`` validation.
 
 The v0.3 LinkML schema (schema/v0.3/dca_experimental_metadata.yaml) differs from
-v0.2 in one slot: ``ImageData.processing_variant`` is an ordered list of processing
-steps instead of a single string, with a recommended ``ProcessingStep`` vocabulary.
+v0.2 in two places:
+
+* ``ImageData.processing_variant`` is an ordered list of processing steps instead of
+  a single string, with a recommended ``ProcessingStep`` vocabulary.
+* Perturbations: the ``PerturbationModality`` vocabulary is aligned with CELLxGENE
+  7.1 (four CRISPR values replace ``crispr``; ``diet`` / ``protein`` / ``temperature``
+  / ``not reported`` are added; ``unknown`` is removed), and ``perturbation`` is
+  required on every image group, as ``{"modality": "no perturbations"}`` when
+  nothing was applied.
+
 Every other block is unchanged, so this module reuses the v0.2 rule classes and
-overrides only ``image_data``. If a later edit to the v0.3 schema touches another
-block, override that block here too; the drift test in
+overrides only ``image_data`` and the perturbation classes. If a later edit to the
+v0.3 schema touches another block, override that block here too; the drift test in
 tests/validation/versions/v0_3/test_experimental_metadata.py fails if the generated
 v0.3 models stop matching the v0.2 ones anywhere else.
 
@@ -14,6 +22,10 @@ Rules added on top of the generated model:
 
 * ``"raw"`` means "no processing" and MUST be the only item when present.
 * Items SHOULD come from the ``ProcessingStep`` vocabulary.
+* ``compound`` requires the ``chemical`` block and a genetic modality the
+  ``genetic`` block (as in v0.2, with the v0.3 genetic values).
+* ``perturbation.modality`` (``no perturbations``) stands alone; without it,
+  ``control_class`` is required, and a non-``empty`` one requires ``definition``.
 
 The projection-specific agreement (an image lists the projection step of each method
 it uses exactly when it carries ``dca.projection``) is not experimental metadata and is
@@ -24,11 +36,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     DCAExperimentalMetadataV0_2,
     _coverage_issues,
+    _enum_value,
+    _is_populated,
     _sentinel_label_issues,
     experimental_block_keys,
 )
@@ -55,10 +69,118 @@ PROJECTION_STEP_BY_METHOD: dict[str, str] = {
 PROJECTION_STEPS: frozenset[str] = frozenset(PROJECTION_STEP_BY_METHOD.values())
 
 
+# Genetic modalities: each requires the ``genetic`` block (``compound`` requires
+# ``chemical``). Mirrors the Perturbation ``modality`` if/then rules in the YAML.
+GENETIC_MODALITIES: frozenset[str] = frozenset(
+    {
+        "CRISPR activation screen",
+        "CRISPR interference screen",
+        "CRISPR knockout mutant",
+        "CRISPR knockout screen",
+        "orf",
+        "shrna",
+        "mirna",
+        "sirna",
+    }
+)
+NO_PERTURBATIONS = _generated_models.NoPerturbations.no_perturbations.value
+# The assignment fields that "no perturbations" excludes: everything but modality and
+# the block's own provenance.
+_ASSIGNMENT_FIELDS: tuple[str, ...] = (
+    "control_class",
+    "definition",
+    "cotreatment",
+    "concentration",
+    "solvent",
+    "duration_h",
+    "timepoint_primary_h",
+    "timepoint_secondary_h",
+)
+
+# A literal renamed in a schema regen would silently disable its rule; fail at import.
+_MODALITIES = {m.value for m in _generated_models.PerturbationModality}
+if not ({"compound"} | GENETIC_MODALITIES) <= _MODALITIES:
+    raise AssertionError(
+        "PerturbationModality is missing rule value(s) "
+        f"{sorted(({'compound'} | GENETIC_MODALITIES) - _MODALITIES)}; regenerate the "
+        "model or update GENETIC_MODALITIES."
+    )
+
+
+class _PerturbationV0_3(_generated_models.Perturbation):
+    """``Perturbation`` with the ``modality`` ⇒ typed-block rules, v0.3 vocabulary."""
+
+    @model_validator(mode="after")
+    def _require_modality_block(self):
+        modality = _enum_value(self.modality)
+        if modality == "compound" and not _is_populated(self.chemical):
+            raise ValueError(
+                "chemical is required when modality is 'compound' "
+                "(a compound perturbation must carry the chemical identifier block)"
+            )
+        if modality in GENETIC_MODALITIES and not _is_populated(self.genetic):
+            raise ValueError(
+                "genetic is required when modality is a genetic kind "
+                f"({' / '.join(sorted(GENETIC_MODALITIES))}; got modality='{modality}')"
+            )
+        return self
+
+
+class _PerturbationAssignmentV0_3(_generated_models.PerturbationAssignment):
+    """``PerturbationAssignment`` with its two forms enforced.
+
+    ``modality: "no perturbations"`` stands alone. Without it, ``control_class`` is
+    required, and anything but ``empty`` must name a ``definition``. The nested
+    definitions use ``_PerturbationV0_3`` so the modality rules apply to them too.
+    """
+
+    definition: Optional[_PerturbationV0_3] = Field(default=None)
+    cotreatment: Optional[_PerturbationV0_3] = Field(default=None)
+
+    @model_validator(mode="after")
+    def _check_form(self):
+        if _enum_value(self.modality) == NO_PERTURBATIONS:
+            extra = [f for f in _ASSIGNMENT_FIELDS if _is_populated(getattr(self, f))]
+            if extra:
+                raise ValueError(
+                    f"modality 'no perturbations' stands alone, but the block also "
+                    f"sets {extra}; when nothing was applied, record nothing else"
+                )
+            return self
+        control_class = _enum_value(self.control_class)
+        if control_class is None:
+            raise ValueError(
+                "control_class is required unless modality is 'no perturbations' "
+                "(record {'modality': 'no perturbations'} when nothing was applied)"
+            )
+        if control_class != "empty" and not _is_populated(self.definition):
+            raise ValueError(
+                "definition is required when control_class is not 'empty' "
+                "(treated and control material must name a perturbation)"
+            )
+        return self
+
+
+class _WellPerturbationV0_3(  # type: ignore[misc]
+    _generated_models.WellPerturbation, _PerturbationAssignmentV0_3
+):
+    """``WellPerturbation`` — a v0.3 ``PerturbationAssignment`` plus ``(plate, well)``.
+
+    The nested overrides are restated because the generated ``WellPerturbation``
+    precedes the ruled class in the MRO and redeclares them with the generated range
+    (see ``_WellPerturbationV0_2``).
+    """
+
+    definition: Optional[_PerturbationV0_3] = Field(default=None)
+    cotreatment: Optional[_PerturbationV0_3] = Field(default=None)
+
+
 class DCAExperimentalMetadataV0_3(DCAExperimentalMetadataV0_2):
-    """v0.3 ``ExperimentalMetadata``: the v0.2 rules with the v0.3 ``ImageData``."""
+    """v0.3 ``ExperimentalMetadata``: the v0.2 rules with the v0.3 ``ImageData`` and
+    perturbation classes, and ``perturbation`` required."""
 
     image_data: Optional[_generated_models.ImageData] = Field(default=None)
+    perturbation: _PerturbationAssignmentV0_3 = Field(default=...)
 
 
 def _processing_variant_issues(obj: dict) -> list[Issue]:
@@ -141,3 +263,29 @@ def validate_dca_experimental_metadata_v0_3(
         Issue(loc=("dca", *issue.loc), message=issue.message, severity=issue.severity)
         for issue in issues
     ]
+
+
+def validate_perturbation_v0_3(obj: dict) -> list[Issue]:
+    """Validate one v0.3 ``Perturbation`` definition (a bare codebook entry)."""
+    import pydantic
+
+    from dca_helpers.validation.validator import _convert_errors
+
+    try:
+        _PerturbationV0_3.model_validate(obj)
+    except pydantic.ValidationError as exc:
+        return _convert_errors(exc)
+    return []
+
+
+def validate_well_perturbation_v0_3(obj: dict) -> list[Issue]:
+    """Validate one v0.3 ``WellPerturbation`` row, returning ``Issue`` objects."""
+    import pydantic
+
+    from dca_helpers.validation.validator import _convert_errors
+
+    try:
+        _WellPerturbationV0_3.model_validate(obj)
+    except pydantic.ValidationError as exc:
+        return _convert_errors(exc)
+    return []

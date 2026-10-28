@@ -330,7 +330,7 @@ exhaustive, authoritative list.
    * - Perturbation
      - ``modality`` / ``control_class`` (+ the ``definition`` reference);
        ``perturbation_identifier`` and ``concentration`` optional
-     - Required when perturbed
+     - Required (``{"modality": "no perturbations"}`` when nothing was applied)
      - OME ``Reagent`` + CellPainting Gallery
    * - Perturbation
      - chemical (``inchikey`` / ``inchi`` / ``smiles`` / ``pubchem_cid`` / ``chembl_id``)
@@ -338,7 +338,7 @@ exhaustive, authoritative list.
      - CellPainting Gallery
    * - Perturbation
      - genetic (``gene_symbol`` / ``ncbi_gene_id`` / ``vector`` …)
-     - Required when CRISPR / ORF
+     - Required when genetic (CRISPR / ORF / shRNA / miRNA / siRNA)
      - CellPainting Gallery + HGNC / NCBIGene
    * - Perturbation
      - dosing / timing (``solvent`` / ``duration_h`` /
@@ -595,7 +595,8 @@ Perturbation Metadata
 Perturbation metadata is modeled as a **modality-agnostic ``Perturbation``**
 (mapped to the OME ``Reagent`` entity), specialized by a ``modality`` discriminator
 into a **chemical** or **genetic** block. This generalizes beyond chemical
-perturbation to **CRISPR / gene knockout / ORF** (and ``physical`` / ``biological``).
+perturbation to **CRISPR / gene knockout / ORF** (and diet, protein, temperature,
+physical and biological perturbations).
 The genetic block carries the gene target that CellPainting Gallery cannot express
 (its ``Treatment_Category`` enum names ``CRISPR``/``ORF`` but provides no gene
 field). The fields are harmonized across two sources: OME/Bio-Formats ``Reagent``
@@ -609,14 +610,19 @@ in-house CRISPR experiment populates the **same** ``Perturbation``
 lives (``source_kind`` records that, e.g. ``original_data`` from the source's own
 manifest).
 
-**Required when present.** A dataset with no perturbations simply has no
-``perturbation`` block. But **if a dataset has perturbations**, the core fields are
-**required**: ``perturbation_id`` + ``modality`` on the ``Perturbation``, and
-``control_class`` on the ``PerturbationAssignment``. ``definition`` is required on
+**Required on every image group.** Every image group **MUST** carry a
+``perturbation`` block. When nothing was applied to its material, the block is
+exactly ``{"modality": "no perturbations"}`` and **MUST NOT** carry any other field.
+Otherwise ``control_class`` is **required**, and the definition's
+``perturbation_id`` + ``modality`` are **required**. ``definition`` is required on
 every **treated or control** assignment (``treatment`` / ``negcon`` / ``poscon``) but
-is **omitted when** ``control_class`` **is** ``empty``, which has nothing to record.
-The ``chemical`` vs ``genetic`` block is required according to ``modality``. All three
-conditionals are enforced as schema rules (see Validation).
+is **omitted when** ``control_class`` **is** ``empty``: an untreated well that is part
+of a screen's layout. The ``chemical`` vs ``genetic`` block is required according to
+``modality``. All of these are enforced as schema rules (see Validation).
+
+.. code-block:: json
+
+   {"perturbation": {"modality": "no perturbations"}}
 
 .. _v03-experimental-perturbation-placement:
 
@@ -700,12 +706,69 @@ See the ``Perturbation``, ``ChemicalPerturbation``, ``GeneticPerturbation``,
 
 The reconciled vocabularies (see the schema enums):
 
-* ``modality`` — lowercased superset of CPG ``Treatment_Category``, plus
-  non-molecular categories: ``compound`` | ``orf`` |
-  ``crispr`` | ``shrna`` | ``mirna`` | ``sirna`` | ``physical`` (e.g. heat shock) |
-  ``biological`` | ``other`` | ``unknown``.
+* ``modality`` (on the ``definition``) — see the table below.
 * ``control_class`` — ``treatment`` | ``negcon`` | ``poscon`` | ``empty`` (CPG's
   redundant ``Control`` dropped; ``empty`` added for untreated wells).
+
+.. _v03-experimental-perturbation-modality:
+
+**Modality and CELLxGENE.** ``modality`` is aligned with the CELLxGENE schema 7.1
+perturbation fields. CELLxGENE's ``perturbation_types`` and
+``genetic_perturbation_strategy`` are **derived** from it, not curated separately, so
+the two can never disagree:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 25 45
+
+   * - ``modality``
+     - CxG ``perturbation_types``
+     - CxG ``genetic_perturbation_strategy``
+   * - ``compound``
+     - ``chemical``
+     - —
+   * - ``CRISPR activation screen``
+     - ``genetic``
+     - ``CRISPR activation screen``
+   * - ``CRISPR interference screen``
+     - ``genetic``
+     - ``CRISPR interference screen``
+   * - ``CRISPR knockout mutant``
+     - ``genetic``
+     - ``CRISPR knockout mutant``
+   * - ``CRISPR knockout screen``
+     - ``genetic``
+     - ``CRISPR knockout screen``
+   * - ``orf`` / ``sirna`` / ``shrna`` / ``mirna``
+     - ``genetic``
+     - ``ORF`` / ``siRNA`` / ``shRNA`` / ``miRNA`` (DCA extensions)
+   * - ``diet`` / ``protein`` / ``temperature``
+     - ``diet`` / ``protein`` / ``temperature``
+     - —
+   * - ``physical`` / ``biological`` / ``not reported`` / ``other``
+     - the same value (DCA extensions)
+     - —
+   * - the block's ``"no perturbations"``
+     - ``no perturbations``
+     - ``no perturbations``
+
+* A control (``negcon`` / ``poscon``) maps to the strategy ``control``, and an
+  ``empty`` well to ``no perturbations``.
+* An assignment with a ``cotreatment`` takes the union of both definitions' types,
+  joined as CELLxGENE does (``chemical || genetic``).
+* ``temperature`` is a temperature *perturbation* (heat or cold shock), not the imaging
+  temperature, which is ``acquisition.temperature_c``.
+* ``not reported`` is for a perturbation of a kind the source does not state. There is
+  no ``unknown``.
+* CELLxGENE 7.1 itself lists only ``chemical`` / ``diet`` / ``genetic`` / ``protein`` /
+  ``temperature`` as types and the four CRISPR strategies plus ``control``; the values
+  marked as DCA extensions go beyond it.
+
+**Migration from v0.2.** ``crispr`` and ``unknown`` have no automatic v0.3 value:
+whether a CRISPR screen was activation, interference or knockout, and what an
+``unknown`` modality was, come from the source, so those datasets are re-curated.
+A v0.2 image group without a ``perturbation`` block gains
+``{"modality": "no perturbations"}``.
 
 Known gaps and contradictions:
 
@@ -798,9 +861,10 @@ hold:
      for a defined class of experiments* (e.g. ``cell_line_*`` when ``tissue_type``
      is "cell line"). Such a field is promoted
      to ``zarr.json`` and made **conditionally required** on that class, rather than
-     left optional — so consumers of that experiment type can rely on it. The
-     ``perturbation`` block is the worked example: optional corpus-wide, required for
-     every image group of a dataset that has perturbations (see
+     left optional — so consumers of that experiment type can rely on it. In
+     v0.2 the ``perturbation`` block was the worked example; v0.3 makes it
+     corpus-wide instead, with ``{"modality": "no perturbations"}`` where nothing
+     was applied (see
      :ref:`Where it is written <v03-experimental-perturbation-placement>`).
 
 Promotion is a **per-field specification decision made via a version bump**. For a
