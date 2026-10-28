@@ -101,13 +101,12 @@ Validate every FOV before writing any. A bad FOV found after half the store is w
 | --- | --- | --- |
 | `cellosaurus` | `biosample.cell_line_id`, `biosample.tissue` | `biosample.cell_line_name` |
 | `ols_label` | any `*.label` | the sibling `*.ontology_term_id` |
-| `ncbitaxon` | `perturbation.definition.perturbation_id` | `perturbation.definition.name` |
 
 ```bash
 dca-propose --field biosample.cell_line_id --hint biosample.cell_line_name=U2OS
 ```
 
-`--offline` skips registry lookups and reports each field as skipped. The same lookups are importable from `dca_helpers.metadata` as `search_cellosaurus(name)` and `search_ncbitaxon(name)`, which return `(CURIE, label)` pairs.
+`--offline` skips registry lookups and reports each field as skipped. The Cellosaurus lookup is importable from `dca_helpers.metadata` as `search_cellosaurus(name)`, which returns `(CURIE, label)` pairs and caches results per name.
 
 ## Building the Documentation
 
