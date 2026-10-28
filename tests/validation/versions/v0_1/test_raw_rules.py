@@ -1,8 +1,11 @@
 import copy
 
+import pydantic
 import pytest
 
+from dca_helpers.validation.versions.v0_1 import models as models_v01
 from dca_helpers.validation.versions.v0_1.models import (
+    DCAStoreSpecV0_1,
     raw_array_rule_messages,
     raw_downsampling_messages,
     raw_level_view,
@@ -100,3 +103,15 @@ def test_raw_downsampling_reports_the_must_and_the_should():
 @pytest.mark.parametrize("levels", [None, "x", [{"shape": 1}], [1, 2]])
 def test_raw_downsampling_tolerates_malformed_levels(levels):
     assert raw_downsampling_messages(levels) == []
+
+
+def test_failing_v01_downsampling_raw_rule_keeps_the_original_errors(monkeypatch):
+    def failing_rule(levels):
+        raise RuntimeError("rule bug")
+
+    monkeypatch.setattr(models_v01, "raw_downsampling_messages", failing_rule)
+    store = valid_store(n_levels=2)
+    store["levels"][1]["shape"][0] = 2
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCAStoreSpecV0_1.model_validate(store)
+    assert any("At least 3 spatial scales" in e["msg"] for e in info.value.errors())

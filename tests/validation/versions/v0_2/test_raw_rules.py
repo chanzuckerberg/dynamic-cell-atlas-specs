@@ -1,4 +1,6 @@
 import copy
+import logging
+import re
 from types import SimpleNamespace
 
 import pydantic
@@ -8,10 +10,12 @@ from dca_helpers.validation.versions.v0_1 import models as models_v01
 from dca_helpers.validation.versions.v0_1.models import (
     DCAScaleLevelSpec,
     raw_array_rule_messages,
+    raw_rule_messages,
 )
 from dca_helpers.validation.versions.v0_2 import models as models_v02
 from dca_helpers.validation.versions.v0_2.models import (
     DCALabelScaleLevelSpecV0_2,
+    DCALabelStoreSpecV0_2,
     DCAStoreSpecV0_2,
     StoreRuleInputs,
     raw_store_rule_messages,
@@ -21,6 +25,7 @@ from dca_helpers.validation.versions.v0_2.models import (
 from .test_error_hiding import BY_NAME, DEFECTS, build_store
 from .test_models import (
     valid_label_level,
+    valid_label_store,
     valid_level,
     valid_store,
     validate_label_level,
@@ -174,3 +179,81 @@ def test_failing_level_raw_rule_keeps_the_original_errors(monkeypatch):
     with pytest.raises(pydantic.ValidationError) as info:
         DCAScaleLevelSpec.model_validate({**valid_level(), "codec_id": "bad"})
     assert any("not permitted" in error["msg"] for error in info.value.errors())
+
+
+def reference_timepoint_findings(n_timepoints, keys):
+    expected = {str(t) for t in range(n_timepoints)}
+    findings = []
+    missing = sorted(expected - set(keys), key=int)
+    if missing:
+        findings.append(("missing", len(missing), missing[0]))
+    unexpected = sorted((k for k in keys if k not in expected), key=repr)
+    if unexpected:
+        findings.append(("unexpected", len(unexpected), repr(unexpected[0])))
+    return findings
+
+
+def timepoint_findings(n_timepoints, keys):
+    levels = [
+        SimpleNamespace(path="0", shape=[n_timepoints, 1, 1, 1, 1], chunk_shape=[1] * 5)
+    ]
+    statistics = {"0": {"timepoint_statistics": {k: {} for k in keys}}}
+    inputs = StoreRuleInputs(
+        levels=levels, axis_units={}, axis_scales={}, channel_statistics=statistics
+    )
+    findings = []
+    for message in timepoint_statistics_messages(inputs):
+        missing = re.search(r"missing (\d+) of .*\(first missing: '(\d+)'\)", message)
+        if missing:
+            findings.append(("missing", int(missing.group(1)), missing.group(2)))
+            continue
+        unexpected = re.search(
+            r"has (\d+) keys .*\(first unexpected: (.+?)\)\. Keys", message
+        )
+        findings.append(("unexpected", int(unexpected.group(1)), unexpected.group(2)))
+    return findings
+
+
+KEY_SETS = {
+    "empty": [],
+    "in_range": ["0", "1", "2"],
+    "gap": ["0", "2"],
+    "leading_zero": ["00", "01", "1"],
+    "out_of_range": ["3", "10", "99"],
+    "signs_and_spaces": ["-1", "+1", " 1", "1 ", "1.0"],
+    "non_digit": ["x", ""],
+    "unicode_digits": ["٣", "²", "１"],
+    "long_digits": ["9" * 30, "9" * 5000],
+    "mixed": ["0", "5", "x", "01", "9" * 5000],
+}
+
+
+@pytest.mark.parametrize("n_timepoints", [-1, 0, 1, 3, 10])
+@pytest.mark.parametrize("keys", KEY_SETS.values(), ids=KEY_SETS.keys())
+def test_timepoint_rule_matches_the_set_based_reference(n_timepoints, keys):
+    assert timepoint_findings(n_timepoints, keys) == reference_timepoint_findings(
+        n_timepoints, keys
+    )
+
+
+def test_swallowed_raw_rule_is_logged_with_its_traceback(caplog):
+    def failing_rule(data):
+        raise RuntimeError("rule bug")
+
+    with caplog.at_level(logging.WARNING):
+        assert raw_rule_messages(failing_rule, {}) == []
+    records = [r for r in caplog.records if "failing_rule" in r.getMessage()]
+    assert len(records) == 1
+    assert records[0].exc_info[0] is RuntimeError
+
+
+def test_failing_label_store_raw_rule_keeps_the_original_errors(monkeypatch):
+    def failing_rule(data):
+        raise RuntimeError("rule bug")
+
+    monkeypatch.setattr(models_v02, "raw_label_store_rule_messages", failing_rule)
+    store = copy.deepcopy(valid_label_store())
+    store["axes"] = ["t", "c", "y", "x", "z"]
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCALabelStoreSpecV0_2.model_validate(store)
+    assert any("Axes must be" in error["msg"] for error in info.value.errors())
