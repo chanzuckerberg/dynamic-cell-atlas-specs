@@ -4,6 +4,7 @@ Rules look a hinted name or term up in Cellosaurus, NCBITaxon or OLS. A proposal
 a suggestion for a human to confirm. Nothing here writes to a store.
 """
 
+import functools
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -44,14 +45,17 @@ class Proposal:
     rule: str
 
 
-def search_cellosaurus(name: str) -> list[tuple[str, str]]:
+@functools.lru_cache(maxsize=4096)
+def search_cellosaurus(name: str) -> tuple[tuple[str, str], ...]:
     """Return ``(curie, label)`` for Cellosaurus lines named exactly ``name``.
 
     A line matches when its identifier or a synonym equals ``name``
     (case-insensitive). The identifier and synonym fields are searched in two
     requests, because Cellosaurus identifiers and synonyms differ (A549 is a
     synonym of the identifier ``A-549``). The label is the matching name.
-    Derivatives that only contain ``name`` are never returned.
+    Derivatives that only contain ``name`` are never returned. Results are cached
+    per name, since ``cell_line_id`` and ``tissue`` share one hint; a failed lookup
+    raises and is not cached.
     """
     target = name.strip().lower()
     found: dict[str, str] = {}
@@ -81,7 +85,7 @@ def search_cellosaurus(name: str) -> list[tuple[str, str]]:
             )
             if accession and label:
                 found.setdefault(accession.replace("_", ":", 1), label)
-    return list(found.items())[:_MAX_CANDIDATES]
+    return tuple(found.items())[:_MAX_CANDIDATES]
 
 
 def search_ncbitaxon(name: str) -> list[tuple[str, str]]:
@@ -111,8 +115,8 @@ def _lookup(
     host: str,
     hints: Mapping[str, str],
     online: bool,
-    search: Callable[[str], list[tuple[str, str]]],
-) -> tuple[Proposal | None, list[tuple[str, str]]]:
+    search: Callable[[str], Sequence[tuple[str, str]]],
+) -> tuple[Proposal | None, Sequence[tuple[str, str]]]:
     """Run ``search`` on a hint. Returns a degraded Proposal, or None plus the candidates."""
     if hint_key not in hints:
         return Proposal(field, None, f"no hint: {hint_key}", rule), []

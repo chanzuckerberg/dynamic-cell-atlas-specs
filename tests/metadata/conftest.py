@@ -56,6 +56,15 @@ def min_dca_block(**sections) -> dict:
     return block
 
 
+@pytest.fixture(autouse=True)
+def _fresh_registry_caches():
+    """Start every test with empty search caches, so no answer leaks between tests."""
+    propose_module = importlib.import_module("dca_helpers.metadata.propose")
+    propose_module.search_cellosaurus.cache_clear()
+    yield
+    propose_module.search_cellosaurus.cache_clear()
+
+
 @pytest.fixture
 def replay_registry(monkeypatch) -> RegistryReplay:
     """Serve recorded registry responses wherever ``propose`` makes an HTTP call."""
