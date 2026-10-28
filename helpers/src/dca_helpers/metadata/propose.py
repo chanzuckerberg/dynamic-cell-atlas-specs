@@ -1,6 +1,6 @@
 """Taxonomy proposals for DCA fields a pipeline's finalize step could not resolve.
 
-Rules look a hinted name or term up in Cellosaurus, NCBITaxon or OLS. A proposal is
+Rules look a hinted name or term up in Cellosaurus or OLS. A proposal is
 a suggestion for a human to confirm. Nothing here writes to a store.
 """
 
@@ -12,7 +12,6 @@ from typing import Any
 
 import requests
 
-from dca_helpers.metadata import ols_client
 from dca_helpers.validation import ontology_lookup
 from dca_helpers.validation.ontology_lookup import (
     CELLOSAURUS_BASE_URL,
@@ -86,12 +85,6 @@ def search_cellosaurus(name: str) -> tuple[tuple[str, str], ...]:
             if accession and label:
                 found.setdefault(accession.replace("_", ":", 1), label)
     return tuple(found.items())[:_MAX_CANDIDATES]
-
-
-def search_ncbitaxon(name: str) -> list[tuple[str, str]]:
-    """Return ``(curie, label)`` NCBITaxon candidates whose label or synonym is ``name``."""
-    matches = ols_client.resolve(name, "ncbitaxon", exact=True)
-    return [(m["curie"], m["label"]) for m in matches][:_MAX_CANDIDATES]
 
 
 def _ols_names(curie: str) -> list[tuple[str, str]]:
@@ -171,22 +164,6 @@ def _propose_one(
             _ols_names,
         )
         return failed or Proposal(field, found[0][1], f"OLS {found[0][0]}", "ols_label")
-
-    if field == "perturbation.definition.perturbation_id":
-        failed, found = _lookup(
-            field,
-            "ncbitaxon",
-            "perturbation.definition.name",
-            _registry_of(OLS_BASE_URL),
-            hints,
-            online,
-            search_ncbitaxon,
-        )
-        if failed:
-            return failed
-        return Proposal(
-            field, found[0][0], _with_alternatives("NCBITaxon", found), "ncbitaxon"
-        )
 
     return None
 

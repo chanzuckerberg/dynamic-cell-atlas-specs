@@ -1,5 +1,5 @@
 """
-CLI entry point for DCA taxonomy proposals (Cellosaurus, NCBITaxon, OLS labels).
+CLI entry point for DCA taxonomy proposals (Cellosaurus, OLS labels).
 
 Usage
 -----

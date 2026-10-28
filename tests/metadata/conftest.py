@@ -5,7 +5,6 @@ import importlib
 
 import pytest
 
-from dca_helpers.metadata import ols_client
 from dca_helpers.validation import ontology_lookup
 
 from ._registry import RegistryReplay
@@ -71,7 +70,6 @@ def replay_registry(monkeypatch) -> RegistryReplay:
     replay = RegistryReplay()
     propose_module = importlib.import_module("dca_helpers.metadata.propose")
     monkeypatch.setattr(propose_module, "_get_with_retry", replay)
-    monkeypatch.setattr(ols_client, "_get_with_retry", replay)
     monkeypatch.setattr(ontology_lookup, "_get_with_retry", replay)
     ontology_lookup.lookup_ols.cache_clear()
     yield replay

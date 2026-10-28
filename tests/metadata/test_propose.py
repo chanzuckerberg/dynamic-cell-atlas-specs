@@ -49,31 +49,6 @@ def test_cellosaurus_derivative_only_result_is_no_match(replay_registry):
     assert (p.value, p.source) == (None, "no match")
 
 
-def test_ncbitaxon_matches_names_not_isolates(replay_registry):
-    p = _one(
-        "perturbation.definition.perturbation_id",
-        hints={"perturbation.definition.name": "Zika virus"},
-    )
-    assert (p.value, p.source, p.rule) == (
-        "NCBITaxon:64320",
-        "NCBITaxon NCBITaxon:64320",
-        "ncbitaxon",
-    )
-    [(_, params)] = replay_registry.requests
-    assert params["queryFields"] == "label,synonym"
-
-
-def test_ncbitaxon_common_name_lists_alternatives(replay_registry):
-    p = _one(
-        "perturbation.definition.perturbation_id",
-        hints={"perturbation.definition.name": "mouse"},
-    )
-    assert (p.value, p.source) == (
-        "NCBITaxon:10090",
-        "NCBITaxon NCBITaxon:10090 (also: NCBITaxon:10088 Mus <genus>)",
-    )
-
-
 def test_ols_label_looks_up_the_hinted_term(replay_registry):
     p = _one(
         "biosample.organ.label",
