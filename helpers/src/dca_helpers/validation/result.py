@@ -64,7 +64,8 @@ class ZarrNodeValidationResult:
     spec_version: str | None
     passed: bool
     parent_path: str | None = (
-        None  # plate root path for HCS field results; None for standalone images
+        None  # plate root for HCS field results, image/field path for label results;
+        # None for standalone images
     )
     ngff_version: str | None = (
         None  # highest OME-NGFF version that passed ("0.5", "0.4", or None)
@@ -81,7 +82,8 @@ class ZarrNodeValidationResult:
     # cross-store checks only (not serialized into reports)
 
     # For HCS plates, one result is produced per field image (parent_path = plate root).
-    # For standalone images, parent_path is None.
+    # Label groups under an image or field get their own result (parent_path = that
+    # image/field path). For standalone images, parent_path is None.
     # Sum across results to get totals:
     #   nodes validated            = len(results)
     #   level zarr.json validated  = sum(r.multiscale_level_count or 0 for r in results)

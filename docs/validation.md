@@ -167,15 +167,17 @@ plate.ome.zarr/
 | Structure | NGFF validation | DCA validation |
 |---|---|---|
 | Single image | Full | Full |
-| Image + labels | Image root only | Image pyramid only — nested `labels/<name>/` image groups are never traversed by `validate_zarr_node`, regardless of whether the store root was found via discovery or passed directly; they're validated only if that label path itself is passed to `validate()` |
+| Image + labels | Image root, plus `labels/` loaded by `open_ome_zarr` | Image pyramid, plus each label declared in `ome.labels` (`IMAGE_LABEL` rows with `parent_path` = the image) |
 | HCS plate | Structural checks via raw attrs | Plate structure + per-field image |
-| HCS plate + labels | Structural checks via raw attrs | Plate structure + per-field image — field label groups not validated |
+| HCS plate + labels | Structural checks via raw attrs | Plate structure + per-field image, plus each selected field's labels (`parent_path` = the field) |
 
-Two distinct gaps affect label arrays:
+Label groups are reached from `validate_zarr_node`, not from discovery: discovery still returns only outermost store roots, so no label store is validated twice. `_validate_labels_of` reads `<image>/labels`, validates each name in `ome.labels` once, and never looks for a label's own `labels/`. Details:
 
-- **Discovery never descends into sub-groups.** `discovery.py` stops at the outermost `zarr.json` (`dirnames.clear()` locally; an ancestor filter on S3), so `labels/segmentation/` is invisible to `discover_zarr_stores` unless the caller points at it directly.
-- **No v0.1 label model.** Pointing directly at a label group correctly classifies it as `IMAGE_LABEL`, but v0.1 has no registered label model — `get_label_model` raises `UnsupportedSpecVersionError`, caught by the caller to produce `passed=True` with a WARNING instead of running the wrong (image) model. v0.2 registers `DCALabelStoreSpecV0_2`, so v0.2 label groups are fully validated when addressed directly.
-
+- Each label listed in `ome.labels` is checked against the same rules as `ome-zarr-models` (missing group, non-integer dtype, level-count mismatch). These defects fail the parent with `ngff_validation` and skip its DCA checks, because ome-zarr-models loads `labels/` when it opens the image. The label rows still carry the DCA findings.
+- DCA adds three checks. A listed group without `ome.image-label` is an error. An empty name, a name with a path separator, or `..` is an error. Groups under `labels/` that `ome.labels` does not list give one WARNING row (`LABELS_LIST`). Duplicate names are validated once. A missing `labels/` group is not an error.
+- `--wells`, `--field-offset` and `--field-limit` apply to labels: only the labels of selected fields are validated.
+- A store whose only defect is in a label has a passing root row, as with HCS fields. Query child rows by `parent_path`.
+- **No v0.1 label model.** v0.1 has no registered label model — `get_label_model` raises `UnsupportedSpecVersionError`, which becomes `passed=True` with a WARNING per label. v0.2 registers `DCALabelStoreSpecV0_2`.
 ---
 
 ## Validation Pipeline
@@ -198,7 +200,7 @@ Five structurally distinct `zarr.json` schemas. `IMAGE` and `IMAGE_LABEL` share 
 | `IMAGE` | `ome.multiscales` | `_build_node_dict` → registered `DCAStoreSpec.model_validate`, with raw `dca` attrs injected |
 | `IMAGE_LABEL` | `ome.multiscales` + `ome.image-label` | Same extraction, `dca=None`; uses `get_label_model(spec_version)` if registered (v0.2), else `passed=True` + WARNING (v0.1) |
 | `HCS_PLATE` | `ome.plate` | Reached via the Step 3 fast path — never via `classify_group` |
-| `LABELS_LIST` | `ome.labels` | Container listing label names, no arrays — `passed=True` immediately |
+| `LABELS_LIST` | `ome.labels` | Container listing label names, no arrays — the container passes, and each declared label is validated as `IMAGE_LABEL` |
 | `GEFF` | `geff` (root, no `ome` key) | Reached via the Step 2 fast path — `skipped=True`, not validated |
 
 ### DCA checks by node type (v0.1)
@@ -233,7 +235,7 @@ The plate root's `ome.plate` is a manifest of wells/rows/columns/acquisitions �
 - **Local**: `os.walk`, calling `dirnames.clear()` once a root is found so it never descends into that store's sub-groups (scale-level arrays, `labels/`, wells).
 - **S3**: `glob` (paginated flat prefix scan, filtered to outermost roots) or `walk` (BFS via `list_with_delimiter`, pruning descent at each root) — see `--strategy` above.
 
-Consequence: once `validate_zarr_node` receives a store root, only scale-level arrays and (for HCS) wells/fields are visited. A `labels/` container is classified `LABELS_LIST` and stops — the label image groups nested under it (`labels/nuclei/zarr.json`, etc.) are never reached unless that path is passed to `validate` directly.
+Consequence: discovery does not find label groups. `validate_zarr_node` validates them from the store root it receives (see Current coverage above).
 
 ---
 
@@ -281,10 +283,11 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 | Level-0 `t` scale is 1 when sampling is `variable` | MUST | new |
 | `dca` key present | MUST | new |
 | Channel count matches C axis size | SHOULD | new |
+| `normalization_statistics[*].timepoint_statistics`, when present, has keys exactly `"0"` to `"T-1"` as strings (T read from the level-0 shape) | MUST | new |
 
 **`DCAGroupMetadataV0_2`** (the `dca` root object): `version: Literal["0.2"], url, channels: list[DCAChannelMetadataV0_2], normalization_statistics`. Channel `index` values must be unique. Each channel carries `channel_type` (SHOULD be in `{fluorescence, labelfree, predicted}`, and SHOULD have `biological_annotation` when fluorescence/predicted) and an optional `biological_annotation.marker_type` (SHOULD be in a fixed vocabulary).
 
-**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes). `normalization_statistics.timepoint_statistics` keys are not checked for covering all T timepoints — partial coverage passes silently.
+**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes).
 
 **Experimental metadata** (`dca.study`/`dca.biosample`/`dca.provenance`/etc.) is validated separately by `versions/v0_2/experimental_metadata.py` against a LinkML-generated model, enforcing conditional rules (e.g. `source_kind: agent ⇒ citation` required) that `gen-pydantic` records but doesn't itself enforce, plus a provenance-coverage check with no LinkML equivalent. See that module's docstring for why each piece is structured the way it is — it's a self-contained sub-design, not part of the core array/channel pipeline described here.
 

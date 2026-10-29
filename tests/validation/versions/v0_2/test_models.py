@@ -1546,3 +1546,148 @@ class TestVariableTimeSampling:
             }
         )
         assert errors(validate_store(store)) == []
+
+
+# ---------------------------------------------------------------------------
+# normalization-statistics.rst § Channel Normalization Fields — MUST
+# ---------------------------------------------------------------------------
+
+
+def timepoint_store(n_timepoints, covered, channels=1):
+    store = valid_store(c=channels)
+    for level in store["levels"]:
+        level["shape"][0] = n_timepoints
+    stats = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
+    for channel in store["dca"]["normalization_statistics"].values():
+        channel["timepoint_statistics"] = {str(t): dict(stats) for t in covered}
+    return store
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsCompleteMust:
+    def test_full_coverage_passes(self):
+        store = timepoint_store(4, range(4))
+        assert errors(validate_store(store)) == []
+
+    def test_absent_timepoint_statistics_passes(self):
+        store = timepoint_store(4, range(4))
+        del store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"]
+        assert errors(validate_store(store)) == []
+
+    def test_partial_coverage_errors(self):
+        store = timepoint_store(100, range(50))
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "missing 50 of 100 timepoints" in errs[0].message
+        assert "first missing: '50'" in errs[0].message
+
+    def test_gap_in_coverage_errors(self):
+        store = timepoint_store(4, [0, 1, 3])
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first missing: '2'" in errs[0].message
+
+    def test_empty_timepoint_statistics_errors(self):
+        store = timepoint_store(3, [])
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "missing 3 of 3 timepoints" in errs[0].message
+
+    def test_each_incomplete_channel_is_reported(self):
+        store = timepoint_store(3, [0], channels=2)
+        errs = errors(validate_store(store))
+        assert len(errs) == 2
+        assert "['0']" in errs[0].message
+        assert "['1']" in errs[1].message
+
+    def test_single_timepoint_requires_entry_zero(self):
+        store = timepoint_store(1, ["1"])
+        messages = [e.message for e in errors(validate_store(store))]
+        assert len(messages) == 2
+        assert any("first missing: '0'" in m for m in messages)
+        assert any("first unexpected: '1'" in m for m in messages)
+
+    @pytest.mark.parametrize("bad", [[], "x", 5])
+    def test_malformed_timepoint_statistics_is_reported_by_the_field_type(self, bad):
+        store = timepoint_store(3, range(3))
+        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = bad
+        messages = [e.message for e in errors(validate_store(store))]
+        assert any("timepoint_statistics" in m for m in messages)
+        assert not any("MUST contain entries" in m for m in messages)
+
+
+def with_extra_timepoint_key(store, key):
+    stats = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
+    store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"][key] = stats
+    return store
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsNoExtraKeysMust:
+    def test_index_equal_to_t_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "4")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: '4'" in errs[0].message
+        assert "'0' to '3'" in errs[0].message
+
+    def test_non_digit_key_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "foo")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: 'foo'" in errs[0].message
+
+    def test_non_canonical_index_errors(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "01")
+        errs = errors(validate_store(store))
+        assert len(errs) == 1
+        assert "first unexpected: '01'" in errs[0].message
+
+    def test_integer_keys_are_rejected(self):
+        store = timepoint_store(2, [])
+        store["dca"]["normalization_statistics"]["0"]["timepoint_statistics"] = {
+            0: {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0},
+            1: {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0},
+        }
+        messages = [e.message for e in errors(validate_store(store))]
+        assert any("Input should be a valid string" in m for m in messages)
+
+    def test_missing_and_unexpected_are_both_reported(self):
+        store = with_extra_timepoint_key(timepoint_store(3, [0, 1]), "7")
+        messages = [e.message for e in errors(validate_store(store))]
+        assert len(messages) == 2
+        assert any("missing 1 of 3 timepoints" in m for m in messages)
+        assert any("first unexpected: '7'" in m for m in messages)
+
+
+@pytest.mark.unit
+class TestTimepointStatisticsNotHiddenByChannelCount:
+    def test_channel_count_warning_does_not_hide_missing_timepoints(self):
+        store = timepoint_store(100, range(50))
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert any(
+            i.severity == Severity.WARNING and "dca.channels has 0 entries" in i.message
+            for i in issues
+        )
+        assert any(
+            i.severity == Severity.ERROR and "missing 50 of 100 timepoints" in i.message
+            for i in issues
+        )
+
+    def test_channel_count_warning_does_not_hide_unexpected_keys(self):
+        store = with_extra_timepoint_key(timepoint_store(4, range(4)), "9")
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert any(i.severity == Severity.WARNING for i in issues)
+        assert any(
+            i.severity == Severity.ERROR and "first unexpected: '9'" in i.message
+            for i in issues
+        )
+
+    def test_channel_count_warning_alone_stays_a_warning(self):
+        store = timepoint_store(4, range(4))
+        store["dca"]["channels"] = []
+        issues = validate_store(store)
+        assert errors(issues) == []
+        assert len([i for i in issues if i.severity == Severity.WARNING]) == 1
