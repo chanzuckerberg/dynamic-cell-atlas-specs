@@ -32,6 +32,7 @@ from dca_helpers.validation.discovery import (
     is_zarr_store,
     open_zarr_group,
 )
+from dca_helpers.validation.pairing import check_projection_pairs
 from dca_helpers.validation.progress_tree import _TreeDisplay
 from dca_helpers.validation.registry import get_model
 from dca_helpers.validation.result import (
@@ -40,6 +41,7 @@ from dca_helpers.validation.result import (
     ZarrNodeValidationResult,
 )
 from dca_helpers.validation.validator import (
+    PROJECTION_SPEC_VERSIONS,
     declared_well_paths,
     is_hcs_plate,
     ome_attrs_of,
@@ -74,6 +76,7 @@ def validate(
     wells: "str | None" = None,
     field_offset: int = 0,
     field_limit: "int | None" = None,
+    require_projection: bool = False,
 ) -> ValidationRun:
     """
     Validate Zarr stores at or under `path`.
@@ -97,12 +100,21 @@ def validate(
         (raises ValueError otherwise — subsetting a multi-store discovery
         root is ambiguous) and is forwarded to `validate_zarr_node`, which
         errors if the resolved store isn't an HCS plate.
+    require_projection : when True, every 3D image store in the run must have a
+        projection store in the run naming it as dca.projection.source_store
+        (see validation/pairing.py). Opt-in because the spec does not require
+        projections. Needs a spec version that defines dca.projection (0.3+).
 
     Returns
     -------
     ValidationRun — iterable collection of ZarrNodeValidationResult with summary metrics
     """
     ModelClass = get_model(spec_version)
+    if require_projection and spec_version not in PROJECTION_SPEC_VERSIONS:
+        raise ValueError(
+            f"require_projection needs a spec version that defines dca.projection "
+            f"({sorted(PROJECTION_SPEC_VERSIONS)}); got {spec_version!r}"
+        )
     path_is_store = is_zarr_store(path)
 
     has_subset_flags = wells is not None or field_offset or field_limit is not None
@@ -146,6 +158,11 @@ def validate(
             field_limit=field_limit,
         )
     )
+
+    # Cross-store projection checks need every store's results, so they run once
+    # here rather than inside validate_zarr_node.
+    if spec_version in PROJECTION_SPEC_VERSIONS:
+        check_projection_pairs(results, require_projection=require_projection)
 
     duration = time.monotonic() - t0
     summary = ValidationSummary.from_results(
