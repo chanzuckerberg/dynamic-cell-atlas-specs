@@ -252,9 +252,9 @@ New spec version → new `versions/vX_Y/models.py` + one entry in each dict. Exi
 
 `versions/v0_1/models.py` — `model_config = ConfigDict(extra="allow")` throughout, so unrecognized future keys don't fail older models. MUST violations raise `ValueError` unprefixed; SHOULD violations prefix `[SHOULD]`, converted to `Severity.WARNING` by `_convert_errors`.
 
-**`DCAScaleLevelSpec`** (one Zarr array): `path, dtype, shape, chunk_shape, shard_shape, codec_id, codec_level`. Enforces the array-level rows of the table above via `field_validator("codec_id")` and `model_validator`s `check_chunk_size`, `check_chunk_shape_recommendations`, `check_shard_size`, `check_compression_recommendation`, `check_dtype_recommendation`.
+**`DCAScaleLevelSpec`** (one Zarr array): `path, dtype, shape, chunk_shape, shard_shape, codec_id, codec_level`. Enforces the array-level rows of the table above via `field_validator("codec_id")` and one `model_validator`, `check_array_rules`, which collects the messages from the chunk-size, channel-chunk, shard-size, compression and dtype rules and raises once.
 
-> **Validator ordering caveat**: Pydantic v2 runs `mode="after"` validators in sequence and stops at the first raise. A SHOULD warning from an earlier validator (e.g. `check_chunk_size`) therefore suppresses any later one (e.g. `check_dtype_recommendation`) for that model instance — issues surface one at a time across repeated runs as earlier ones are fixed. This applies throughout v0.1 and v0.2.
+> **Validator ordering caveat**: Pydantic v2 stops a model's `mode="after"` validator chain at the first raise. The level spec and the v0.2 store models therefore use one collecting validator each (`check_array_rules`, `check_store_rules`), so the rules in that chain never hide each other. The v0.1 store has a single after-validator, `check_downsampling_factors`. Two gaps remain. A failed field-level validator (for example `axes`, a missing `dca`, or the v0.1 level count) skips the model's after-validators. A failed nested model (for example a level with a chunk-size SHOULD, a bad `dimension_names`, or a channel missing a required field) skips the parent's after-validators. In both cases the store-level rules do not run. This applies throughout v0.1 and v0.2.
 
 **`DCAStoreSpecV0_1`** (root model, entry point for `model_validate()`): `spec_version, axes, multiscale_level_count, levels`. Enforces the group-level rows via `axes_must_be_tczyx`, `must_have_minimum_scales`, `check_downsampling_factors`.
 
@@ -284,7 +284,7 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 
 **Experimental metadata** (`dca.study`/`dca.biosample`/`dca.provenance`/etc.) is validated separately by `versions/v0_2/experimental_metadata.py` against a LinkML-generated model, enforcing conditional rules (e.g. `source_kind: agent ⇒ citation` required) that `gen-pydantic` records but doesn't itself enforce, plus a provenance-coverage check with no LinkML equivalent. See that module's docstring for why each piece is structured the way it is — it's a self-contained sub-design, not part of the core array/channel pipeline described here.
 
-**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`), subject to the same validator-ordering caveat above.
+**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation, through the `_dtype_messages` hook: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`). The validator-ordering caveat above applies.
 
 ---
 

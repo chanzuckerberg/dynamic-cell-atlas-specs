@@ -16,7 +16,8 @@ where `data` is a dict produced by validation.validator._build_node_dict().
 from __future__ import annotations
 
 import math
-from typing import Literal
+from collections.abc import Sequence
+from typing import Any, Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -112,12 +113,11 @@ class DCAScaleLevelSpec(BaseModel):
     # Chunk size — MUST >= 512 KB, SHOULD >= 1 MB
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_chunk_size(self) -> "DCAScaleLevelSpec":
+    def _chunk_size_messages(self) -> list[str]:
         # Chunk-size rules apply only to the base resolution level.
         # See array-standard.rst § Chunk Size / Edge Cases.
         if self.level_index > 0:
-            return self
+            return []
 
         channel_idx = AXES_REQUIRED.index("c")
 
@@ -136,60 +136,56 @@ class DCAScaleLevelSpec(BaseModel):
         # Only enforce min chunk size if:
         # chunk(minus channel) is smaller than the whole array (minus channel)
         if nbytes < CHUNK_MIN_BYTES and chunk_nbytes < total_nbytes:
-            raise ValueError(
+            return [
                 f"Uncompressed chunk size {kb:.0f} KB is below the required 512 KB minimum "
                 f"(level={self.path!r}, chunk_shape={self.chunk_shape}, dtype={self.dtype}). "
                 "See array-standard.rst § Chunk Size edge cases."
-            )
+            ]
 
         if nbytes < CHUNK_REC_BYTES and chunk_nbytes < total_nbytes:
-            raise ValueError(
+            return [
                 f"[SHOULD] Uncompressed chunk size {kb:.0f} KB is below the recommended "
                 f"1 MB (level={self.path!r}, chunk_shape={self.chunk_shape}, dtype={self.dtype})"
-            )
+            ]
 
-        return self
+        return []
 
     # ------------------------------------------------------------------
     # Chunk shape recommendations — SHOULD
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_chunk_shape_recommendations(self) -> "DCAScaleLevelSpec":
+    def _chunk_shape_messages(self) -> list[str]:
         c = self.chunk_shape[1]  # channel dim (axes order [t, c, z, y, x])
 
-        warnings: list[str] = []
         if c != C_CHUNK_RECOMMENDED:
-            warnings.append(
+            return [
                 f"[SHOULD] Channel chunk size should be {C_CHUNK_RECOMMENDED}; got {c}"
-            )
-        if warnings:
-            raise ValueError("\n".join(warnings))
-
-        return self
+            ]
+        return []
 
     # ------------------------------------------------------------------
     # Shard size — MUST < 5 TB; MUST >= 1 GB when array >= 1 GB
     #              SHOULD < 5 GB; SHOULD spatial <= 2048; SHOULD time >= 16
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_shard_size(self) -> "DCAScaleLevelSpec":
+    def _shard_size_messages(self) -> list[str]:
         if self.shard_shape is None or self.level_index > 0:
-            return self
+            return []
 
         shard_bytes = _nbytes(self.shard_shape, self.dtype)
         array_bytes = _nbytes(self.shape, self.dtype)
 
+        errors: list[str] = []
+
         # MUST: < 5 TB
         if shard_bytes >= SHARD_MAX_BYTES:
-            raise ValueError(
+            errors.append(
                 f"Uncompressed shard size {shard_bytes / 1024**4:.1f} TB must be < 5 TB"
             )
 
         # MUST: >= 1 GB when array itself >= 1 GB
         if array_bytes >= SHARD_MIN_BYTES and shard_bytes < SHARD_MIN_BYTES:
-            raise ValueError(
+            errors.append(
                 f"Uncompressed shard size {shard_bytes / 1024**3:.2f} GB must be >= 1 GB "
                 f"for arrays >= 1 GB (array is {array_bytes / 1024**3:.2f} GB)"
             )
@@ -222,17 +218,13 @@ class DCAScaleLevelSpec(BaseModel):
                 f"minimum of {TIME_SHARD_MIN_RECOMMENDED}"
             )
 
-        if warnings:
-            raise ValueError("\n".join(warnings))
-
-        return self
+        return errors + warnings
 
     # ------------------------------------------------------------------
     # Compression recommendations — SHOULD
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_compression_recommendation(self) -> "DCAScaleLevelSpec":
+    def _compression_messages(self) -> list[str]:
         warnings: list[str] = []
         dtype_kind = np.dtype(
             self.dtype
@@ -267,27 +259,88 @@ class DCAScaleLevelSpec(BaseModel):
                     f"maximum of {RECOMMENDED_LEVEL_MAX}"
                 )
 
-        if warnings:
-            raise ValueError("\n".join(warnings))
-
-        return self
+        return warnings
 
     # ------------------------------------------------------------------
     # Data type recommendations — SHOULD
     # ------------------------------------------------------------------
 
-    @model_validator(mode="after")
-    def check_dtype_recommendation(self) -> "DCAScaleLevelSpec":
+    def _dtype_messages(self) -> list[str]:
         normalized = str(np.dtype(self.dtype))
         if (
             normalized not in RAW_DTYPES_RECOMMENDED
             and normalized != LABEL_DTYPE_RECOMMENDED
         ):
-            raise ValueError(
+            return [
                 f"[SHOULD] dtype '{self.dtype}' is unusual; raw arrays should use "
                 f"uint8 or uint16, label arrays should use uint32"
-            )
+            ]
+        return []
+
+    # ------------------------------------------------------------------
+    # One validator for every array rule. Pydantic stops the after-validator
+    # chain at the first raise, so separate validators would let an earlier
+    # SHOULD hide a later MUST.
+    # ------------------------------------------------------------------
+
+    @model_validator(mode="after")
+    def check_array_rules(self) -> "DCAScaleLevelSpec":
+        messages = (
+            self._chunk_size_messages()
+            + self._chunk_shape_messages()
+            + self._shard_size_messages()
+            + self._compression_messages()
+            + self._dtype_messages()
+        )
+        if messages:
+            raise ValueError("\n".join(messages))
         return self
+
+
+def downsampling_factor_messages(levels: Sequence[Any]) -> list[str]:
+    if len(levels) < 2:
+        return []
+
+    must_errors: list[str] = []
+    should_warnings: list[str] = []
+
+    for i in range(len(levels) - 1):
+        fine = levels[i].shape
+        coarse = levels[i + 1].shape
+        chunks = levels[i].chunk_shape
+
+        for dim_idx, dim_name in enumerate(AXES_REQUIRED):
+            fine_dim = fine[dim_idx]
+            coarse_dim = coarse[dim_idx]
+            chunk_dim = chunks[dim_idx]
+
+            # Avoid divide-by-zero for degenerate dims
+            if coarse_dim == 0:
+                continue
+
+            factor = fine_dim / coarse_dim
+
+            if dim_name in NON_SPATIAL_AXES:
+                # MUST: t and c must not be downsampled
+                if fine_dim != coarse_dim:
+                    must_errors.append(
+                        f"Level {i}→{i+1}: downsampling factor for '{dim_name}' "
+                        f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
+                    )
+            else:
+                # SHOULD: spatial dims should have factor 2. Downsampling
+                # legitimately stops once an axis reaches its chunk floor, so
+                # skip when fine_dim is already <= its chunk size.
+                if fine_dim > chunk_dim and not math.isclose(
+                    factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
+                ):
+                    should_warnings.append(
+                        f"[SHOULD] Level {i}→{i+1}: downsampling factor for '{dim_name}' "
+                        f"should be {DOWNSAMPLING_FACTOR_RECOMMENDED} "
+                        f"(got {fine_dim}/{coarse_dim}≈{factor:.2f})"
+                    )
+
+    return must_errors + should_warnings
 
 
 # ---------------------------------------------------------------------------
@@ -344,50 +397,7 @@ class DCAStoreSpecV0_1(BaseModel):
 
     @model_validator(mode="after")
     def check_downsampling_factors(self) -> "DCAStoreSpecV0_1":
-        if len(self.levels) < 2:
-            return self
-
-        must_errors: list[str] = []
-        should_warnings: list[str] = []
-
-        for i in range(len(self.levels) - 1):
-            fine = self.levels[i].shape
-            coarse = self.levels[i + 1].shape
-            chunks = self.levels[i].chunk_shape
-
-            for dim_idx, dim_name in enumerate(AXES_REQUIRED):
-                fine_dim = fine[dim_idx]
-                coarse_dim = coarse[dim_idx]
-                chunk_dim = chunks[dim_idx]
-
-                # Avoid divide-by-zero for degenerate dims
-                if coarse_dim == 0:
-                    continue
-
-                factor = fine_dim / coarse_dim
-
-                if dim_name in NON_SPATIAL_AXES:
-                    # MUST: t and c must not be downsampled
-                    if fine_dim != coarse_dim:
-                        must_errors.append(
-                            f"Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"must be 1 (got {fine_dim}/{coarse_dim}={factor:.2f})"
-                        )
-                else:
-                    # SHOULD: spatial dims should have factor 2. Downsampling
-                    # legitimately stops once an axis reaches its chunk floor, so
-                    # skip when fine_dim is already <= its chunk size.
-                    if fine_dim > chunk_dim and not math.isclose(
-                        factor, DOWNSAMPLING_FACTOR_RECOMMENDED, rel_tol=0.05
-                    ):
-                        should_warnings.append(
-                            f"[SHOULD] Level {i}→{i+1}: downsampling factor for '{dim_name}' "
-                            f"should be {DOWNSAMPLING_FACTOR_RECOMMENDED} "
-                            f"(got {fine_dim}/{coarse_dim}≈{factor:.2f})"
-                        )
-
-        all_issues = must_errors + should_warnings
-        if all_issues:
-            raise ValueError("\n".join(all_issues))
-
+        messages = downsampling_factor_messages(self.levels)
+        if messages:
+            raise ValueError("\n".join(messages))
         return self
