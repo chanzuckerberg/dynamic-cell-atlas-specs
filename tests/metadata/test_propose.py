@@ -17,7 +17,7 @@ def _one(field, **kwargs):
 
 
 def test_cellosaurus_proposes_curie_and_tissue_term(replay_registry):
-    hints = {"biosample.cell_line_name": "A549"}
+    hints = {"biosample.cell_line_name": "A549", "biosample.tissue_type": "cell line"}
     assert _one("biosample.cell_line_id", hints=hints).value == "CVCL:0023"
     assert _one("biosample.tissue", hints=hints).value == [
         {"ontology_term_id": "CVCL:0023", "label": "A549"}
@@ -30,13 +30,33 @@ def test_cellosaurus_proposes_curie_and_tissue_term(replay_registry):
 
 def test_repeated_proposals_search_each_name_once(replay_registry):
     fields = ["biosample.cell_line_id", "biosample.tissue"]
-    hints = {"biosample.cell_line_name": "A549"}
+    hints = {"biosample.cell_line_name": "A549", "biosample.tissue_type": "cell line"}
     propose(fields, hints=hints)
     propose(fields, hints=hints)
     assert [params["q"] for _, params in replay_registry.requests] == [
         'id:"A549"',
         'sy:"A549"',
     ]
+
+
+@pytest.mark.parametrize(
+    "hints, reason",
+    [
+        (
+            {"biosample.cell_line_name": "WTC-11", "biosample.tissue_type": "organoid"},
+            "tissue_type is 'organoid', not 'cell line'",
+        ),
+        ({"biosample.cell_line_name": "A549"}, "no hint: biosample.tissue_type"),
+    ],
+    ids=["organoid", "no-tissue-type"],
+)
+def test_tissue_is_a_cellosaurus_term_only_for_a_cell_line(
+    replay_registry, hints, reason
+):
+    assert _one("biosample.tissue", hints=hints) == Proposal(
+        "biosample.tissue", None, reason, "cellosaurus"
+    )
+    assert replay_registry.requests == []
 
 
 def test_cellosaurus_parent_line_beats_its_derivatives(replay_registry):
