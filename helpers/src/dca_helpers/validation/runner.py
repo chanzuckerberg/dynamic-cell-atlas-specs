@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Literal
 
+import obstore.exceptions as _obs_exc
 from rich.live import Live
 
 from dca_helpers import CURRENT_SPEC_VERSION, __version__
@@ -198,8 +199,9 @@ def list_plate_wells(path: str) -> list[tuple[str, int]]:
     on plate-declaration order, so executor.map below is used purely for the
     parallelism speedup, not to preserve any particular order.
 
-    Raises ValueError if `path` doesn't resolve to a single store, or if that
-    store isn't an HCS plate.
+    Raises ValueError if `path` doesn't resolve to a single store, if that
+    store isn't an HCS plate, or if opening a well fails with an S3 access
+    error (network/throttling/auth).
     """
     if not is_zarr_store(path):
         raise ValueError(f"{path!r} does not point directly at a single Zarr store")
@@ -222,6 +224,11 @@ def list_plate_wells(path: str) -> list[tuple[str, int]]:
     def _count_one(well_path: str) -> "tuple[str, int] | None":
         try:
             well_group = open_zarr_group(f"{node_path}/{well_path}")
+        except _obs_exc.BaseError as exc:
+            raise ValueError(
+                f"S3 access error (network/throttling/auth) opening well "
+                f"{well_path!r} under {path!r}: {exc}"
+            ) from exc
         except Exception as exc:
             # A dropped well silently understates the listing's total field
             # count — since --list-wells exists to plan a chunking scheme,

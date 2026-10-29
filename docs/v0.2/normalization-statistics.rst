@@ -90,7 +90,7 @@ Each channel normalization object **MUST** contain:
 Each channel normalization object **MAY** contain:
 
 * ``timepoint_statistics`` — an object mapping zero-based timepoint indices (as strings) to per-timepoint intensity statistics.
-  If present, it **MUST** contain entries for all timepoints in the dataset.
+  If present, its keys **MUST** be exactly ``"0"`` to ``"T-1"``, where T is the number of timepoints in the dataset: one entry for every timepoint, and no other keys.
 
 Intensity Statistics Fields
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -15,7 +15,12 @@ Flow for one Zarr store:
        IMAGE        → _validate_image()       (DCAStoreSpec model)
        IMAGE_LABEL  → _validate_image_label() (DCALabelStoreSpec model
                                               — not yet registered)
-       LABELS_LIST  → _validate_labels_list() (no arrays — pass immediately)
+       LABELS_LIST  → _validate_labels_list() (container passes; each label declared
+                                              in ome.labels is validated as IMAGE_LABEL)
+
+Label groups under an IMAGE node, and under each selected HCS field, are
+validated by _validate_labels_of() and reported as IMAGE_LABEL results with
+parent_path set to the image/field path.
 """
 
 from __future__ import annotations
@@ -439,6 +444,17 @@ _WELL_OPEN_FAILED = object()  # sentinel: distinguishes "well couldn't be
 # opened" from a legitimate well_perturbation of None
 
 
+def _well_s3_issue(well_path: str, action: str, exc: Exception) -> Issue:
+    return Issue(
+        loc=("s3_io",),
+        message=(
+            f"S3 access error (network/throttling/auth) {action} "
+            f"well '{well_path}': {exc}"
+        ),
+        severity=Severity.ERROR,
+    )
+
+
 def _process_one_well(
     node_path: str,
     well_path: str,
@@ -451,14 +467,23 @@ def _process_one_well(
     Open one well and run the per-well MUST checks documented on
     _gather_plate_fields. Returns (well_path, issues, well_field_paths,
     selected_field_paths, well_perturbation_or_sentinel) — the last element
-    is _WELL_OPEN_FAILED when the well group itself couldn't be opened, so
-    the caller adds no well_perturbation_by_well entry for it.
+    is _WELL_OPEN_FAILED when the well group couldn't be opened or its
+    children couldn't be listed over S3, so the caller adds no
+    well_perturbation_by_well entry for it.
 
     Pure function of its arguments (no shared mutable state) so it can run
     concurrently across wells via a thread pool — see _gather_plate_fields.
     """
     try:
         well_group = open_zarr_group(f"{node_path}/{well_path}")
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "opening", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         return (
             well_path,
@@ -483,6 +508,14 @@ def _process_one_well(
     field_images = well_images(well_ome)
     try:
         well_keys = set(well_group.keys())
+    except _obs_exc.BaseError as exc:
+        return (
+            well_path,
+            [_well_s3_issue(well_path, "listing", exc)],
+            [],
+            [],
+            _WELL_OPEN_FAILED,
+        )
     except Exception:
         well_keys = set()
 
@@ -1223,23 +1256,29 @@ def _validate_hcs_plate(
     field_results: list[ZarrNodeValidationResult] = []
     perturbation_by_field: dict[str, object] = {}
 
+    def _field_and_labels(fp: str):
+        field_out = _validate_field(
+            node_path,
+            fp,
+            spec_version,
+            ngff_version,
+            ModelClass,
+            check_ontology=check_ontology,
+        )
+        label_results = _validate_labels_of(
+            f"{node_path}/{fp}", spec_version, check_ontology
+        )
+        return field_out, label_results
+
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(
-                _validate_field,
-                node_path,
-                fp,
-                spec_version,
-                ngff_version,
-                ModelClass,
-                check_ontology=check_ontology,
-            ): fp
-            for fp in selected_field_paths
+            executor.submit(_field_and_labels, fp): fp for fp in selected_field_paths
         }
         for future in as_completed(futures):
             fp = futures[future]
-            result, axes, chunk_shape, perturbation = future.result()
+            (result, axes, chunk_shape, perturbation), label_results = future.result()
             field_results.append(result)
+            field_results.extend(label_results)
             perturbation_by_field[fp] = perturbation
             if axes is not None:
                 seen_axes.append(axes)
@@ -1317,20 +1356,267 @@ def _validate_hcs_plate(
     return [plate_result] + field_results
 
 
+def _validate_label_group(
+    node_path: str,
+    ome_obj: Image,
+    ngff_version: str | None,
+    spec_version: str,
+    *,
+    parent_path: str | None = None,
+    check_ontology: bool = False,
+) -> list[ZarrNodeValidationResult]:
+    """Validate one already-opened label image group against the label model,
+    or return the "not yet supported" warning when the spec version has none."""
+    try:
+        LabelModelClass = get_label_model(spec_version)
+    except UnsupportedSpecVersionError:
+        results = [
+            ZarrNodeValidationResult(
+                node_path=node_path,
+                parent_path=parent_path,
+                spec_version=spec_version,
+                passed=True,
+                ngff_version=ngff_version,
+                issues=[
+                    Issue(
+                        loc=("label_validation",),
+                        message=(
+                            f"DCA label group validation is not yet supported for "
+                            f"spec version '{spec_version}'. "
+                            f"Label arrays were not checked."
+                        ),
+                        severity=Severity.WARNING,
+                    )
+                ],
+            )
+        ]
+    else:
+        results = _validate_image(
+            node_path,
+            ome_obj,
+            ngff_version,
+            spec_version,
+            LabelModelClass,
+            dca=None,
+            parent_path=parent_path,
+            check_ontology=check_ontology,
+        )
+    return _tag_node_type(results, ZarrNodeType.IMAGE_LABEL)
+
+
+def _label_error(
+    path: str,
+    parent_path: str,
+    spec_version: str,
+    loc: tuple,
+    message: str,
+    ngff_version: str | None = None,
+) -> list[ZarrNodeValidationResult]:
+    return [
+        _single_error_result(
+            path,
+            spec_version,
+            loc,
+            message,
+            ngff_version=ngff_version,
+            parent_path=parent_path,
+            node_type=ZarrNodeType.IMAGE_LABEL,
+        )
+    ]
+
+
+def _validate_label_node(
+    label_path: str,
+    name: str,
+    parent_path: str,
+    spec_version: str,
+    check_ontology: bool,
+) -> list[ZarrNodeValidationResult]:
+    """Open, classify and validate one label group declared in ome.labels."""
+    try:
+        label_group = open_zarr_group(label_path)
+        ome_obj = open_ome_zarr(label_group)
+    except (FileNotFoundError, _obs_exc.NotFoundError):
+        return _label_error(
+            label_path,
+            parent_path,
+            spec_version,
+            ("labels", name),
+            f"Label '{name}' is listed in ome.labels but has no group on disk",
+        )
+    except _obs_exc.BaseError as exc:
+        return _label_error(
+            label_path,
+            parent_path,
+            spec_version,
+            ("s3_io",),
+            f"S3 access error (network/throttling/auth): {exc}",
+        )
+    except Exception as exc:
+        return _label_error(
+            label_path,
+            parent_path,
+            spec_version,
+            ("labels", name, "ngff_validation"),
+            str(exc),
+        )
+
+    ngff_version = str(ome_obj.ome_zarr_version)
+    try:
+        node_type = classify_group(label_path, ome_obj, ome_attrs_of(label_group))
+    except ValueError as exc:
+        return _label_error(
+            label_path,
+            parent_path,
+            spec_version,
+            ("labels", name, "node_classification"),
+            str(exc),
+            ngff_version,
+        )
+    if node_type != ZarrNodeType.IMAGE_LABEL:
+        return _label_error(
+            label_path,
+            parent_path,
+            spec_version,
+            ("labels", name),
+            f"Label '{name}' is listed in ome.labels but lacks ome.image-label",
+            ngff_version,
+        )
+    return _validate_label_group(
+        label_path,
+        ome_obj,
+        ngff_version,
+        spec_version,
+        parent_path=parent_path,
+        check_ontology=check_ontology,
+    )
+
+
+def _is_safe_label_name(name: object) -> bool:
+    return (
+        isinstance(name, str)
+        and name not in ("", ".", "..")
+        and "/" not in name
+        and "\\" not in name
+    )
+
+
+def _validate_label_children(
+    container_group: "zarr.Group",
+    container_path: str,
+    parent_path: str,
+    spec_version: str,
+    check_ontology: bool,
+) -> list[ZarrNodeValidationResult]:
+    """Validate every label declared in a labels container's ome.labels.
+
+    Declared names are validated once each, in declaration order. Child groups
+    of the container that ome.labels does not declare get one WARNING result
+    for the container. Label groups are never searched for their own labels/.
+    """
+    results: list[ZarrNodeValidationResult] = []
+    declared: list[str] = []
+    for name in _as_list(ome_attrs_of(container_group).get("labels")):
+        if not _is_safe_label_name(name):
+            results.extend(
+                _label_error(
+                    container_path,
+                    parent_path,
+                    spec_version,
+                    ("labels",),
+                    f"Invalid label name in ome.labels: {name!r}",
+                )
+            )
+        elif name not in declared:
+            declared.append(name)
+
+    for name in declared:
+        results.extend(
+            _validate_label_node(
+                f"{container_path}/{name}",
+                name,
+                parent_path,
+                spec_version,
+                check_ontology,
+            )
+        )
+
+    try:
+        undeclared = sorted(set(container_group.keys()) - set(declared))
+    except Exception:
+        undeclared = []
+    if undeclared:
+        results.append(
+            ZarrNodeValidationResult(
+                node_path=container_path,
+                parent_path=parent_path,
+                spec_version=spec_version,
+                passed=True,
+                node_type=ZarrNodeType.LABELS_LIST,
+                issues=[
+                    Issue(
+                        loc=("labels", "undeclared"),
+                        message=(
+                            f"Groups under labels/ are not listed in ome.labels: "
+                            f"{undeclared}"
+                        ),
+                        severity=Severity.WARNING,
+                    )
+                ],
+            )
+        )
+    return results
+
+
+def _validate_labels_of(
+    image_path: str,
+    spec_version: str,
+    check_ontology: bool = False,
+) -> list[ZarrNodeValidationResult]:
+    """Validate the label groups of one image or HCS field group.
+
+    A missing labels/ group is not an error. Results carry
+    parent_path=image_path.
+    """
+    labels_path = f"{image_path}/labels"
+    try:
+        labels_group = open_zarr_group(labels_path)
+    except (FileNotFoundError, _obs_exc.NotFoundError):
+        return []
+    except _obs_exc.BaseError as exc:
+        return _label_error(
+            labels_path,
+            image_path,
+            spec_version,
+            ("s3_io",),
+            f"S3 access error (network/throttling/auth): {exc}",
+        )
+    except Exception as exc:
+        return _label_error(
+            labels_path, image_path, spec_version, ("labels", "store_open"), str(exc)
+        )
+    return _validate_label_children(
+        labels_group, labels_path, image_path, spec_version, check_ontology
+    )
+
+
 def _validate_labels_list(
     node_path: str,
     ngff_version: str | None,
     spec_version: str,
+    container_group: "zarr.Group",
+    check_ontology: bool = False,
 ) -> list[ZarrNodeValidationResult]:
-    """LABELS_LIST groups carry no arrays — pass immediately."""
-    return [
-        ZarrNodeValidationResult(
-            node_path=node_path,
-            spec_version=spec_version,
-            passed=True,
-            ngff_version=ngff_version,
-        )
-    ]
+    """Pass the container itself, then validate each label it declares."""
+    container = ZarrNodeValidationResult(
+        node_path=node_path,
+        spec_version=spec_version,
+        passed=True,
+        ngff_version=ngff_version,
+    )
+    return [container] + _validate_label_children(
+        container_group, node_path, node_path, spec_version, check_ontology
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1487,7 +1773,7 @@ def validate_zarr_node(
             _single_error_result(
                 node_path, spec_version, ("ngff_validation",), str(exc)
             )
-        ]
+        ] + _validate_labels_of(node_path, spec_version, check_ontology)
 
     ngff_version = str(ome_obj.ome_zarr_version)
 
@@ -1507,44 +1793,23 @@ def validate_zarr_node(
 
     # Step 4: dispatch by node type.
     if node_type == ZarrNodeType.LABELS_LIST:
-        results = _validate_labels_list(node_path, ngff_version, spec_version)
+        results = _validate_labels_list(
+            node_path,
+            ngff_version,
+            spec_version,
+            zarr_group,
+            check_ontology=check_ontology,
+        )
         return _tag_node_type(results, node_type)
 
     if node_type == ZarrNodeType.IMAGE_LABEL:
-        try:
-            LabelModelClass = get_label_model(spec_version)
-        except UnsupportedSpecVersionError:
-            # DCALabelStoreSpec not yet registered for this version — skip with warning.
-            results = [
-                ZarrNodeValidationResult(
-                    node_path=node_path,
-                    spec_version=spec_version,
-                    passed=True,
-                    ngff_version=ngff_version,
-                    issues=[
-                        Issue(
-                            loc=("label_validation",),
-                            message=(
-                                f"DCA label group validation is not yet supported for "
-                                f"spec version '{spec_version}'. "
-                                f"Label arrays were not checked."
-                            ),
-                            severity=Severity.WARNING,
-                        )
-                    ],
-                )
-            ]
-        else:
-            results = _validate_image(
-                node_path,
-                ome_obj,
-                ngff_version,
-                spec_version,
-                LabelModelClass,
-                dca=None,
-                check_ontology=check_ontology,
-            )
-        return _tag_node_type(results, node_type)
+        return _validate_label_group(
+            node_path,
+            ome_obj,
+            ngff_version,
+            spec_version,
+            check_ontology=check_ontology,
+        )
 
     # IMAGE
     results = _validate_image(
@@ -1557,4 +1822,5 @@ def validate_zarr_node(
         check_ontology=check_ontology,
         group_attrs=raw_attrs,
     )
-    return _tag_node_type(results, node_type)
+    results = _tag_node_type(results, node_type)
+    return results + _validate_labels_of(node_path, spec_version, check_ontology)

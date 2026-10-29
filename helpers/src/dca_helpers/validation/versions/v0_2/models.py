@@ -797,25 +797,68 @@ class DCAStoreSpecV0_2(BaseModel):
         return v
 
     # ------------------------------------------------------------------
-    # channel-metadata.rst § Location in Zarr store — SHOULD
-    # channels SHOULD include metadata for each channel in the image.
+    # channel-metadata.rst § Location in Zarr store — SHOULD (channel count)
+    # normalization-statistics.rst § Channel Normalization Fields — MUST
+    # (timepoint_statistics keys)
+    # One accumulating validator: pydantic stops the chain at the first raise, so
+    # separate validators would let the SHOULD hide the MUST.
     # ------------------------------------------------------------------
 
     @model_validator(mode="after")
-    def check_channel_count_matches_c_axis(self) -> "DCAStoreSpecV0_2":
+    def check_dca_matches_arrays(self) -> "DCAStoreSpecV0_2":
         if self.dca is None or not self.levels:
             return self
-        c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
-        n_channel_entries = len(self.dca.channels)
-        if n_channel_entries != c_axis_size:
-            suffix = "y" if n_channel_entries == 1 else "ies"
-            raise ValueError(
-                f"[SHOULD] dca.channels has {n_channel_entries} entr{suffix} "
-                f"but the C axis at level 0 has size {c_axis_size}. "
-                f"channels SHOULD cover all {c_axis_size} channels "
-                f"(channel-metadata.rst § Location in Zarr store)."
-            )
+        errors = self._channel_count_errors(self.dca)
+        errors += self._timepoint_statistics_errors(self.dca)
+        if errors:
+            raise ValueError("\n".join(errors))
         return self
+
+    def _channel_count_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
+        c_axis_size = self.levels[0].shape[1]  # C is index 1 in [t, c, z, y, x]
+        n_channel_entries = len(dca.channels)
+        if n_channel_entries == c_axis_size:
+            return []
+        suffix = "y" if n_channel_entries == 1 else "ies"
+        return [
+            f"[SHOULD] dca.channels has {n_channel_entries} entr{suffix} "
+            f"but the C axis at level 0 has size {c_axis_size}. "
+            f"channels SHOULD cover all {c_axis_size} channels "
+            f"(channel-metadata.rst § Location in Zarr store)."
+        ]
+
+    def _timepoint_statistics_errors(self, dca: DCAGroupMetadataV0_2) -> list[str]:
+        n_timepoints = self.levels[0].shape[0]
+        expected = {str(t) for t in range(n_timepoints)}
+        errors: list[str] = []
+        for channel, entry in (dca.normalization_statistics.model_extra or {}).items():
+            tp_stats = (
+                entry.get("timepoint_statistics") if isinstance(entry, dict) else None
+            )
+            if not isinstance(tp_stats, dict):
+                continue
+            missing = sorted(expected - set(tp_stats), key=int)
+            if missing:
+                errors.append(
+                    f"normalization_statistics['{channel}'].timepoint_statistics is "
+                    f"missing {len(missing)} of {n_timepoints} timepoints "
+                    f"(first missing: '{missing[0]}'). If present, it MUST contain "
+                    "entries for all timepoints in the dataset "
+                    "(normalization-statistics.rst § Channel Normalization Fields)."
+                )
+            unexpected = sorted(
+                (k for k in tp_stats if k not in expected), key=lambda k: repr(k)
+            )
+            if unexpected:
+                errors.append(
+                    f"normalization_statistics['{channel}'].timepoint_statistics has "
+                    f"{len(unexpected)} keys that are not timepoint indices "
+                    f"'0' to '{n_timepoints - 1}' as strings "
+                    f"(first unexpected: {unexpected[0]!r}). Keys MUST be "
+                    "zero-based timepoint indices of the dataset "
+                    "(normalization-statistics.rst § Channel Normalization Fields)."
+                )
+        return errors
 
 
 # ---------------------------------------------------------------------------
