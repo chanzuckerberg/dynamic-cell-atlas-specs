@@ -1,0 +1,68 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_DX70"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YZ46"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549 DHODH-/-"
+      },
+      {
+       "type": "synonym",
+       "value": "DHODH-/- A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_E7IZ"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A549(Cas9)"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "id:\"A549\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}
