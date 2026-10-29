@@ -122,6 +122,16 @@ def _propose_one(
     hints: Mapping[str, str],
     online: bool,
 ) -> Proposal | None:
+    if field == "biosample.tissue":
+        tissue_type = hints.get("biosample.tissue_type")
+        if tissue_type is None:
+            return Proposal(
+                field, None, "no hint: biosample.tissue_type", "cellosaurus"
+            )
+        if tissue_type != "cell line":
+            reason = f"tissue_type is {tissue_type!r}, not 'cell line'"
+            return Proposal(field, None, reason, "cellosaurus")
+
     if field in ("biosample.cell_line_id", "biosample.tissue"):
         failed, found = _lookup(
             field,
