@@ -1,0 +1,83 @@
+{
+ "body": {
+  "facet_counts": {
+   "facet_fields": {
+    "isDefiningOntology": [
+     "true",
+     "1"
+    ],
+    "isObsolete": [
+     "false",
+     "1"
+    ],
+    "ontologyId": [
+     "ictv",
+     "1",
+     "eupath",
+     "1",
+     "ontoneo",
+     "1",
+     "apollo_sv",
+     "1",
+     "ncit",
+     "1",
+     "mesh",
+     "1",
+     "snomed",
+     "1",
+     "valuesets",
+     "1",
+     "mondo",
+     "1",
+     "ecto",
+     "1",
+     "pr",
+     "1",
+     "omit",
+     "1",
+     "ncbitaxon",
+     "1"
+    ],
+    "ontologyIri": [
+     "http://purl.obolibrary.org/obo/ncbitaxon.owl",
+     "1"
+    ],
+    "ontologyPreferredPrefix": [
+     "NCBITaxon",
+     "1"
+    ],
+    "type": [
+     "class",
+     "1"
+    ]
+   }
+  },
+  "response": {
+   "docs": [
+    {
+     "label": "Zika virus",
+     "obo_id": "NCBITaxon:64320"
+    }
+   ],
+   "numFound": 1,
+   "start": 0
+  },
+  "responseHeader": {
+   "QTime": 0,
+   "status": 0
+  }
+ },
+ "request": {
+  "params": {
+   "exact": "true",
+   "fieldList": "obo_id,label",
+   "ontology": "ncbitaxon",
+   "q": "Zika virus",
+   "queryFields": "label,synonym",
+   "rows": 20,
+   "type": "class"
+  },
+  "url": "https://www.ebi.ac.uk/ols4/api/search"
+ },
+ "status_code": 200
+}

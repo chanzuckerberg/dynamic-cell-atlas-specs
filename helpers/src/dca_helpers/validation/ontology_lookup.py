@@ -309,6 +309,38 @@ def lookup_ols(iri: str) -> TermRecord | None:
 
 
 @functools.lru_cache(maxsize=4096)
+def search_ols(name: str, ontology: str, prefix: str) -> tuple[tuple[str, str], ...]:
+    """``(curie, label)`` terms in OLS ``ontology`` whose label or a synonym is ``name``.
+
+    The reverse of :func:`lookup_ols` (name -> CURIE, for proposing a term; the
+    validator itself never searches). Matches on label and synonym only, so a common
+    name like "mouse" does not also match every virus whose label contains it, and
+    keeps only terms with the ontology's own CURIE ``prefix`` (OLS also returns a
+    term as imported into other ontologies). Memoized per process; raises on
+    transient failure, like the other lookups.
+    """
+    resp = get_with_retry(
+        f"{OLS_BASE_URL}/search",
+        {
+            "q": name,
+            "type": "class",
+            "exact": "true",
+            "queryFields": "label,synonym",
+            "fieldList": "obo_id,label",
+            "rows": 20,
+            "ontology": ontology,
+        },
+    )
+    resp.raise_for_status()
+    wanted = f"{prefix}:".lower()
+    return tuple(
+        (doc["obo_id"], doc.get("label", ""))
+        for doc in resp.json().get("response", {}).get("docs", [])
+        if str(doc.get("obo_id", "")).lower().startswith(wanted)
+    )
+
+
+@functools.lru_cache(maxsize=4096)
 def lookup_ols_ancestors(ontology: str, iri: str) -> frozenset[str] | None:
     """Return the ``obo_id`` set of a term's ancestors in ``ontology``, or None.
 

@@ -151,7 +151,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'dca',
                   'sc': {'prefix_prefix': 'sc',
                          'prefix_reference': 'https://schema.org/'},
                   'sdc': {'prefix_prefix': 'sdc',
-                          'prefix_reference': 'https://github.com/chanzuckerberg/dataset-catalog#'}},
+                          'prefix_reference': 'https://github.com/chanzuckerberg/dataset-catalog#'},
+                  'uniprot': {'prefix_prefix': 'uniprot',
+                              'prefix_reference': 'http://purl.uniprot.org/uniprot/'}},
      'source_file': 'schema/v0.3/dca_experimental_metadata.yaml',
      'title': 'DCA Experimental Metadata'} )
 
@@ -301,19 +303,31 @@ class MatchStatus(str, Enum):
 
 class PerturbationModality(str, Enum):
     """
-    How the perturbation acts. Normalized superset of CellPainting Gallery ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), with values lowercased.
+    How the perturbation acts. Normalized superset of CellPainting Gallery ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), aligned with CELLxGENE schema 7.1 so that CxG's ``perturbation_types`` and ``genetic_perturbation_strategy`` are derived from it rather than curated: ``compound`` maps to the CxG type ``chemical``; the four CRISPR values and ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` map to ``genetic``, with the CRISPR values also naming the CxG strategy; ``diet`` / ``protein`` / ``temperature`` map to the CxG type of the same name. The other values are DCA extensions of the CxG vocabulary. "Nothing was applied" is not a modality of a perturbation; it is the ``no perturbations`` value of ``PerturbationAssignment.modality``.
     """
     compound = "compound"
     """
-    Small-molecule / chemical perturbation.
+    Small-molecule / chemical perturbation (CxG ``chemical``).
     """
     orf = "orf"
     """
     Open reading frame overexpression.
     """
-    crispr = "crispr"
+    CRISPR_activation_screen = "CRISPR activation screen"
     """
-    CRISPR knockout / interference / activation.
+    CRISPR activation (CRISPRa) screen. CxG ``genetic`` / ``CRISPR activation screen``.
+    """
+    CRISPR_interference_screen = "CRISPR interference screen"
+    """
+    CRISPR interference (CRISPRi) screen. CxG ``genetic`` / ``CRISPR interference screen``.
+    """
+    CRISPR_knockout_mutant = "CRISPR knockout mutant"
+    """
+    CRISPR knockout of founder-generation (F0) material, not a screen. CxG ``genetic`` / ``CRISPR knockout mutant``.
+    """
+    CRISPR_knockout_screen = "CRISPR knockout screen"
+    """
+    CRISPR knockout screen. CxG ``genetic`` / ``CRISPR knockout screen``.
     """
     shrna = "shrna"
     """
@@ -327,21 +341,47 @@ class PerturbationModality(str, Enum):
     """
     Small interfering RNA knockdown — transient, transfected synthetic duplex, distinct from the vector-delivered, stably-expressed ``shrna``. Not in the CPG source vocabulary.
     """
+    diet = "diet"
+    """
+    Dietary perturbation, e.g. a change of nutrients (CxG ``diet``).
+    """
+    protein = "protein"
+    """
+    Treatment with a protein, e.g. a growth factor or cytokine (CxG ``protein``).
+    """
+    temperature = "temperature"
+    """
+    Temperature perturbation, e.g. heat or cold shock (CxG ``temperature``). Not the imaging temperature, which is ``AcquisitionMetadata.temperature_c``.
+    """
     physical = "physical"
     """
-    Physical perturbation (e.g. heat shock, irradiation).
+    Physical perturbation other than temperature (e.g. irradiation, mechanical stress).
     """
     biological = "biological"
     """
     Biological perturbation (e.g. pathogen, ligand, co-culture).
     """
+    not_reported = "not reported"
+    """
+    A perturbation was applied but the source does not say which kind.
+    """
+    unknown = "unknown"
+    """
+    The kind of perturbation cannot be determined, e.g. from a source whose description contradicts itself or names an agent of unknown nature.
+    """
     other = "other"
     """
     Perturbation not covered by the categories above.
     """
-    unknown = "unknown"
+
+
+class NoPerturbations(str, Enum):
     """
-    Modality not determinable.
+    The single value of ``PerturbationAssignment.modality``: nothing was applied to this image group's material (CxG ``no perturbations``).
+    """
+    no_perturbations = "no perturbations"
+    """
+    Nothing was applied to this image group's material.
     """
 
 
@@ -447,7 +487,7 @@ class ExperimentalMetadata(ConfiguredBaseModel):
     study: Study = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
     biosample: Biosample = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
     specimen: Specimen = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
-    perturbation: Optional[PerturbationAssignment] = Field(default=None, description="""The perturbation applied to this image group's material — dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). CONDITIONALLY REQUIRED: present for every image group of a dataset that has perturbations, absent for a dataset that has none. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key — and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
+    perturbation: PerturbationAssignment = Field(default=..., description="""The perturbation applied to this image group's material — dosing / control class / timing plus the :class:`Perturbation` it references (its ``definition`` slot). REQUIRED on every image group. An image group whose material had nothing applied records ``{\"modality\": \"no perturbations\"}`` and nothing else. Mirrored into the ``zarr.json`` ``dca`` block like the other required blocks, so a perturbation is readable from the image group a consumer already has open, without resolving a plate / well key — and so it is expressible for a plateless ``image_collection`` store. This is the AUTHORITATIVE placement: an arrayed HCS screen may additionally index the same assignment per well as a :class:`WellPerturbation`, which is derived from this block.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
     acquisition: Optional[AcquisitionMetadata] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
     image_data: Optional[ImageData] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
     study_component: StudyComponent = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ExperimentalMetadata']} })
@@ -505,7 +545,7 @@ class Microscope(ConfiguredBaseModel):
          'exact_mappings': ['bioformats:Microscope.Model', 'cpg:Microscope_Name']} })
     type: Optional[MicroscopeType] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Detector'],
          'exact_mappings': ['bioformats:Microscope.Type']} })
-    modality: Optional[str] = Field(default=None, description="""Imaging modality (e.g. fluorescence, brightfield).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation'],
+    modality: Optional[str] = Field(default=None, description="""Imaging modality (e.g. fluorescence, brightfield).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation', 'PerturbationAssignment'],
          'exact_mappings': ['cpg:Microscope_Modality']} })
     binning: Optional[str] = Field(default=None, description="""Detector binning (e.g. \"2x2\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope'], 'exact_mappings': ['cpg:Microscope_Binning']} })
 
@@ -683,7 +723,7 @@ class Biosample(ConfiguredBaseModel):
                                                                           'name': 'tissue_type'}}}}]})
 
     group_id: str = Field(default=..., description="""Row key of the Parquet (``tables/obs``) table, and the key that links this sample's metadata to the image arrays it describes. There is one obs row per image group: a single-image store has one row; an HCS plate has one row per well (the well ``WellPerturbation.plate`` / ``well`` also key on). DCA-native — so sample metadata is not floating free of the data it annotates. Reuses the identifier the ingestor already writes to the obs table rather than minting a separate one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample']} })
-    organism: list[OrganismTerm] = Field(default=..., description="""Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:9606\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample']} })
+    organism: list[OrganismTerm] = Field(default=..., description="""Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:9606\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample', 'BiologicalPerturbation']} })
     tissue_type: TissueType = Field(default=..., json_schema_extra = { "linkml_meta": {'close_mappings': ['sdc:sample.tissue.type'],
          'domain_of': ['Biosample'],
          'exact_mappings': ['cxmod:tissue_type', 'ops:experiment.tissue_type']} })
@@ -761,7 +801,9 @@ class AdditionalMetadataField(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
     name: str = Field(default=..., description="""Field name (SHOULD be namespaced if targeting a specific spec).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Perturbation']} })
-    value: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Concentration']} })
+    value: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
 
 
 class OntologyTerm(ConfiguredBaseModel):
@@ -1180,12 +1222,23 @@ class Perturbation(ConfiguredBaseModel):
                                                                         'required': True}}},
                     'preconditions': {'slot_conditions': {'modality': {'equals_string': 'compound',
                                                                        'name': 'modality'}}}},
-                   {'description': 'A genetic perturbation (crispr / orf / shrna / '
-                                   'mirna / sirna) must carry the genetic-target '
-                                   'block.',
+                   {'description': 'A genetic perturbation (the four CRISPR values / '
+                                   'orf / shrna / mirna / sirna) must carry the '
+                                   'genetic-target block.',
                     'postconditions': {'slot_conditions': {'genetic': {'name': 'genetic',
                                                                        'required': True}}},
-                    'preconditions': {'slot_conditions': {'modality': {'any_of': [{'equals_string': 'crispr'},
+                    'preconditions': {'slot_conditions': {'modality': {'any_of': [{'equals_string': 'CRISPR '
+                                                                                                    'activation '
+                                                                                                    'screen'},
+                                                                                  {'equals_string': 'CRISPR '
+                                                                                                    'interference '
+                                                                                                    'screen'},
+                                                                                  {'equals_string': 'CRISPR '
+                                                                                                    'knockout '
+                                                                                                    'mutant'},
+                                                                                  {'equals_string': 'CRISPR '
+                                                                                                    'knockout '
+                                                                                                    'screen'},
                                                                                   {'equals_string': 'orf'},
                                                                                   {'equals_string': 'shrna'},
                                                                                   {'equals_string': 'mirna'},
@@ -1201,11 +1254,14 @@ class Perturbation(ConfiguredBaseModel):
     perturbation_identifier: Optional[str] = Field(default=None, description="""External catalog identifier for the construct. Because the source varies (Broad sample id, vendor id, JCP2022 id), it MUST be namespaced so the value names its database — e.g. ``JCP2022:JCP2022_012345`` or ``Broad:BRD-K12345678``. The canonical, resolvable identity lives in the typed modality block (``chemical.pubchem_cid`` / ``genetic.ncbi_gene_id``); this generic slot records the source's own catalog id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'],
          'exact_mappings': ['bioformats:Reagent.ReagentIdentifier',
                             'cpg:Treatment_Broad_Sample']} })
-    modality: PerturbationModality = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation'],
+    modality: PerturbationModality = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation', 'PerturbationAssignment'],
          'exact_mappings': ['cpg:Treatment_Category']} })
     mechanism: Optional[str] = Field(default=None, description="""Mechanism of action (free text).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'], 'exact_mappings': ['cpg:Treatment_Mechanism']} })
     chemical: Optional[ChemicalPerturbation] = Field(default=None, description="""Chemical identifiers — present when ``modality = compound``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
-    genetic: Optional[GeneticPerturbation] = Field(default=None, description="""Genetic-target identifiers — present when ``modality`` is crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    genetic: Optional[GeneticPerturbation] = Field(default=None, description="""Genetic-target identifiers — present when ``modality`` is one of the four CRISPR values or orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    biological: Optional[BiologicalPerturbation] = Field(default=None, description="""The biological agent — RECOMMENDED when ``modality`` is ``biological`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    protein: Optional[ProteinPerturbation] = Field(default=None, description="""The protein applied — RECOMMENDED when ``modality`` is ``protein`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    condition: Optional[ConditionPerturbation] = Field(default=None, description="""The condition applied — RECOMMENDED when ``modality`` is ``diet``, ``temperature`` or ``physical`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
 
 
 class ChemicalPerturbation(ConfiguredBaseModel):
@@ -1246,7 +1302,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
     gene_symbol: Optional[str] = Field(default=None, description="""HGNC gene symbol (e.g. \"TP53\") — the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
-         'domain_of': ['GeneticPerturbation'],
+         'domain_of': ['GeneticPerturbation', 'ProteinPerturbation'],
          'exact_mappings': ['cpg:crispr_symbol', 'cpg:orf_symbol']} })
     ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") — the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
@@ -1292,28 +1348,187 @@ class Concentration(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
-    value: Optional[float] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Concentration']} })
-    unit: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration']} })
+    value: Optional[float] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
+    unit: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration', 'ConditionPerturbation']} })
     text: Optional[str] = Field(default=None, description="""Free-text concentration as recorded (CPG fallback).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration'],
          'exact_mappings': ['cpg:Treatment_Concentration']} })
 
 
-class PerturbationAssignment(ConfiguredBaseModel):
+class BiologicalPerturbation(ConfiguredBaseModel):
     """
-    The ASSIGNMENT of a :class:`Perturbation` to imaged material — the dosing / control / timing that turns a reusable codebook entry into \"what was done to this sample\". The entry itself is the ``definition`` slot (plus an optional ``cotreatment``); everything else here is the assignment. Carries no plate / well key, so it is placement-agnostic: it is the ``perturbation`` block of :class:`ExperimentalMetadata` (image level, alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key. Required-when-present: a dataset with perturbations MUST carry the required fields below; a dataset with none simply has no ``perturbation`` block. (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)
+    A biological perturbation agent: a virus, bacterium or other pathogen, or cells of another organism in co-culture.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    organism: OrganismTerm = Field(default=..., description="""The agent's organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:64320\" for Zika virus).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample', 'BiologicalPerturbation']} })
+    strain: Optional[str] = Field(default=None, description="""Strain, isolate or line of the agent, as the source names it (e.g. \"PRVABC59\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['BiologicalPerturbation']} })
+    multiplicity_of_infection: Optional[float] = Field(default=None, description="""Multiplicity of infection (infectious units per cell), for an infection.""", ge=0, json_schema_extra = { "linkml_meta": {'domain_of': ['BiologicalPerturbation']} })
+
+
+class ProteinPerturbation(ConfiguredBaseModel):
+    """
+    A protein applied to the material, e.g. a growth factor, cytokine or antibody.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    uniprot_id: str = Field(default=..., description="""UniProtKB accession of the protein as a colon CURIE (e.g. \"uniprot:P01308\" for insulin), resolvable via the ``prefixes`` block; the same ``uniprot:`` form CELLxGENE uses to identify a protein treatment. ``na`` when the protein has no UniProtKB entry (e.g. an engineered fusion).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ProteinPerturbation']} })
+    gene_symbol: Optional[str] = Field(default=None, description="""Symbol of the gene encoding the protein (the human-readable label).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation', 'ProteinPerturbation']} })
+
+    @field_validator('uniprot_id')
+    def pattern_uniprot_id(cls, v):
+        pattern=re.compile(r"^(uniprot:([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?|na)$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid uniprot_id format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid uniprot_id format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class ConditionTerm(OntologyTerm):
+    """
+    Experimental-condition ontology annotation (EFO), e.g. a diet or a temperature treatment.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata',
-         'rules': [{'description': 'Treated and control material (treatment / negcon / '
+         'slot_usage': {'ontology_term_id': {'name': 'ontology_term_id',
+                                             'pattern': '^(EFO:\\d+|unknown|na|unavailable)$'}}})
+
+    ontology_term_id: str = Field(default=..., description="""CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['OntologyTerm']} })
+    label: str = Field(default=..., description="""Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.""", json_schema_extra = { "linkml_meta": {'domain_of': ['OntologyTerm']} })
+
+    @field_validator('ontology_term_id')
+    def pattern_ontology_term_id(cls, v):
+        pattern=re.compile(r"^(EFO:\d+|unknown|na|unavailable)$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid ontology_term_id format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid ontology_term_id format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('label')
+    def pattern_label(cls, v):
+        pattern=re.compile(r"^.+$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid label format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid label format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class ConditionPerturbation(ConfiguredBaseModel):
+    """
+    An environmental or physical condition applied as a perturbation: a diet, a temperature, or another physical treatment (e.g. irradiation, mechanical stress).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    condition: ConditionTerm = Field(default=..., description="""The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
+    value: Optional[float] = Field(default=None, description="""The condition's magnitude, e.g. 42 for a 42 °C heat shock.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
+    unit: Optional[str] = Field(default=None, description="""Unit of ``value``, e.g. \"degree Celsius\", \"Gy\" or \"percent\".""", json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration', 'ConditionPerturbation']} })
+
+
+class PerturbationAssignment(ConfiguredBaseModel):
+    """
+    The ASSIGNMENT of a :class:`Perturbation` to imaged material — the dosing / control / timing that turns a reusable codebook entry into \"what was done to this sample\". The entry itself is the ``definition`` slot (plus an optional ``cotreatment``); everything else here is the assignment. Carries no plate / well key, so it is placement-agnostic: it is the ``perturbation`` block of :class:`ExperimentalMetadata` (image level, alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key. It has two forms. Material that had nothing applied carries only ``modality: \"no perturbations\"``. Everything else carries ``control_class`` and, unless that is ``empty``, a ``definition``; ``modality`` is then absent (the kind of each perturbation is its ``definition.modality``). (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata',
+         'rules': [{'description': 'A perturbation block that does not say "no '
+                                   'perturbations" must state the control class.',
+                    'postconditions': {'slot_conditions': {'control_class': {'name': 'control_class',
+                                                                             'required': True}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'ABSENT'}}}},
+                   {'description': '"no perturbations" stands alone, so '
+                                   '``control_class`` is absent with it. (One rule per '
+                                   'field: several absences in one rule would only '
+                                   'fail when all are set.)',
+                    'postconditions': {'slot_conditions': {'control_class': {'name': 'control_class',
+                                                                             'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so ``definition`` '
+                                   'is absent with it. (One rule per field: several '
+                                   'absences in one rule would only fail when all are '
+                                   'set.)',
+                    'postconditions': {'slot_conditions': {'definition': {'name': 'definition',
+                                                                          'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so '
+                                   '``cotreatment`` is absent with it. (One rule per '
+                                   'field: several absences in one rule would only '
+                                   'fail when all are set.)',
+                    'postconditions': {'slot_conditions': {'cotreatment': {'name': 'cotreatment',
+                                                                           'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so '
+                                   '``concentration`` is absent with it. (One rule per '
+                                   'field: several absences in one rule would only '
+                                   'fail when all are set.)',
+                    'postconditions': {'slot_conditions': {'concentration': {'name': 'concentration',
+                                                                             'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so ``solvent`` is '
+                                   'absent with it. (One rule per field: several '
+                                   'absences in one rule would only fail when all are '
+                                   'set.)',
+                    'postconditions': {'slot_conditions': {'solvent': {'name': 'solvent',
+                                                                       'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so ``duration_h`` '
+                                   'is absent with it. (One rule per field: several '
+                                   'absences in one rule would only fail when all are '
+                                   'set.)',
+                    'postconditions': {'slot_conditions': {'duration_h': {'name': 'duration_h',
+                                                                          'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so '
+                                   '``timepoint_primary_h`` is absent with it. (One '
+                                   'rule per field: several absences in one rule would '
+                                   'only fail when all are set.)',
+                    'postconditions': {'slot_conditions': {'timepoint_primary_h': {'name': 'timepoint_primary_h',
+                                                                                   'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': '"no perturbations" stands alone, so '
+                                   '``timepoint_secondary_h`` is absent with it. (One '
+                                   'rule per field: several absences in one rule would '
+                                   'only fail when all are set.)',
+                    'postconditions': {'slot_conditions': {'timepoint_secondary_h': {'name': 'timepoint_secondary_h',
+                                                                                     'value_presence': 'ABSENT'}}},
+                    'preconditions': {'slot_conditions': {'modality': {'name': 'modality',
+                                                                       'value_presence': 'PRESENT'}}}},
+                   {'description': 'Treated and control material (treatment / negcon / '
                                    'poscon) must name a perturbation; ``empty`` has '
                                    'none to record, so ``definition`` is not required '
                                    'there.',
                     'postconditions': {'slot_conditions': {'definition': {'name': 'definition',
                                                                           'required': True}}},
                     'preconditions': {'slot_conditions': {'control_class': {'name': 'control_class',
-                                                                            'none_of': [{'equals_string': 'empty'}]}}}}]})
+                                                                            'none_of': [{'equals_string': 'empty'}],
+                                                                            'value_presence': 'PRESENT'}}}}]})
 
+    modality: Optional[NoPerturbations] = Field(default=None, description="""``no perturbations`` when nothing was applied to this image group's material; the block then carries nothing else. Absent otherwise: the kind of an applied perturbation is ``definition.modality``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation', 'PerturbationAssignment']} })
     definition: Optional[Perturbation] = Field(default=None, description="""The :class:`Perturbation` definition this assignment applies — the reusable codebook entry (what the perturbagen IS), as distinct from the dosing / control / timing around it (what was DONE to this material), which are the sibling slots here. Required for treated and control material (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is ``empty``, which has nothing to record (enforced by the class rule above).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment']} })
-    control_class: PerturbationControlClass = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
+    control_class: Optional[PerturbationControlClass] = Field(default=None, description="""Required unless ``modality`` is ``no perturbations`` (enforced by the class rule above).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
          'exact_mappings': ['cpg:Treatment_Control_Class']} })
     concentration: Optional[Concentration] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment']} })
     solvent: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
@@ -1338,8 +1553,9 @@ class WellPerturbation(PerturbationAssignment):
 
     plate: str = Field(default=..., description="""Plate identifier. Together with ``well`` this is the link to the image arrays: it MUST match the OME-NGFF HCS plate name (the ``plate`` group in ``zarr.json``) so a row resolves to a well group in the store.""", json_schema_extra = { "linkml_meta": {'domain_of': ['WellPerturbation']} })
     well: str = Field(default=..., description="""Well identifier in row-letter + column-number form (e.g. \"A03\"), mapping to the OME-NGFF HCS ``row``/``column`` well-group path (``A/3``) under the plate. This is the key tying the assignment to the imaged well.""", json_schema_extra = { "linkml_meta": {'domain_of': ['WellPerturbation']} })
+    modality: Optional[NoPerturbations] = Field(default=None, description="""``no perturbations`` when nothing was applied to this image group's material; the block then carries nothing else. Absent otherwise: the kind of an applied perturbation is ``definition.modality``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Microscope', 'Perturbation', 'PerturbationAssignment']} })
     definition: Optional[Perturbation] = Field(default=None, description="""The :class:`Perturbation` definition this assignment applies — the reusable codebook entry (what the perturbagen IS), as distinct from the dosing / control / timing around it (what was DONE to this material), which are the sibling slots here. Required for treated and control material (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is ``empty``, which has nothing to record (enforced by the class rule above).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment']} })
-    control_class: PerturbationControlClass = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
+    control_class: Optional[PerturbationControlClass] = Field(default=None, description="""Required unless ``modality`` is ``no perturbations`` (enforced by the class rule above).""", json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
          'exact_mappings': ['cpg:Treatment_Control_Class']} })
     concentration: Optional[Concentration] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment']} })
     solvent: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['PerturbationAssignment'],
@@ -1387,5 +1603,9 @@ Perturbation.model_rebuild()
 ChemicalPerturbation.model_rebuild()
 GeneticPerturbation.model_rebuild()
 Concentration.model_rebuild()
+BiologicalPerturbation.model_rebuild()
+ProteinPerturbation.model_rebuild()
+ConditionTerm.model_rebuild()
+ConditionPerturbation.model_rebuild()
 PerturbationAssignment.model_rebuild()
 WellPerturbation.model_rebuild()

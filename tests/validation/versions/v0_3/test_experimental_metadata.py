@@ -25,9 +25,11 @@ PV_LOC = ("dca", "image_data", "processing_variant")
 def _dca(steps) -> dict:
     dca = json.loads(FIXTURE_FIELD.read_text())["attributes"]["dca"]
     dca["image_data"] = {"processing_variant": steps}
+    dca["perturbation"] = {"modality": "no perturbations"}
     dca["provenance"] = {
         **dca["provenance"],
         "image_data.processing_variant": {"source_kind": "original_data"},
+        "perturbation.modality": {"source_kind": "original_data"},
     }
     return dca
 
@@ -40,6 +42,11 @@ def _at(issues, loc=PV_LOC):
 class TestProcessingVariantList:
     def test_fixture_without_image_data_is_clean(self):
         dca = json.loads(FIXTURE_FIELD.read_text())["attributes"]["dca"]
+        dca["perturbation"] = {"modality": "no perturbations"}
+        dca["provenance"] = {
+            **dca["provenance"],
+            "perturbation.modality": {"source_kind": "original_data"},
+        }
         assert validate_dca_experimental_metadata_v0_3(dca) == []
 
     def test_ordered_list_of_known_steps_passes(self):
@@ -89,10 +96,11 @@ class TestProcessingVariantList:
 
 
 @pytest.mark.unit
-def test_v0_3_schema_differs_from_v0_2_only_in_image_data():
+def test_v0_3_schema_differs_from_v0_2_only_in_overridden_blocks():
     """v0_3/experimental_metadata.py reuses the v0.2 rule classes for every block
-    but image_data. That is only correct while the two generated schemas agree
-    everywhere else; if this fails, override the changed block in the v0.3 module."""
+    but image_data and the perturbation classes. That is only correct while the two
+    generated schemas agree everywhere else; if this fails, override the changed
+    block in the v0.3 module."""
 
     def load(version):
         path = (
@@ -102,11 +110,43 @@ def test_v0_3_schema_differs_from_v0_2_only_in_image_data():
         return json.loads(path.read_text())
 
     v2, v3 = load("0.2"), load("0.3")
-    changed = {"ImageData", "ProcessingStep"}
-    assert set(v3["$defs"]) - set(v2["$defs"]) == {"ProcessingStep"}
+    changed = {
+        "ImageData",
+        "ProcessingStep",
+        "PerturbationModality",
+        "NoPerturbations",
+        "Perturbation",
+        "PerturbationAssignment",
+        "WellPerturbation",
+        "ExperimentalMetadata",
+    }
+    added = {
+        "ProcessingStep",
+        "NoPerturbations",
+        "BiologicalPerturbation",
+        "ProteinPerturbation",
+        "ConditionPerturbation",
+        "ConditionTerm",
+    }
+    assert set(v3["$defs"]) - set(v2["$defs"]) == added
     for name in v2["$defs"]:
         if name not in changed:
             assert v3["$defs"][name] == v2["$defs"][name], name
+    # ExperimentalMetadata may differ only in perturbation being required (the v0.3
+    # class overrides that field); its other blocks are the reused v0.2 ones.
+    e2, e3 = v2["$defs"]["ExperimentalMetadata"], v3["$defs"]["ExperimentalMetadata"]
+    assert set(e3["required"]) - set(e2["required"]) == {"perturbation"}
+    assert set(e2["required"]) <= set(e3["required"])
+    for prop in e2["properties"]:
+        if prop not in {"perturbation", "image_data"}:
+            assert e3["properties"][prop] == e2["properties"][prop], prop
     for key in set(v2) | set(v3):
-        if key not in {"$defs", "description", "metamodel_version"}:
+        # The top-level properties / required mirror ExperimentalMetadata (checked above).
+        if key not in {
+            "$defs",
+            "description",
+            "metamodel_version",
+            "properties",
+            "required",
+        }:
             assert v3.get(key) == v2.get(key), key

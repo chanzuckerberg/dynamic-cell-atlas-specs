@@ -47,9 +47,16 @@ Changes from v0.2
 * ``dca.version`` is ``"0.3"``.
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
   recommended step vocabulary, instead of a single string, and a new free-text
-  ``image_data.processing_description`` holds the full processing text. These are the
-  only changes to the experimental-metadata schema
-  (``schema/v0.3/dca_experimental_metadata.yaml``).
+  ``image_data.processing_description`` holds the full processing text.
+* **Perturbations** are aligned with the CELLxGENE 7.1 perturbation fields: the
+  ``modality`` vocabulary replaces ``crispr`` with four CRISPR values and adds ``diet``
+  / ``protein`` / ``temperature`` / ``not reported``; typed ``biological``,
+  ``protein`` and ``condition`` blocks join ``chemical`` and ``genetic``; and the
+  ``perturbation`` block is required on every image group, as
+  ``{"modality": "no perturbations"}`` when nothing was applied. See
+  :ref:`Perturbation Metadata <v03-experimental-perturbation-modality>`.
+  These and the ``image_data`` change are the only changes to the
+  experimental-metadata schema (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
   cross-store projection checks and an opt-in ``--require-projection`` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default

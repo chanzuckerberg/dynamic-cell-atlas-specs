@@ -53,6 +53,7 @@ prefixes:
   ensembl: http://identifiers.org/ensembl/
   PubChem: http://identifiers.org/pubchem.compound/
   EFO: http://www.ebi.ac.uk/efo/EFO_
+  uniprot: http://purl.uniprot.org/uniprot/
   CVCL: https://www.cellosaurus.org/CVCL_
   MONDO: http://purl.obolibrary.org/obo/MONDO_
   UBERON: http://purl.obolibrary.org/obo/UBERON_
@@ -202,16 +203,37 @@ enums:
   PerturbationModality:
     description: >-
       How the perturbation acts. Normalized superset of CellPainting Gallery
-      ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), with
-      values lowercased.
+      ``Treatment_Category`` ([ORF, Compound, CRISPR, shRNA, miRNA, None]), aligned
+      with CELLxGENE schema 7.1 so that CxG's ``perturbation_types`` and
+      ``genetic_perturbation_strategy`` are derived from it rather than curated:
+      ``compound`` maps to the CxG type ``chemical``; the four CRISPR values and
+      ``orf`` / ``shrna`` / ``mirna`` / ``sirna`` map to ``genetic``, with the
+      CRISPR values also naming the CxG strategy; ``diet`` / ``protein`` /
+      ``temperature`` map to the CxG type of the same name. The other values are
+      DCA extensions of the CxG vocabulary. "Nothing was applied" is not a
+      modality of a perturbation; it is the ``no perturbations`` value of
+      ``PerturbationAssignment.modality``.
     permissible_values:
       compound:
-        description: Small-molecule / chemical perturbation.
+        description: Small-molecule / chemical perturbation (CxG ``chemical``).
         exact_mappings: [cpg:Treatment_Category]
       orf:
         description: Open reading frame overexpression.
-      crispr:
-        description: CRISPR knockout / interference / activation.
+      CRISPR activation screen:
+        description: >-
+          CRISPR activation (CRISPRa) screen. CxG ``genetic`` /
+          ``CRISPR activation screen``.
+      CRISPR interference screen:
+        description: >-
+          CRISPR interference (CRISPRi) screen. CxG ``genetic`` /
+          ``CRISPR interference screen``.
+      CRISPR knockout mutant:
+        description: >-
+          CRISPR knockout of founder-generation (F0) material, not a screen. CxG
+          ``genetic`` / ``CRISPR knockout mutant``.
+      CRISPR knockout screen:
+        description: >-
+          CRISPR knockout screen. CxG ``genetic`` / ``CRISPR knockout screen``.
       shrna:
         description: Short hairpin RNA knockdown (CPG only).
       mirna:
@@ -221,14 +243,40 @@ enums:
           Small interfering RNA knockdown — transient, transfected synthetic
           duplex, distinct from the vector-delivered, stably-expressed ``shrna``.
           Not in the CPG source vocabulary.
+      diet:
+        description: Dietary perturbation, e.g. a change of nutrients (CxG ``diet``).
+      protein:
+        description: >-
+          Treatment with a protein, e.g. a growth factor or cytokine (CxG
+          ``protein``).
+      temperature:
+        description: >-
+          Temperature perturbation, e.g. heat or cold shock (CxG ``temperature``).
+          Not the imaging temperature, which is
+          ``AcquisitionMetadata.temperature_c``.
       physical:
-        description: Physical perturbation (e.g. heat shock, irradiation).
+        description: >-
+          Physical perturbation other than temperature (e.g. irradiation,
+          mechanical stress).
       biological:
         description: Biological perturbation (e.g. pathogen, ligand, co-culture).
+      not reported:
+        description: >-
+          A perturbation was applied but the source does not say which kind.
+      unknown:
+        description: >-
+          The kind of perturbation cannot be determined, e.g. from a source whose
+          description contradicts itself or names an agent of unknown nature.
       other:
         description: Perturbation not covered by the categories above.
-      unknown:
-        description: Modality not determinable.
+
+  NoPerturbations:
+    description: >-
+      The single value of ``PerturbationAssignment.modality``: nothing was applied to
+      this image group's material (CxG ``no perturbations``).
+    permissible_values:
+      no perturbations:
+        description: Nothing was applied to this image group's material.
 
   PerturbationControlClass:
     description: >-
@@ -352,8 +400,9 @@ classes:
           The perturbation applied to this image group's material — dosing / control
           class / timing plus the :class:`Perturbation` it references (its
           ``definition`` slot).
-          CONDITIONALLY REQUIRED: present for every image group of a dataset that has
-          perturbations, absent for a dataset that has none. Mirrored into the
+          REQUIRED on every image group. An image group whose material had nothing
+          applied records ``{"modality": "no perturbations"}`` and nothing else.
+          Mirrored into the
           ``zarr.json`` ``dca`` block like the other required blocks, so a
           perturbation is readable from the image group a consumer already has open,
           without resolving a plate / well key — and so it is expressible for a
@@ -362,6 +411,7 @@ classes:
           a :class:`WellPerturbation`, which is derived from this block.
         range: PerturbationAssignment
         inlined: true
+        required: true
       acquisition:
         range: AcquisitionMetadata
         inlined: true
@@ -1215,13 +1265,16 @@ classes:
             chemical:
               required: true
       - description: >-
-          A genetic perturbation (crispr / orf / shrna / mirna / sirna) must carry
-          the genetic-target block.
+          A genetic perturbation (the four CRISPR values / orf / shrna / mirna /
+          sirna) must carry the genetic-target block.
         preconditions:
           slot_conditions:
             modality:
               any_of:
-                - equals_string: crispr
+                - equals_string: CRISPR activation screen
+                - equals_string: CRISPR interference screen
+                - equals_string: CRISPR knockout mutant
+                - equals_string: CRISPR knockout screen
                 - equals_string: orf
                 - equals_string: shrna
                 - equals_string: mirna
@@ -1266,10 +1319,28 @@ classes:
         inlined: true
       genetic:
         description: >-
-          Genetic-target identifiers — present when ``modality`` is
-          crispr / orf / shrna / mirna / sirna. This is the genetic-perturbation
+          Genetic-target identifiers — present when ``modality`` is one of the
+          four CRISPR values or orf / shrna / mirna / sirna. This is the genetic-perturbation
           extension (knockout, knockdown, or overexpression of a gene target).
         range: GeneticPerturbation
+        inlined: true
+      biological:
+        description: >-
+          The biological agent — RECOMMENDED when ``modality`` is ``biological``
+          (validators warn when it is missing).
+        range: BiologicalPerturbation
+        inlined: true
+      protein:
+        description: >-
+          The protein applied — RECOMMENDED when ``modality`` is ``protein``
+          (validators warn when it is missing).
+        range: ProteinPerturbation
+        inlined: true
+      condition:
+        description: >-
+          The condition applied — RECOMMENDED when ``modality`` is ``diet``,
+          ``temperature`` or ``physical`` (validators warn when it is missing).
+        range: ConditionPerturbation
         inlined: true
 
   ChemicalPerturbation:
@@ -1344,6 +1415,72 @@ classes:
         description: Free-text concentration as recorded (CPG fallback).
         exact_mappings: [cpg:Treatment_Concentration]
 
+  BiologicalPerturbation:
+    description: >-
+      A biological perturbation agent: a virus, bacterium or other pathogen, or cells
+      of another organism in co-culture.
+    attributes:
+      organism:
+        description: >-
+          The agent's organism as an ``ontology_term_id`` + ``label`` pair; the id is an
+          NCBITaxon CURIE (e.g. "NCBITaxon:64320" for Zika virus).
+        range: OrganismTerm
+        inlined: true
+        required: true
+      strain:
+        description: >-
+          Strain, isolate or line of the agent, as the source names it (e.g.
+          "PRVABC59").
+      multiplicity_of_infection:
+        description: Multiplicity of infection (infectious units per cell), for an infection.
+        range: float
+        minimum_value: 0
+
+  ProteinPerturbation:
+    description: A protein applied to the material, e.g. a growth factor, cytokine or antibody.
+    attributes:
+      uniprot_id:
+        description: >-
+          UniProtKB accession of the protein as a colon CURIE (e.g. "uniprot:P01308"
+          for insulin), resolvable via the ``prefixes`` block; the same ``uniprot:``
+          form CELLxGENE uses to identify a protein treatment. ``na`` when the protein
+          has no UniProtKB entry (e.g. an engineered fusion).
+        pattern: "^(uniprot:([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\\d+)?|na)$"
+        required: true
+      gene_symbol:
+        description: Symbol of the gene encoding the protein (the human-readable label).
+
+  ConditionTerm:
+    description: >-
+      Experimental-condition ontology annotation (EFO), e.g. a diet or a temperature
+      treatment.
+    is_a: OntologyTerm
+    slot_usage:
+      ontology_term_id:
+        pattern: "^(EFO:\\d+|unknown|na|unavailable)$"
+
+  ConditionPerturbation:
+    description: >-
+      An environmental or physical condition applied as a perturbation: a diet, a
+      temperature, or another physical treatment (e.g. irradiation, mechanical stress).
+    attributes:
+      condition:
+        description: >-
+          The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO
+          CURIE, e.g. "EFO:0001702" (temperature). CELLxGENE reads ``diet`` from
+          EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from
+          EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no
+          term for it, e.g. a laser ablation.
+        range: ConditionTerm
+        inlined: true
+        required: true
+      value:
+        description: The condition's magnitude, e.g. 42 for a 42 °C heat shock.
+        range: float
+      unit:
+        description: >-
+          Unit of ``value``, e.g. "degree Celsius", "Gy" or "percent".
+
   PerturbationAssignment:
     description: >-
       The ASSIGNMENT of a :class:`Perturbation` to imaged material — the dosing /
@@ -1354,10 +1491,111 @@ classes:
       the ``perturbation`` block of :class:`ExperimentalMetadata` (image level,
       alongside ``study`` / ``biosample`` / ``specimen``), and it is the body that
       :class:`WellPerturbation` extends with an HCS ``(plate, well)`` key.
-      Required-when-present: a dataset with perturbations MUST carry the required
-      fields below; a dataset with none simply has no ``perturbation`` block.
+      It has two forms. Material that had nothing applied carries only
+      ``modality: "no perturbations"``. Everything else carries ``control_class``
+      and, unless that is ``empty``, a ``definition``; ``modality`` is then absent
+      (the kind of each perturbation is its ``definition.modality``).
       (Pooled/OPS screens use a deferred per-cell table instead; see the spec doc.)
     rules:
+      - description: >-
+          A perturbation block that does not say "no perturbations" must state the
+          control class.
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: ABSENT
+        postconditions:
+          slot_conditions:
+            control_class:
+              required: true
+      - description: >-
+          "no perturbations" stands alone, so ``control_class`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            control_class:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``definition`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            definition:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``cotreatment`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            cotreatment:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``concentration`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            concentration:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``solvent`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            solvent:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``duration_h`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            duration_h:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``timepoint_primary_h`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            timepoint_primary_h:
+              value_presence: ABSENT
+      - description: >-
+          "no perturbations" stands alone, so ``timepoint_secondary_h`` is absent with it. (One rule
+          per field: several absences in one rule would only fail when all are set.)
+        preconditions:
+          slot_conditions:
+            modality:
+              value_presence: PRESENT
+        postconditions:
+          slot_conditions:
+            timepoint_secondary_h:
+              value_presence: ABSENT
       - description: >-
           Treated and control material (treatment / negcon / poscon) must name a
           perturbation; ``empty`` has none to record, so ``definition`` is
@@ -1365,6 +1603,7 @@ classes:
         preconditions:
           slot_conditions:
             control_class:
+              value_presence: PRESENT
               none_of:
                 - equals_string: empty
         postconditions:
@@ -1372,6 +1611,12 @@ classes:
             definition:
               required: true
     attributes:
+      modality:
+        description: >-
+          ``no perturbations`` when nothing was applied to this image group's
+          material; the block then carries nothing else. Absent otherwise: the kind
+          of an applied perturbation is ``definition.modality``.
+        range: NoPerturbations
       definition:
         range: Perturbation
         inlined: true
@@ -1383,8 +1628,10 @@ classes:
           (``treatment`` / ``negcon`` / ``poscon``); omitted when ``control_class`` is
           ``empty``, which has nothing to record (enforced by the class rule above).
       control_class:
+        description: >-
+          Required unless ``modality`` is ``no perturbations`` (enforced by the class
+          rule above).
         range: PerturbationControlClass
-        required: true
         exact_mappings: [cpg:Treatment_Control_Class]
       concentration:
         range: Concentration
