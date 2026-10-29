@@ -72,5 +72,7 @@ def replay_registry(monkeypatch) -> RegistryReplay:
     monkeypatch.setattr(propose_module, "get_with_retry", replay)
     monkeypatch.setattr(ontology_lookup, "get_with_retry", replay)
     ontology_lookup.lookup_ols.cache_clear()
+    ontology_lookup.search_ols.cache_clear()
     yield replay
     ontology_lookup.lookup_ols.cache_clear()
+    ontology_lookup.search_ols.cache_clear()

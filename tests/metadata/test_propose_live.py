@@ -1,6 +1,6 @@
 import pytest
 
-from dca_helpers.metadata.propose import search_cellosaurus
+from dca_helpers.metadata.propose import search_cellosaurus, search_ncbitaxon
 
 
 @pytest.mark.live
@@ -11,3 +11,8 @@ def test_live_a549():
 @pytest.mark.live
 def test_live_hek293_is_the_parent_line():
     assert search_cellosaurus("HEK293")[0][0] == "CVCL:0045"
+
+
+@pytest.mark.live
+def test_live_zika_virus():
+    assert search_ncbitaxon("Zika virus")[0] == ("NCBITaxon:64320", "Zika virus")

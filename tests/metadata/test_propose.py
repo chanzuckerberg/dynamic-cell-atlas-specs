@@ -69,6 +69,49 @@ def test_cellosaurus_derivative_only_result_is_no_match(replay_registry):
     assert (p.value, p.source) == (None, "no match")
 
 
+def test_biological_organism_is_an_ncbitaxon_term(replay_registry):
+    p = _one(
+        "perturbation.definition.biological.organism",
+        hints={"perturbation.definition.name": "Zika virus"},
+    )
+    assert (p.value, p.source, p.rule) == (
+        {"ontology_term_id": "NCBITaxon:64320", "label": "Zika virus"},
+        "NCBITaxon NCBITaxon:64320",
+        "ncbitaxon",
+    )
+    [(_, params)] = replay_registry.requests
+    assert params["queryFields"] == "label,synonym"
+
+
+def test_cotreatment_organism_uses_the_cotreatment_name(replay_registry):
+    p = _one(
+        "perturbation.cotreatment.biological.organism",
+        hints={"perturbation.cotreatment.name": "Zika virus"},
+    )
+    assert p.value["ontology_term_id"] == "NCBITaxon:64320"
+
+
+def test_common_organism_name_lists_alternatives(replay_registry):
+    p = _one(
+        "perturbation.definition.biological.organism",
+        hints={"perturbation.definition.name": "mouse"},
+    )
+    assert p.value == {"ontology_term_id": "NCBITaxon:10090", "label": "Mus musculus"}
+    assert p.source == "NCBITaxon NCBITaxon:10090 (also: NCBITaxon:10088 Mus <genus>)"
+
+
+def test_perturbation_id_is_never_proposed(replay_registry):
+    """The dataset's own key: an NCBITaxon term would replace the row's id."""
+    assert (
+        propose(
+            ["perturbation.definition.perturbation_id"],
+            hints={"perturbation.definition.name": "Zika virus"},
+        )
+        == []
+    )
+    assert replay_registry.requests == []
+
+
 def test_ols_label_looks_up_the_hinted_term(replay_registry):
     p = _one(
         "biosample.organ.label",

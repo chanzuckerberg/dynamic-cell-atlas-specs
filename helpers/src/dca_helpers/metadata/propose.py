@@ -1,7 +1,8 @@
 """Taxonomy proposals for DCA fields a pipeline's finalize step could not resolve.
 
-Rules look a hinted name or term up in Cellosaurus or OLS. A proposal is
-a suggestion for a human to confirm. Nothing here writes to a store.
+Rules look a hinted name or term up in Cellosaurus or OLS (including NCBITaxon, for
+the organism of a biological perturbation). A proposal is a suggestion for a human to
+confirm. Nothing here writes to a store.
 """
 
 import functools
@@ -17,6 +18,7 @@ from dca_helpers.validation.ontology_lookup import (
     get_with_retry,
     lookup_ols,
     registry_of,
+    search_ols,
 )
 from dca_helpers.validation.versions.v0_2._ontology_terms import Term
 
@@ -77,6 +79,19 @@ def search_cellosaurus(name: str) -> tuple[tuple[str, str], ...]:
             if accession and label:
                 found.setdefault(accession.replace("_", ":", 1), label)
     return tuple(found.items())[:_MAX_CANDIDATES]
+
+
+def search_ncbitaxon(name: str) -> list[tuple[str, str]]:
+    """``(curie, label)`` NCBITaxon terms whose label or a synonym is ``name``."""
+    return list(search_ols(name, "ncbitaxon", "NCBITaxon"))[:_MAX_CANDIDATES]
+
+
+#: The organism slot of a biological perturbation's typed block (v0.3), on the
+#: definition and on a cotreatment. Each is proposed from that perturbation's name.
+_BIOLOGICAL_ORGANISM_FIELDS = (
+    "perturbation.definition.biological.organism",
+    "perturbation.cotreatment.biological.organism",
+)
 
 
 def _ols_names(curie: str) -> list[tuple[str, str]]:
@@ -166,6 +181,26 @@ def _propose_one(
             _ols_names,
         )
         return failed or Proposal(field, found[0][1], f"OLS {found[0][0]}", "ols_label")
+
+    if field in _BIOLOGICAL_ORGANISM_FIELDS:
+        failed, found = _lookup(
+            field,
+            "ncbitaxon",
+            field.removesuffix("biological.organism") + "name",
+            registry_of(OLS_BASE_URL),
+            hints,
+            online,
+            search_ncbitaxon,
+        )
+        if failed:
+            return failed
+        curie, label = found[0]
+        return Proposal(
+            field,
+            {"ontology_term_id": curie, "label": label},
+            _with_alternatives("NCBITaxon", found),
+            "ncbitaxon",
+        )
 
     return None
 
