@@ -99,7 +99,7 @@ Validate every FOV before writing any. A bad FOV found after half the store is w
 
 | Rule | Fills | Reads hint |
 | --- | --- | --- |
-| `cellosaurus` | `biosample.cell_line_id`, `biosample.tissue` | `biosample.cell_line_name` |
+| `cellosaurus` | `biosample.cell_line_id`, `biosample.tissue` | `biosample.cell_line_name`; `biosample.tissue` also needs `biosample.tissue_type` to be `cell line` |
 | `ols_label` | any `*.label` | the sibling `*.ontology_term_id` |
 
 ```bash
