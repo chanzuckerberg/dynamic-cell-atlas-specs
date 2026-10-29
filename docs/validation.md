@@ -48,7 +48,7 @@ Options:
                            0.3+; off by default.
 ```
 
-`--spec-version` defaults to `CURRENT_SPEC_VERSION` — the installed `dca_helpers` package version truncated to `major.minor` (e.g. `0.2`) — not a hardcoded string; `--help` renders that concrete value, not the symbolic name.
+`--spec-version` defaults to `CURRENT_SPEC_VERSION`, which is pinned to `0.2` in `dca_helpers/__init__.py` rather than read from the package version: v0.3 is released but still being developed, and the metadata engine writes v0.2 blocks, so the default moves to 0.3 in a later release. `--help` renders that concrete value, not the symbolic name.
 
 `--strategy` only affects S3 discovery of a parent path: `glob` does one flat `ListObjectsV2` scan (better for many scattered images); `walk` does BFS with early pruning (better for a single/few large plates). Ignored for local paths and for a path that is already a store root.
 
