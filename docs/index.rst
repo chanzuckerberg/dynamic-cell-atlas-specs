@@ -5,14 +5,14 @@ Welcome to the Dynamic Cell Atlas (DCA) data resource specifications.
 
 These specifications define standards for storing 5D fluorescence microscopy datasets (3D+time+channels) in a standardized format that makes them interchangeable for further processing, with a focus on self-supervised pre-training AI models.
 
-**Version 0.3** (draft) — Last updated: |last_updated_v03|
+**Version 0.3** (latest release) — Last updated: |last_updated_v03|
 
-**Version 0.2** (latest release) — Last updated: |last_updated_v02|
+**Version 0.2** — Last updated: |last_updated_v02|
 
 .. toctree::
    :maxdepth: 2
 
-   🚧 v0.3 - Draft <v0.3/index>
+   v0.3 <v0.3/index>
    v0.2 <v0.2/index>
 
 .. toctree::

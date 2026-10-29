@@ -6,7 +6,7 @@ For more detailed information on scope, use cases etc. refer to the [documentati
 
 ## Contents
 
-- [Specification](docs/v0.2/) and JSON schema
+- [Specification](docs/v0.3/) and JSON schema
 - [Data Validator](helpers/src/dca_helpers/validation) using Pydantic
 - [Helper tooling](helpers/src/dca_helpers) for parts of the specification that go beyond general OME-ngff
 

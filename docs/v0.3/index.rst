@@ -1,5 +1,5 @@
-🚧 Version 0.3 Specification - Draft
-=====================================
+Version 0.3 Specification
+=========================
 
 Last updated: |last_updated_v03|
 
@@ -53,7 +53,8 @@ Changes from v0.2
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
   cross-store projection checks and an opt-in ``--require-projection`` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
-  spec version stays 0.2 until v0.3 is released.
+  spec version stays 0.2 while v0.3 is developed further, so pass
+  ``--spec-version 0.3`` to validate against v0.3.
 
 Contents
 --------

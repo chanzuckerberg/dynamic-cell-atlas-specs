@@ -16,11 +16,9 @@ def _read_version() -> str:
 __version__ = _read_version()
 
 
-def _spec_version(version: str) -> str:
-    """The DCA spec version — package version truncated to ``major.minor``."""
-    return ".".join(version.split(".")[:2])
-
-
-CURRENT_SPEC_VERSION = _spec_version(__version__)
+#: The spec version the validator uses when none is given. Pinned rather than read
+#: from the package version: v0.3 is released but still being developed, and the
+#: metadata engine writes v0.2 blocks, so the default stays 0.2 until v0.3 is ready.
+CURRENT_SPEC_VERSION = "0.2"
 
 __all__ = ["__version__", "CURRENT_SPEC_VERSION"]
