@@ -31,9 +31,7 @@ class TestRunDcaValidationGuard:
         def explode(dca, check_ontology):
             raise RuntimeError("bad metadata")
 
-        monkeypatch.setattr(
-            validator, "validate_dca_experimental_metadata_v0_2", explode
-        )
+        monkeypatch.setitem(validator._EXPERIMENTAL_VALIDATORS, "0.2", explode)
         issues = validator._run_dca_validation({}, {}, "0.2", ExplodingModel, False)
         assert [i.loc for i in issues] == [
             ("model validation",),

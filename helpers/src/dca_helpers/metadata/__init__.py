@@ -16,6 +16,7 @@ from dca_helpers.metadata.attributes import (
     write_normalization_statistics,
 )
 from dca_helpers.metadata.config import load_dca_config
+from dca_helpers.metadata.propose import Proposal, propose, search_cellosaurus
 from dca_helpers.metadata.resolve import (
     DCA_KEY,
     MISSING,
@@ -33,11 +34,14 @@ __all__ = [
     "MISSING",
     "STORE_COLUMNS",
     "DcaValidationError",
+    "Proposal",
     "dca_read_columns",
     "load_dca_config",
     "merge_dca_attributes",
+    "propose",
     "resolve",
     "resolve_dca",
+    "search_cellosaurus",
     "validate_dca",
     "write_normalization_statistics",
 ]

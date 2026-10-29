@@ -1,0 +1,58 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5Q7"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE HeLa-Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "HeLa-Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C8PX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa/Cas9 AAVS1"
+      },
+      {
+       "type": "synonym",
+       "value": "HeLa-Cas9 AAVS1"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "sy:\"HeLa Cas9\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}

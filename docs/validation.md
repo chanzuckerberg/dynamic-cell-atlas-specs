@@ -20,6 +20,7 @@ flowchart LR
   subgraph pydantic["Pydantic models"]
     v01["DCA v0.1"]
     v02["DCA v0.2"]
+    v03["DCA v0.3"]
   end
 ```
 
@@ -41,6 +42,10 @@ Options:
   --check-ontology         Resolve every ontology_term_id against its source
                            registry and check its label. Makes network
                            requests; off by default.
+  --require-projection     Require every 3D image store under PATH to have a
+  (alias --require-mip)    projection store naming it as
+                           dca.projection.source_store. Needs --spec-version
+                           0.3+; off by default.
 ```
 
 `--spec-version` defaults to `CURRENT_SPEC_VERSION` — the installed `dca_helpers` package version truncated to `major.minor` (e.g. `0.2`) — not a hardcoded string; `--help` renders that concrete value, not the symbolic name.
@@ -108,6 +113,7 @@ for r in run:   # ValidationRun is iterable over ZarrNodeValidationResult
 helpers/src/dca_helpers/validation/
 ├── cli.py        # dca-validate entry point
 ├── discovery.py  # find Zarr store roots (local os.walk; S3 via obstore glob/walk)
+├── pairing.py    # cross-store projection checks (v0.3+), incl. --require-projection
 ├── registry.py   # spec version → DCAStoreSpec / DCALabelStoreSpec model class
 ├── result.py     # Issue, Severity, ZarrNodeValidationResult, ValidationSummary, ValidationRun
 ├── runner.py     # validate() — discover + concurrently validate stores under a path
@@ -115,10 +121,11 @@ helpers/src/dca_helpers/validation/
 ├── zarr_node.py  # ZarrNodeType enum; classify_group()
 └── versions/
     ├── v0_1/models.py                        # DCA v0.1 rules
-    └── v0_2/{models.py,experimental_metadata.py}  # DCA v0.2 rules + LinkML-derived metadata
+    ├── v0_2/{models.py,experimental_metadata.py}  # DCA v0.2 rules + LinkML-derived metadata
+    └── v0_3/{models.py,experimental_metadata.py}  # v0.2 + projections; list processing_variant
 ```
 
-Adding a spec version means adding `versions/vX_Y/models.py` and one registry entry — nothing else changes.
+Adding a spec version means adding `versions/vX_Y/models.py` and one registry entry. A version that adds per-store checks outside the Pydantic models (v0.3's projection rules) also registers them in `validator.py`, and a version that adds cross-store checks wires them into `runner.validate()` — both keyed on a version set, so earlier versions are unaffected.
 
 ---
 
@@ -338,6 +345,34 @@ class ValidationRun:
 ```
 
 `passed` is `True` iff `issues` has no `ERROR`. Warnings never flip it.
+
+## Pydantic Models — v0.3
+
+v0.3 inherits every v0.2 image and label rule unchanged and adds projections (`docs/v0.3/projections.rst`: maximum, mean, sum or single-plane, uniform or per channel, recording the planes actually used) and a list-valued `processing_variant`.
+
+**Per image group** (`versions/v0_3/models.py`):
+
+| Rule | Severity |
+|---|---|
+| `dca.version == "0.3"` | MUST |
+| `dca.projection`: exactly one of `method` (uniform form) and `channels` (per-channel form); methods in `max` / `mean` / `sum` / `slice`. `source_store` is required only when the 3D source is in the DCA, which the cross-store pass checks | MUST |
+| Plane ranges (both forms): `z_start`/`z_end` together, absolute and half-open, `0 <= z_start < z_end <= z_dim_source`; `z_dim_source` given when any range is; no `z_step` without a range; `slice` selects exactly one plane | MUST |
+| Per-channel form: every key is one of the image's `dca.channels` names (unlisted channels were not projected); per-timepoint `z_start`/`z_end` lists have one entry per level-0 timepoint | MUST |
+| `focus` (optional provenance): `z` for `per: fov`, `z_per_t` for `per: timepoint` (one entry per level-0 timepoint); `null` where no in-focus plane was found; given planes below `z_dim_source` | MUST |
+| `dca.projection` present ⇒ `processing_variant` lists exactly the projection steps of the methods used | MUST |
+| A projection step listed without `dca.projection` (fine for an image projected before deposit; an error across stores when its 3D source is in the run) | SHOULD |
+| A projection has z of size 1 at every level | MUST |
+| `z_fraction` agrees with `(z_end - z_start) / z_dim_source` (±2 planes) | SHOULD |
+| With `z_step > 1`, `z_end` is the last plane used + 1 (any value up to the last plane + `z_step` selects the same planes) | SHOULD |
+| No top-level `mip` attribute (the v0.2-era placement) | MUST |
+
+The relational rules are a standalone function, `check_projection_v0_3`, called from `validator._run_dca_validation`, rather than more `mode="after"` validators on `DCAStoreSpecV0_3`: pydantic stops a model's after-validators at the first raise, so an inherited v0.2 SHOULD would otherwise skip them.
+
+**Experimental metadata** (`versions/v0_3/experimental_metadata.py`): the v0.3 LinkML schema differs from v0.2 only in `ImageData.processing_variant` (a non-empty list) and the new `ProcessingStep` vocabulary, so the module reuses the v0.2 rule classes and overrides only `image_data`. A test fails if the generated v0.3 schema ever differs from v0.2 anywhere else. Added rules: `raw` alone (MUST); items in `ProcessingStep` (SHOULD).
+
+**Across stores** (`pairing.py`, run once by `runner.validate()` after every store is validated): a store named after a 3D sibling in the run (`<name>_proj.ome.zarr` / `<name>_mip.ome.zarr` next to `<name>.ome.zarr`, or the same with `.zarr`, in either combination of extensions) is its projection and must carry `dca.projection` with `source_store` on every image group. A projection that names no source and has no such sibling was projected before deposit, and the rest is skipped. Otherwise, each projection's `source_store` resolves to a store (a bare name is a sibling; a URL or absolute path is used as given, falling back to a same-named sibling in the run for local mirrors); the projection mirrors the source's image groups; and per image group the t/y/x sizes and t/y/x scales match the source's level 0, `z_dim_source` matches its z, `focus` planes lie within its z (which also covers a block without `z_dim_source`), the uniform form keeps every source channel in order, each per-channel `source_channel` (default: the output name) and `focus.channel` is a source channel, the dtype equals the source's when every method is `max`/`slice` (otherwise the source's or a float type), `processing_variant` starts with the source's steps followed only by projection steps, and `processing_description` equals the source's (absent when the source has none). The store name should insert `_proj` before its extension (`.ome.zarr` or `.zarr`; `_mip` is accepted when every channel uses `max`). A missing source is an error; a source that exists but is not part of the run is a warning, since the comparison needs both stores in one run. The comparison reads `ImageFacts` recorded on each result during validation, so it costs no extra I/O; `ImageFacts` is excluded from reports.
+
+**`--require-projection`** (alias `--require-mip`; opt-in, since the spec does not require projections): every 3D image store in the run that is not itself a projection must be named as the `source_store` of some projection in the run.
 
 ---
 

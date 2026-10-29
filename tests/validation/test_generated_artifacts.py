@@ -20,24 +20,35 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Relative paths, run from REPO_ROOT — must match the Makefile exactly.
 # gen-pydantic embeds the schema path it is given into the module's `source_file`
 # metadata, so the invocation has to mirror `make schema` to be reproducible.
-SCHEMA = "schema/v0.2/dca_experimental_metadata.yaml"
-JSON_OUT = (
-    REPO_ROOT
-    / "schema"
-    / "v0.2"
-    / "generated"
-    / "dca_experimental_metadata.schema.json"
-)
-PYDANTIC_OUT = (
-    REPO_ROOT
-    / "helpers"
-    / "src"
-    / "dca_helpers"
-    / "validation"
-    / "versions"
-    / "v0_2"
-    / "_generated_models.py"
-)
+VERSIONS = ["0.2", "0.3"]
+
+
+def _schema(version: str) -> str:
+    return f"schema/v{version}/dca_experimental_metadata.yaml"
+
+
+def _json_out(version: str) -> Path:
+    return (
+        REPO_ROOT
+        / "schema"
+        / f"v{version}"
+        / "generated"
+        / "dca_experimental_metadata.schema.json"
+    )
+
+
+def _pydantic_out(version: str) -> Path:
+    return (
+        REPO_ROOT
+        / "helpers"
+        / "src"
+        / "dca_helpers"
+        / "validation"
+        / "versions"
+        / f"v{version.replace('.', '_')}"
+        / "_generated_models.py"
+    )
+
 
 pytestmark = pytest.mark.skipif(
     shutil.which("gen-json-schema") is None or shutil.which("gen-pydantic") is None,
@@ -52,19 +63,21 @@ def _run(cmd: list[str]) -> str:
     return proc.stdout
 
 
-def test_json_schema_in_sync_with_yaml():
-    regenerated = _run(["gen-json-schema", "--no-metadata", SCHEMA])
-    committed = JSON_OUT.read_text()
+@pytest.mark.parametrize("version", VERSIONS)
+def test_json_schema_in_sync_with_yaml(version):
+    regenerated = _run(["gen-json-schema", "--no-metadata", _schema(version)])
+    committed = _json_out(version).read_text()
     assert regenerated == committed, (
-        "schema/v0.2/generated/dca_experimental_metadata.schema.json is stale. "
+        f"schema/v{version}/generated/dca_experimental_metadata.schema.json is stale. "
         "Run `make schema` and commit the result."
     )
 
 
-def test_pydantic_models_in_sync_with_yaml():
-    regenerated = _run(["gen-pydantic", SCHEMA])
-    committed = PYDANTIC_OUT.read_text()
+@pytest.mark.parametrize("version", VERSIONS)
+def test_pydantic_models_in_sync_with_yaml(version):
+    regenerated = _run(["gen-pydantic", _schema(version)])
+    committed = _pydantic_out(version).read_text()
     assert regenerated == committed, (
-        "helpers/src/dca_helpers/validation/versions/v0_2/_generated_models.py is "
-        "stale. Run `make schema` and commit the result."
+        f"{_pydantic_out(version).relative_to(REPO_ROOT)} is stale. "
+        "Run `make schema` and commit the result."
     )
