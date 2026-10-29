@@ -16,8 +16,11 @@ from dca_helpers.validation.versions.v0_2 import models as models_v02
 from dca_helpers.validation.versions.v0_2.models import (
     DCALabelScaleLevelSpecV0_2,
     DCALabelStoreSpecV0_2,
+    DCAScaleLevelSpecV0_2,
     DCAStoreSpecV0_2,
     StoreRuleInputs,
+    raw_label_store_rule_messages,
+    raw_order_is_trusted,
     raw_store_rule_messages,
     timepoint_statistics_messages,
 )
@@ -60,14 +63,12 @@ def test_clean_store_has_no_raw_messages():
 
 @pytest.mark.parametrize(
     "hiding",
-    ["dca_missing", "axes_order", "channel_field", "level_chunk_should"],
+    ["dca_missing", "channel_field", "level_chunk_should"],
 )
 def test_raw_rules_find_what_the_model_hides(hiding):
     store = build_store([BY_NAME["no_coarse_level"]])
     if hiding == "dca_missing":
         del store["dca"]
-    elif hiding == "axes_order":
-        store["axes"] = ["t", "c", "y", "x", "z"]
     elif hiding == "channel_field":
         store["dca"]["channels"][0].pop("name")
     else:
@@ -257,3 +258,100 @@ def test_failing_label_store_raw_rule_keeps_the_original_errors(monkeypatch):
     with pytest.raises(pydantic.ValidationError) as info:
         DCALabelStoreSpecV0_2.model_validate(store)
     assert any("Axes must be" in error["msg"] for error in info.value.errors())
+
+
+def untrusted_stores():
+    wrong_axes = build_store([BY_NAME["no_coarse_level"]])
+    wrong_axes["axes"] = ["x", "y", "z", "c", "t"]
+    permuted_names = build_store([BY_NAME["no_coarse_level"]])
+    permuted_names["levels"][1]["dimension_names"] = ["t", "c", "y", "z", "x"]
+    missing_names = build_store([BY_NAME["no_coarse_level"]])
+    del missing_names["levels"][0]["dimension_names"]
+    no_axes = build_store([BY_NAME["no_coarse_level"]])
+    del no_axes["axes"]
+    return {
+        "wrong_axes": wrong_axes,
+        "permuted_level_names": permuted_names,
+        "missing_level_names": missing_names,
+        "no_axes": no_axes,
+    }
+
+
+UNTRUSTED = untrusted_stores()
+
+
+@pytest.mark.parametrize("store", UNTRUSTED.values(), ids=UNTRUSTED.keys())
+def test_raw_rules_are_skipped_when_the_dimension_order_is_not_trusted(store):
+    assert StoreRuleInputs.from_raw(store) is None
+    assert raw_store_rule_messages(store) == []
+
+
+def test_raw_label_store_rules_are_skipped_when_the_order_is_not_trusted():
+    store = copy.deepcopy(valid_label_store(n_levels=1))
+    store["levels"][0]["shape"][2:] = [4096, 4096, 4096]
+    assert any("No scale level" in m for m in raw_label_store_rule_messages(store))
+    store["axes"] = ["x", "y", "z", "c", "t"]
+    assert raw_label_store_rule_messages(store) == []
+
+
+def test_level_raw_rules_are_skipped_when_dimension_names_are_invalid():
+    level = {**valid_level(), "chunk_shape": [1, 1, 64, 64, 64]}
+    assert DCAScaleLevelSpecV0_2.order_is_trusted(level)
+    assert raw_array_rule_messages(level)
+    permuted = {**level, "dimension_names": ["t", "z", "c", "y", "x"]}
+    assert not DCAScaleLevelSpecV0_2.order_is_trusted(permuted)
+    assert not DCAScaleLevelSpecV0_2.order_is_trusted(
+        {**level, "dimension_names": None}
+    )
+    assert not DCAScaleLevelSpecV0_2.order_is_trusted("level")
+
+
+def test_tuple_typed_axes_names_and_levels_are_trusted():
+    store = build_store([BY_NAME["no_coarse_level"]])
+    store["axes"] = tuple(store["axes"])
+    for level in store["levels"]:
+        level["dimension_names"] = tuple(level["dimension_names"])
+    store["levels"] = tuple(store["levels"])
+    assert raw_order_is_trusted(store)
+    assert any("No scale level" in m for m in raw_store_rule_messages(store))
+
+
+LEVEL_MODELS = [
+    (DCAScaleLevelSpecV0_2, valid_level, [1, 1, 64, 64, 64]),
+    (DCALabelScaleLevelSpecV0_2, valid_label_level, [1, 1, 32, 64, 64]),
+]
+
+
+def level_messages(model, data):
+    try:
+        model.model_validate(data)
+    except pydantic.ValidationError as exc:
+        return [error["msg"] for error in exc.errors()]
+    return []
+
+
+@pytest.mark.parametrize("model,make,chunk", LEVEL_MODELS, ids=["image", "label"])
+def test_level_wrap_runs_the_array_rules_when_the_names_are_valid(model, make, chunk):
+    level = {**make(), "codec_id": "bad", "chunk_shape": chunk}
+    messages = level_messages(model, level)
+    assert any("not permitted" in m for m in messages)
+    assert any("recommended 1 MB" in m for m in messages)
+
+
+@pytest.mark.parametrize("model,make,chunk", LEVEL_MODELS, ids=["image", "label"])
+@pytest.mark.parametrize(
+    "names", [["t", "z", "c", "y", "x"], None], ids=["permuted", "absent"]
+)
+def test_level_wrap_skips_the_array_rules_when_the_names_are_invalid(
+    model, make, chunk, names
+):
+    level = {
+        **make(),
+        "codec_id": "bad",
+        "chunk_shape": chunk,
+        "dimension_names": names,
+    }
+    messages = level_messages(model, level)
+    assert any("dimension_names" in m for m in messages)
+    assert any("not permitted" in m for m in messages)
+    assert not any("recommended 1 MB" in m for m in messages)

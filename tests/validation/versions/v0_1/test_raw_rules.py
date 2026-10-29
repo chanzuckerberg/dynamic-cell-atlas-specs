@@ -115,3 +115,25 @@ def test_failing_v01_downsampling_raw_rule_keeps_the_original_errors(monkeypatch
     with pytest.raises(pydantic.ValidationError) as info:
         DCAStoreSpecV0_1.model_validate(store)
     assert any("At least 3 spatial scales" in e["msg"] for e in info.value.errors())
+
+
+def test_v01_downsampling_is_skipped_when_axes_are_invalid():
+    store = valid_store()
+    store["axes"] = ["x", "y", "z", "c", "t"]
+    store["levels"][1]["shape"][0] = 2
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCAStoreSpecV0_1.model_validate(store)
+    messages = [error["msg"] for error in info.value.errors()]
+    assert len(messages) == 1
+    assert "Axes must be" in messages[0]
+
+
+def test_v01_downsampling_runs_for_tuple_typed_valid_axes():
+    store = valid_store(n_levels=2)
+    store["axes"] = tuple(store["axes"])
+    store["levels"][1]["shape"][0] = 2
+    with pytest.raises(pydantic.ValidationError) as info:
+        DCAStoreSpecV0_1.model_validate(store)
+    messages = [error["msg"] for error in info.value.errors()]
+    assert any("At least 3 spatial scales" in m for m in messages)
+    assert any("downsampling factor for 't'" in m for m in messages)
