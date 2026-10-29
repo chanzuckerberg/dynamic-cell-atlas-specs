@@ -12,9 +12,9 @@ For more detailed information on scope, use cases etc. refer to the [documentati
 
 ## A pipeline validates every FOV, then writes the DCA block
 
-A pipeline resolves one `[dca.*]` TOML block per FOV with `dca_helpers.metadata`, validates every FOV, and only then writes. The engine exports `load_dca_config`, `resolve_dca`, `validate_dca`, `DcaValidationError`, `merge_dca_attributes`, `write_normalization_statistics`, `DCA_SCHEMA_URL` and `STORE_COLUMNS`. `SPEC_VERSION` lives in `dca_helpers.metadata.attributes`.
+A pipeline resolves one `[dca.*]` TOML block per FOV with `dca_helpers.metadata`, validates every FOV, and only then writes. The pipeline-facing exports are `load_dca_config`, `resolve_dca`, `validate_dca`, `DcaValidationError`, `merge_dca_attributes`, `write_normalization_statistics`, `DCA_SCHEMA_URL` and `STORE_COLUMNS`; `propose`, `Proposal` and `search_cellosaurus` back `dca-propose` (below). `SPEC_VERSION` lives in `dca_helpers.metadata.attributes`.
 
-`base.toml` holds what is known up front. A leaf is a literal or `{ column = "..." }`, which is read from the per-FOV row (`STORE_COLUMNS` lists the columns the store itself supplies). Each channel catalogue entry needs a `name`.
+`base.toml` holds what is known up front. A leaf is a literal or `{ column = "..." }`, which is read from the per-FOV row (`STORE_COLUMNS` lists the reserved columns a pipeline fills from its store). Each channel catalogue entry needs a `name`.
 
 ```toml
 [dca.study]
@@ -24,7 +24,6 @@ description = "U2OS live-cell imaging example"
 year_imaged = "2026"
 experimenter = [{ first_name = "A", last_name = "B" }]
 dataset_name = { column = "store_dataset_name" }
-release_date = { column = "store_name_date" }
 license = "CC-BY-4.0"
 
 [dca.biosample]
@@ -52,7 +51,7 @@ biological_annotation = { marker = { column = "marker" }, marker_type = "protein
 [dca.provenance]
 ```
 
-`confirmed.toml` carries the human-confirmed values. `load_dca_config` merges it over the base.
+`confirmed.toml` carries the human-confirmed values, such as the release date, which no store can supply. `load_dca_config` merges it over the base.
 
 ```toml
 [dca.study]
@@ -70,7 +69,7 @@ from dca_helpers.metadata import (
 
 block = load_dca_config("base.toml", "confirmed.toml")
 row = {"store_dataset_name": "example_plate", "store_group_id": "example_plate/A/1",
-       "store_name_date": "", "cell_line": "U2OS", "marker": "SEC61B"}
+       "cell_line": "U2OS", "marker": "SEC61B"}
 keys = ["raw GFP"]
 
 warnings = []
