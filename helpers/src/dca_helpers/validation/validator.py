@@ -870,7 +870,10 @@ def _run_dca_validation(
             issues.append(_unexpected_error_issue("experimental metadata", exc))
 
     if group_attrs is not None and spec_version in PROJECTION_SPEC_VERSIONS:
-        issues.extend(check_projection_v0_3(node_dict, dca, group_attrs))
+        try:
+            issues.extend(check_projection_v0_3(node_dict, dca, group_attrs))
+        except Exception as exc:
+            issues.append(_unexpected_error_issue("projection rules", exc))
 
     return issues
 

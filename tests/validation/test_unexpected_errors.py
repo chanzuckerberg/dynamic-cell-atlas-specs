@@ -40,6 +40,26 @@ class TestRunDcaValidationGuard:
         assert "RuntimeError" in issues[1].message
 
 
+class PassingModel:
+    @classmethod
+    def model_validate(cls, data):
+        return None
+
+
+@pytest.mark.unit
+def test_unexpected_projection_error_becomes_one_error_issue(monkeypatch):
+    def explode(node_dict, dca, group_attrs):
+        raise KeyError("levels")
+
+    monkeypatch.setattr(validator, "check_projection_v0_3", explode)
+    issues = validator._run_dca_validation(
+        {}, None, "0.3", PassingModel, False, group_attrs={}
+    )
+    assert [i.loc for i in issues] == [("projection rules",)]
+    assert issues[0].severity == Severity.ERROR
+    assert "KeyError" in issues[0].message
+
+
 @pytest.mark.unit
 def test_unexpected_error_is_logged_with_its_traceback(caplog):
     with caplog.at_level(logging.WARNING, logger=validator.logger.name):
