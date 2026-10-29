@@ -60,7 +60,10 @@ def test_v03_channel_warning_does_not_hide_a_missing_axis_unit():
     store["dca"]["channels"][0]["channel_type"] = "predicted"
     store["axis_units"] = {**store["axis_units"], "z": None}
     issues = issues_of(DCAStoreSpecV0_3, store)
-    assert any(i.severity == Severity.WARNING for i in issues)
+    assert any(
+        i.severity == Severity.WARNING and "no biological_annotation" in i.message
+        for i in issues
+    )
     assert any("Spatial axis 'z' has no unit" in i.message for i in issues)
 
 

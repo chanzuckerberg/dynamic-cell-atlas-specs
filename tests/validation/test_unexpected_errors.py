@@ -61,6 +61,23 @@ def test_unexpected_projection_error_becomes_one_error_issue(monkeypatch):
 
 
 @pytest.mark.unit
+def test_malformed_dca_channels_in_the_real_projection_rule_becomes_one_error_issue():
+    dca = {
+        "image_data": {"processing_variant": ["max_projection"]},
+        "channels": 5,
+        "projection": {"channels": {"ch0": {"z_start": 0}}},
+    }
+    node_dict = {"axes": ["t", "c", "z", "y", "x"], "array_shapes": [[1, 1, 1, 8, 8]]}
+    issues = validator._run_dca_validation(
+        node_dict, dca, "0.3", PassingModel, False, group_attrs={}
+    )
+    projection = [i for i in issues if i.loc == ("projection rules",)]
+    assert len(projection) == 1
+    assert projection[0].severity == Severity.ERROR
+    assert "TypeError" in projection[0].message
+
+
+@pytest.mark.unit
 def test_unexpected_error_is_logged_with_its_traceback(caplog):
     with caplog.at_level(logging.WARNING, logger=validator.logger.name):
         validator._run_dca_validation({}, None, "0.2", ExplodingModel, False)
