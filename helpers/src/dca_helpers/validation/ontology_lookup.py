@@ -195,7 +195,17 @@ class _RegistryRecentlyUnreachable(Exception):
     """Skipped without a request: this registry failed within the TTL window."""
 
 
-def _registry_of(url: str) -> str:
+#: Everything :func:`get_with_retry` raises when a registry cannot answer, for callers
+#: outside this module that degrade a failed lookup instead of propagating it.
+REGISTRY_ERRORS: tuple[type[Exception], ...] = (
+    requests.exceptions.RequestException,
+    OSError,
+    _TransientHTTPError,
+    _RegistryRecentlyUnreachable,
+)
+
+
+def registry_of(url: str) -> str:
     """The host a URL belongs to — the grain the failure memory is keyed on."""
     return urlsplit(url).netloc
 
@@ -215,7 +225,7 @@ def _recent_failure(registry: str) -> Exception | None:
         return error
 
 
-def _get_with_retry(url: str, params: dict) -> object:
+def get_with_retry(url: str, params: dict) -> object:
     """GET ``url`` with a descriptive User-Agent, retrying transient failures.
 
     Retries connection errors, timeouts, and 429/5xx responses up to
@@ -228,7 +238,7 @@ def _get_with_retry(url: str, params: dict) -> object:
     and short-circuits every other request to that host in the window, before
     taking a semaphore slot. See ``_registry_failures``.
     """
-    registry = _registry_of(url)
+    registry = registry_of(url)
     cached = _recent_failure(registry)
     if cached is not None:
         raise _RegistryRecentlyUnreachable(
@@ -283,7 +293,7 @@ def lookup_ols(iri: str) -> TermRecord | None:
     matching term) *is* cached — it is a definitive answer, not a transient
     failure.
     """
-    resp = _get_with_retry(f"{OLS_BASE_URL}/terms", {"iri": iri})
+    resp = get_with_retry(f"{OLS_BASE_URL}/terms", {"iri": iri})
     resp.raise_for_status()
     terms = resp.json().get("_embedded", {}).get("terms", [])
     if not terms:
@@ -308,7 +318,7 @@ def lookup_ols_ancestors(ontology: str, iri: str) -> frozenset[str] | None:
     """
     encoded = quote(quote(iri, safe=""), safe="")
     url = f"{OLS_BASE_URL}/ontologies/{ontology}/terms/{encoded}/ancestors"
-    resp = _get_with_retry(url, {"size": 1000})
+    resp = get_with_retry(url, {"size": 1000})
     if 400 <= resp.status_code < 500:
         return None
     terms = resp.json().get("_embedded", {}).get("terms", [])
@@ -323,7 +333,7 @@ def lookup_cellosaurus(accession: str) -> TermRecord | None:
     is a definitive "does not resolve". Raises on transient failure (5xx /
     connection), which the caller downgrades to a WARNING.
     """
-    resp = _get_with_retry(
+    resp = get_with_retry(
         f"{CELLOSAURUS_BASE_URL}/cell-line/{accession}",
         {"format": "json", "fld": ["id", "sy"]},
     )

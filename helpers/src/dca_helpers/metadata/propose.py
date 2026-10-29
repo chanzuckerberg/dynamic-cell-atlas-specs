@@ -10,26 +10,18 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-import requests
-
-from dca_helpers.validation import ontology_lookup
 from dca_helpers.validation.ontology_lookup import (
     CELLOSAURUS_BASE_URL,
     OLS_BASE_URL,
-    _get_with_retry,
-    _registry_of,
+    REGISTRY_ERRORS,
+    get_with_retry,
     lookup_ols,
+    registry_of,
 )
 from dca_helpers.validation.versions.v0_2._ontology_terms import Term
 
 logger = logging.getLogger(__name__)
 
-_LOOKUP_ERRORS = (
-    requests.exceptions.RequestException,
-    OSError,
-    ontology_lookup._TransientHTTPError,
-    ontology_lookup._RegistryRecentlyUnreachable,
-)
 _MAX_CANDIDATES = 5
 _SEARCH_ROWS = 100
 
@@ -59,7 +51,7 @@ def search_cellosaurus(name: str) -> tuple[tuple[str, str], ...]:
     target = name.strip().lower()
     found: dict[str, str] = {}
     for search_field in ("id", "sy"):
-        resp = _get_with_retry(
+        resp = get_with_retry(
             f"{CELLOSAURUS_BASE_URL}/search/cell-line",
             {
                 "q": f'{search_field}:"{name}"',
@@ -117,7 +109,7 @@ def _lookup(
         return Proposal(field, None, "lookup skipped (offline)", rule), []
     try:
         candidates = search(hints[hint_key])
-    except _LOOKUP_ERRORS as error:
+    except REGISTRY_ERRORS as error:
         logger.warning("%s lookup for %s failed: %s", host, field, error)
         return Proposal(field, None, f"lookup failed: {host}", rule), []
     if not candidates:
@@ -135,7 +127,7 @@ def _propose_one(
             field,
             "cellosaurus",
             "biosample.cell_line_name",
-            _registry_of(CELLOSAURUS_BASE_URL),
+            registry_of(CELLOSAURUS_BASE_URL),
             hints,
             online,
             search_cellosaurus,
@@ -158,7 +150,7 @@ def _propose_one(
             field,
             "ols_label",
             hint_key,
-            _registry_of(OLS_BASE_URL),
+            registry_of(OLS_BASE_URL),
             hints,
             online,
             _ols_names,

@@ -1,6 +1,6 @@
 # Recorded registry responses
 
-Each `*.json` file holds one real Cellosaurus or OLS response plus the request that produced it, replayed by `tests/metadata/_registry.py` at the `_get_with_retry` boundary. A trimmed file keeps the response envelope and every key as returned, keeps whole records unedited and in their original order, and drops the rest. Trimmed files keep every record that matches the query exactly plus at least two near-miss records, so the exact-match filter still runs.
+Each `*.json` file holds one real Cellosaurus or OLS response plus the request that produced it, replayed by `tests/metadata/_registry.py` at the `get_with_retry` boundary. A trimmed file keeps the response envelope and every key as returned, keeps whole records unedited and in their original order, and drops the rest. Trimmed files keep every record that matches the query exactly plus at least two near-miss records, so the exact-match filter still runs.
 
 | File | Request | Recorded | Contents |
 |---|---|---|---|

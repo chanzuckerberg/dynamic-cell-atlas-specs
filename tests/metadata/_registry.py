@@ -35,7 +35,7 @@ def _key(url: str, params: dict) -> str:
 
 
 class RegistryReplay:
-    """Callable with the signature of ``_get_with_retry`` that serves fixtures."""
+    """Callable with the signature of ``get_with_retry`` that serves fixtures."""
 
     def __init__(self, directory: Path = REGISTRY_FIXTURES):
         self._responses: dict[str, RecordedResponse] = {}

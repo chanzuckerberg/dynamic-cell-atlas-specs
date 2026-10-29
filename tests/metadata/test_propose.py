@@ -90,7 +90,7 @@ def test_registry_failure_degrades_to_a_reasoned_none(monkeypatch):
     def down(url, params):
         raise requests.ConnectionError("down")
 
-    monkeypatch.setattr(propose_module, "_get_with_retry", down)
+    monkeypatch.setattr(propose_module, "get_with_retry", down)
     p = _one("biosample.cell_line_id", hints={"biosample.cell_line_name": "A549"})
     assert (p.value, p.source) == (None, "lookup failed: api.cellosaurus.org")
 

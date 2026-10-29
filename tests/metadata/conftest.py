@@ -69,8 +69,8 @@ def replay_registry(monkeypatch) -> RegistryReplay:
     """Serve recorded registry responses wherever ``propose`` makes an HTTP call."""
     replay = RegistryReplay()
     propose_module = importlib.import_module("dca_helpers.metadata.propose")
-    monkeypatch.setattr(propose_module, "_get_with_retry", replay)
-    monkeypatch.setattr(ontology_lookup, "_get_with_retry", replay)
+    monkeypatch.setattr(propose_module, "get_with_retry", replay)
+    monkeypatch.setattr(ontology_lookup, "get_with_retry", replay)
     ontology_lookup.lookup_ols.cache_clear()
     yield replay
     ontology_lookup.lookup_ols.cache_clear()
