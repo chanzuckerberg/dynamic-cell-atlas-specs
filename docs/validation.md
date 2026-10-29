@@ -375,6 +375,8 @@ The relational rules are a standalone function, `check_projection_v0_3`, called 
 | `perturbation.modality` (`no perturbations`) carries no other field | MUST |
 | Without it, `control_class` is present, and a non-`empty` one names a `definition` | MUST |
 | `compound` ⇒ `chemical`; a genetic modality (the four CRISPR values, `orf`, `shrna`, `mirna`, `sirna`) ⇒ `genetic` | MUST |
+| `biological` ⇒ `biological`; `protein` ⇒ `protein`; `diet` / `temperature` / `physical` ⇒ `condition` (a separate pass, so the warning cannot hide an error) | SHOULD |
+| Typed blocks, when present: `biological.organism` an NCBITaxon term; `protein.uniprot_id` a `uniprot:` accession or `na`; `condition.condition` an EFO term or sentinel | MUST |
 
 The plate walk checks each well's `dca.well_perturbation` row with the rules of the spec version being validated (`validate_well_perturbation_v0_3` for v0.3).
 

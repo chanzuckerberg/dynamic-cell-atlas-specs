@@ -8,9 +8,9 @@ v0.2 in two places:
   a single string, with a recommended ``ProcessingStep`` vocabulary.
 * Perturbations: the ``PerturbationModality`` vocabulary is aligned with CELLxGENE
   7.1 (four CRISPR values replace ``crispr``; ``diet`` / ``protein`` / ``temperature``
-  / ``not reported`` are added; ``unknown`` is removed), and ``perturbation`` is
-  required on every image group, as ``{"modality": "no perturbations"}`` when
-  nothing was applied.
+  / ``not reported`` are added), typed ``biological`` / ``protein`` / ``condition``
+  blocks join ``chemical`` / ``genetic``, and ``perturbation`` is required on every
+  image group, as ``{"modality": "no perturbations"}`` when nothing was applied.
 
 Every other block is unchanged, so this module reuses the v0.2 rule classes and
 overrides only ``image_data`` and the perturbation classes. If a later edit to the
@@ -26,6 +26,8 @@ Rules added on top of the generated model:
   ``genetic`` block (as in v0.2, with the v0.3 genetic values).
 * ``perturbation.modality`` (``no perturbations``) stands alone; without it,
   ``control_class`` is required, and a non-``empty`` one requires ``definition``.
+* ``biological`` / ``protein`` / ``diet`` / ``temperature`` / ``physical`` SHOULD carry
+  their typed block (a warning, from a separate pass so that it cannot hide an error).
 
 The projection-specific agreement (an image lists the projection step of each method
 it uses exactly when it carries ``dca.projection``) is not experimental metadata and is
@@ -97,13 +99,24 @@ _ASSIGNMENT_FIELDS: tuple[str, ...] = (
     "timepoint_secondary_h",
 )
 
+# The recommended typed block of each remaining modality (a SHOULD, unlike the
+# chemical / genetic MUSTs above).
+RECOMMENDED_BLOCK: dict[str, str] = {
+    "biological": "biological",
+    "protein": "protein",
+    "diet": "condition",
+    "temperature": "condition",
+    "physical": "condition",
+}
+
 # A literal renamed in a schema regen would silently disable its rule; fail at import.
 _MODALITIES = {m.value for m in _generated_models.PerturbationModality}
-if not ({"compound"} | GENETIC_MODALITIES) <= _MODALITIES:
+_RULE_MODALITIES = {"compound"} | GENETIC_MODALITIES | set(RECOMMENDED_BLOCK)
+if not _RULE_MODALITIES <= _MODALITIES:
     raise AssertionError(
         "PerturbationModality is missing rule value(s) "
-        f"{sorted(({'compound'} | GENETIC_MODALITIES) - _MODALITIES)}; regenerate the "
-        "model or update GENETIC_MODALITIES."
+        f"{sorted(_RULE_MODALITIES - _MODALITIES)}; regenerate the model or update "
+        "GENETIC_MODALITIES / RECOMMENDED_BLOCK."
     )
 
 
@@ -224,6 +237,44 @@ def _processing_variant_issues(obj: dict) -> list[Issue]:
     return issues
 
 
+def _recommended_block_issues(definition: object, loc: tuple) -> list[Issue]:
+    """SHOULD: a ``biological`` / ``protein`` / ``diet`` / ``temperature`` /
+    ``physical`` definition carries its typed block.
+
+    A separate pass rather than a model validator: a raised warning on the nested
+    definition would stop the enclosing assignment's own MUST checks from running.
+    """
+    from dca_helpers.validation.result import Issue, Severity
+
+    if not isinstance(definition, dict):
+        return []
+    modality = definition.get("modality")
+    block = RECOMMENDED_BLOCK.get(modality) if isinstance(modality, str) else None
+    if block is None or _is_populated(definition.get(block)):
+        return []
+    return [
+        Issue(
+            loc=(*loc, block),
+            message=(
+                f"{block} is recommended when modality is '{modality}' "
+                "(experimental-metadata.rst § Perturbation Metadata)"
+            ),
+            severity=Severity.WARNING,
+        )
+    ]
+
+
+def _assignment_block_issues(assignment: object, loc: tuple = ()) -> list[Issue]:
+    """``_recommended_block_issues`` for an assignment's definition and cotreatment."""
+    if not isinstance(assignment, dict):
+        return []
+    return [
+        issue
+        for key in ("definition", "cotreatment")
+        for issue in _recommended_block_issues(assignment.get(key), (*loc, key))
+    ]
+
+
 def validate_experimental_metadata_v0_3(obj: dict) -> list[Issue]:
     """Validate one v0.3 experimental-metadata object, returning ``Issue`` objects.
 
@@ -242,6 +293,10 @@ def validate_experimental_metadata_v0_3(obj: dict) -> list[Issue]:
     issues.extend(_coverage_issues(obj))
     issues.extend(_sentinel_label_issues(obj))
     issues.extend(_processing_variant_issues(obj))
+    if isinstance(obj, dict):
+        issues.extend(
+            _assignment_block_issues(obj.get("perturbation"), ("perturbation",))
+        )
     return issues
 
 
@@ -271,11 +326,12 @@ def validate_perturbation_v0_3(obj: dict) -> list[Issue]:
 
     from dca_helpers.validation.validator import _convert_errors
 
+    issues: list[Issue] = []
     try:
         _PerturbationV0_3.model_validate(obj)
     except pydantic.ValidationError as exc:
-        return _convert_errors(exc)
-    return []
+        issues.extend(_convert_errors(exc))
+    return issues + _recommended_block_issues(obj, ())
 
 
 def validate_well_perturbation_v0_3(obj: dict) -> list[Issue]:
@@ -284,8 +340,9 @@ def validate_well_perturbation_v0_3(obj: dict) -> list[Issue]:
 
     from dca_helpers.validation.validator import _convert_errors
 
+    issues: list[Issue] = []
     try:
         _WellPerturbationV0_3.model_validate(obj)
     except pydantic.ValidationError as exc:
-        return _convert_errors(exc)
-    return []
+        issues.extend(_convert_errors(exc))
+    return issues + _assignment_block_issues(obj)

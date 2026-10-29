@@ -151,7 +151,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'dca',
                   'sc': {'prefix_prefix': 'sc',
                          'prefix_reference': 'https://schema.org/'},
                   'sdc': {'prefix_prefix': 'sdc',
-                          'prefix_reference': 'https://github.com/chanzuckerberg/dataset-catalog#'}},
+                          'prefix_reference': 'https://github.com/chanzuckerberg/dataset-catalog#'},
+                  'uniprot': {'prefix_prefix': 'uniprot',
+                              'prefix_reference': 'http://purl.uniprot.org/uniprot/'}},
      'source_file': 'schema/v0.3/dca_experimental_metadata.yaml',
      'title': 'DCA Experimental Metadata'} )
 
@@ -362,6 +364,10 @@ class PerturbationModality(str, Enum):
     not_reported = "not reported"
     """
     A perturbation was applied but the source does not say which kind.
+    """
+    unknown = "unknown"
+    """
+    The kind of perturbation cannot be determined, e.g. from a source whose description contradicts itself or names an agent of unknown nature.
     """
     other = "other"
     """
@@ -717,7 +723,7 @@ class Biosample(ConfiguredBaseModel):
                                                                           'name': 'tissue_type'}}}}]})
 
     group_id: str = Field(default=..., description="""Row key of the Parquet (``tables/obs``) table, and the key that links this sample's metadata to the image arrays it describes. There is one obs row per image group: a single-image store has one row; an HCS plate has one row per well (the well ``WellPerturbation.plate`` / ``well`` also key on). DCA-native — so sample metadata is not floating free of the data it annotates. Reuses the identifier the ingestor already writes to the obs table rather than minting a separate one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample']} })
-    organism: list[OrganismTerm] = Field(default=..., description="""Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:9606\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample']} })
+    organism: list[OrganismTerm] = Field(default=..., description="""Organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:9606\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample', 'BiologicalPerturbation']} })
     tissue_type: TissueType = Field(default=..., json_schema_extra = { "linkml_meta": {'close_mappings': ['sdc:sample.tissue.type'],
          'domain_of': ['Biosample'],
          'exact_mappings': ['cxmod:tissue_type', 'ops:experiment.tissue_type']} })
@@ -795,7 +801,9 @@ class AdditionalMetadataField(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
     name: str = Field(default=..., description="""Field name (SHOULD be namespaced if targeting a specific spec).""", json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Perturbation']} })
-    value: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Concentration']} })
+    value: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
 
 
 class OntologyTerm(ConfiguredBaseModel):
@@ -1251,6 +1259,9 @@ class Perturbation(ConfiguredBaseModel):
     mechanism: Optional[str] = Field(default=None, description="""Mechanism of action (free text).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation'], 'exact_mappings': ['cpg:Treatment_Mechanism']} })
     chemical: Optional[ChemicalPerturbation] = Field(default=None, description="""Chemical identifiers — present when ``modality = compound``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
     genetic: Optional[GeneticPerturbation] = Field(default=None, description="""Genetic-target identifiers — present when ``modality`` is one of the four CRISPR values or orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    biological: Optional[BiologicalPerturbation] = Field(default=None, description="""The biological agent — RECOMMENDED when ``modality`` is ``biological`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    protein: Optional[ProteinPerturbation] = Field(default=None, description="""The protein applied — RECOMMENDED when ``modality`` is ``protein`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    condition: Optional[ConditionPerturbation] = Field(default=None, description="""The condition applied — RECOMMENDED when ``modality`` is ``diet``, ``temperature`` or ``physical`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
 
 
 class ChemicalPerturbation(ConfiguredBaseModel):
@@ -1291,7 +1302,7 @@ class GeneticPerturbation(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
     gene_symbol: Optional[str] = Field(default=None, description="""HGNC gene symbol (e.g. \"TP53\") — the human-readable label. ``ncbi_gene_id`` is the canonical, resolvable key; this is the symbol that accompanies it.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['HGNC:0'],
-         'domain_of': ['GeneticPerturbation'],
+         'domain_of': ['GeneticPerturbation', 'ProteinPerturbation'],
          'exact_mappings': ['cpg:crispr_symbol', 'cpg:orf_symbol']} })
     ncbi_gene_id: Optional[str] = Field(default=None, description="""NCBI Gene ID as a colon CURIE (e.g. \"NCBIGene:7157\") — the canonical, resolvable cross-table gene key. The value names its own database via the ``prefixes`` block.""", json_schema_extra = { "linkml_meta": {'close_mappings': ['NCBIGene:0'],
          'domain_of': ['GeneticPerturbation'],
@@ -1337,10 +1348,97 @@ class Concentration(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
-    value: Optional[float] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField', 'Concentration']} })
-    unit: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration']} })
+    value: Optional[float] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
+    unit: Optional[str] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration', 'ConditionPerturbation']} })
     text: Optional[str] = Field(default=None, description="""Free-text concentration as recorded (CPG fallback).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration'],
          'exact_mappings': ['cpg:Treatment_Concentration']} })
+
+
+class BiologicalPerturbation(ConfiguredBaseModel):
+    """
+    A biological perturbation agent: a virus, bacterium or other pathogen, or cells of another organism in co-culture.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    organism: OrganismTerm = Field(default=..., description="""The agent's organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:64320\" for Zika virus).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Biosample', 'BiologicalPerturbation']} })
+    strain: Optional[str] = Field(default=None, description="""Strain, isolate or line of the agent, as the source names it (e.g. \"PRVABC59\").""", json_schema_extra = { "linkml_meta": {'domain_of': ['BiologicalPerturbation']} })
+    multiplicity_of_infection: Optional[float] = Field(default=None, description="""Multiplicity of infection (infectious units per cell), for an infection.""", ge=0, json_schema_extra = { "linkml_meta": {'domain_of': ['BiologicalPerturbation']} })
+
+
+class ProteinPerturbation(ConfiguredBaseModel):
+    """
+    A protein applied to the material, e.g. a growth factor, cytokine or antibody.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    uniprot_id: str = Field(default=..., description="""UniProtKB accession of the protein as a colon CURIE (e.g. \"uniprot:P01308\" for insulin), resolvable via the ``prefixes`` block; the same ``uniprot:`` form CELLxGENE uses to identify a protein treatment. ``na`` when the protein has no UniProtKB entry (e.g. an engineered fusion).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ProteinPerturbation']} })
+    gene_symbol: Optional[str] = Field(default=None, description="""Symbol of the gene encoding the protein (the human-readable label).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneticPerturbation', 'ProteinPerturbation']} })
+
+    @field_validator('uniprot_id')
+    def pattern_uniprot_id(cls, v):
+        pattern=re.compile(r"^(uniprot:([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\d+)?|na)$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid uniprot_id format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid uniprot_id format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class ConditionTerm(OntologyTerm):
+    """
+    Experimental-condition ontology annotation (EFO), e.g. a diet or a temperature treatment.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata',
+         'slot_usage': {'ontology_term_id': {'name': 'ontology_term_id',
+                                             'pattern': '^(EFO:\\d+|unknown|na|unavailable)$'}}})
+
+    ontology_term_id: str = Field(default=..., description="""CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['OntologyTerm']} })
+    label: str = Field(default=..., description="""Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.""", json_schema_extra = { "linkml_meta": {'domain_of': ['OntologyTerm']} })
+
+    @field_validator('ontology_term_id')
+    def pattern_ontology_term_id(cls, v):
+        pattern=re.compile(r"^(EFO:\d+|unknown|na|unavailable)$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid ontology_term_id format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid ontology_term_id format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('label')
+    def pattern_label(cls, v):
+        pattern=re.compile(r"^.+$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid label format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid label format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class ConditionPerturbation(ConfiguredBaseModel):
+    """
+    An environmental or physical condition applied as a perturbation: a diet, a temperature, or another physical treatment (e.g. irradiation, mechanical stress).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
+
+    condition: ConditionTerm = Field(default=..., description="""The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
+    value: Optional[float] = Field(default=None, description="""The condition's magnitude, e.g. 42 for a 42 °C heat shock.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
+                       'Concentration',
+                       'ConditionPerturbation']} })
+    unit: Optional[str] = Field(default=None, description="""Unit of ``value``, e.g. \"degree Celsius\", \"Gy\" or \"percent\".""", json_schema_extra = { "linkml_meta": {'domain_of': ['Concentration', 'ConditionPerturbation']} })
 
 
 class PerturbationAssignment(ConfiguredBaseModel):
@@ -1505,5 +1603,9 @@ Perturbation.model_rebuild()
 ChemicalPerturbation.model_rebuild()
 GeneticPerturbation.model_rebuild()
 Concentration.model_rebuild()
+BiologicalPerturbation.model_rebuild()
+ProteinPerturbation.model_rebuild()
+ConditionTerm.model_rebuild()
+ConditionPerturbation.model_rebuild()
 PerturbationAssignment.model_rebuild()
 WellPerturbation.model_rebuild()

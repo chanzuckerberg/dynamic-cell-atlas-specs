@@ -120,7 +120,15 @@ def test_v0_3_schema_differs_from_v0_2_only_in_overridden_blocks():
         "WellPerturbation",
         "ExperimentalMetadata",
     }
-    assert set(v3["$defs"]) - set(v2["$defs"]) == {"ProcessingStep", "NoPerturbations"}
+    added = {
+        "ProcessingStep",
+        "NoPerturbations",
+        "BiologicalPerturbation",
+        "ProteinPerturbation",
+        "ConditionPerturbation",
+        "ConditionTerm",
+    }
+    assert set(v3["$defs"]) - set(v2["$defs"]) == added
     for name in v2["$defs"]:
         if name not in changed:
             assert v3["$defs"][name] == v2["$defs"][name], name

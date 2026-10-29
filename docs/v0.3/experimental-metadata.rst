@@ -624,6 +624,38 @@ of a screen's layout. The ``chemical`` vs ``genetic`` block is required accordin
 
    {"perturbation": {"modality": "no perturbations"}}
 
+**Typed blocks.** Each kind of perturbation has a block on the ``definition`` that
+records *what* was applied in a structured, resolvable form:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 18 52
+
+   * - ``modality``
+     - Block
+     - Key field
+   * - ``compound``
+     - ``chemical`` (**required**)
+     - ``pubchem_cid``, ``inchikey``, ``smiles``, …
+   * - the CRISPR values, ``orf``, ``shrna``, ``mirna``, ``sirna``
+     - ``genetic`` (**required**)
+     - ``gene_symbol``, ``ncbi_gene_id``, ``ensembl_gene_id``, …
+   * - ``biological``
+     - ``biological`` (recommended)
+     - ``organism``: an NCBITaxon term for the agent (e.g. ``NCBITaxon:64320``,
+       Zika virus); optional ``strain`` and ``multiplicity_of_infection``
+   * - ``protein``
+     - ``protein`` (recommended)
+     - ``uniprot_id``: a UniProtKB accession (``uniprot:P01308``, insulin), or ``na``
+   * - ``diet`` / ``temperature`` / ``physical``
+     - ``condition`` (recommended)
+     - ``condition``: an EFO term (``EFO:0001702``, temperature), or ``unavailable``
+       with a descriptive label when EFO has none; optional ``value`` and ``unit``
+
+A recommended block that is missing is a validator warning, not an error, so a
+dataset can be curated before every agent has been identified. ``not reported``,
+``unknown`` and ``other`` have no block.
+
 .. _v03-experimental-perturbation-placement:
 
 **Where it is written.** Two things are modeled separately, because their grains
@@ -745,7 +777,7 @@ the two can never disagree:
    * - ``diet`` / ``protein`` / ``temperature``
      - ``diet`` / ``protein`` / ``temperature``
      - —
-   * - ``physical`` / ``biological`` / ``not reported`` / ``other``
+   * - ``physical`` / ``biological`` / ``not reported`` / ``unknown`` / ``other``
      - the same value (DCA extensions)
      - —
    * - the block's ``"no perturbations"``
@@ -758,15 +790,18 @@ the two can never disagree:
   joined as CELLxGENE does (``chemical || genetic``).
 * ``temperature`` is a temperature *perturbation* (heat or cold shock), not the imaging
   temperature, which is ``acquisition.temperature_c``.
-* ``not reported`` is for a perturbation of a kind the source does not state. There is
-  no ``unknown``.
+* ``not reported`` is for a perturbation of a kind the source does not state;
+  ``unknown`` is for one whose kind cannot be determined at all.
+* The typed blocks carry the term CELLxGENE itself looks for: a ``protein`` block's
+  ``uniprot:`` accession, and the EFO diet or temperature term of a ``condition``
+  block.
 * CELLxGENE 7.1 itself lists only ``chemical`` / ``diet`` / ``genetic`` / ``protein`` /
   ``temperature`` as types and the four CRISPR strategies plus ``control``; the values
   marked as DCA extensions go beyond it.
 
-**Migration from v0.2.** ``crispr`` and ``unknown`` have no automatic v0.3 value:
-whether a CRISPR screen was activation, interference or knockout, and what an
-``unknown`` modality was, come from the source, so those datasets are re-curated.
+**Migration from v0.2.** ``crispr`` has no automatic v0.3 value: whether a CRISPR
+screen was activation, interference or knockout comes from the source, so those
+datasets are re-curated. Every other v0.2 modality carries over unchanged.
 A v0.2 image group without a ``perturbation`` block gains
 ``{"modality": "no perturbations"}``.
 

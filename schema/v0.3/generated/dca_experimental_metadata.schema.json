@@ -143,6 +143,36 @@
             "title": "AssayTerm",
             "type": "object"
         },
+        "BiologicalPerturbation": {
+            "additionalProperties": false,
+            "description": "A biological perturbation agent: a virus, bacterium or other pathogen, or cells of another organism in co-culture.",
+            "properties": {
+                "multiplicity_of_infection": {
+                    "description": "Multiplicity of infection (infectious units per cell), for an infection.",
+                    "minimum": 0,
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "organism": {
+                    "$ref": "#/$defs/OrganismTerm",
+                    "description": "The agent's organism as an ``ontology_term_id`` + ``label`` pair; the id is an NCBITaxon CURIE (e.g. \"NCBITaxon:64320\" for Zika virus)."
+                },
+                "strain": {
+                    "description": "Strain, isolate or line of the agent, as the source names it (e.g. \"PRVABC59\").",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "organism"
+            ],
+            "title": "BiologicalPerturbation",
+            "type": "object"
+        },
         "Biosample": {
             "additionalProperties": false,
             "description": "Sample-level descriptors. Sample context reuses the CZI cross-modality schema v1.1.0 (CELLxGENE-aligned) as ``ontology_term_id`` + label pairs; cell-line identity uses the CellPainting Gallery + Cellosaurus.",
@@ -348,6 +378,57 @@
                 }
             },
             "title": "Concentration",
+            "type": "object"
+        },
+        "ConditionPerturbation": {
+            "additionalProperties": false,
+            "description": "An environmental or physical condition applied as a perturbation: a diet, a temperature, or another physical treatment (e.g. irradiation, mechanical stress).",
+            "properties": {
+                "condition": {
+                    "$ref": "#/$defs/ConditionTerm",
+                    "description": "The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation."
+                },
+                "unit": {
+                    "description": "Unit of ``value``, e.g. \"degree Celsius\", \"Gy\" or \"percent\".",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "value": {
+                    "description": "The condition's magnitude, e.g. 42 for a 42 \u00b0C heat shock.",
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "condition"
+            ],
+            "title": "ConditionPerturbation",
+            "type": "object"
+        },
+        "ConditionTerm": {
+            "additionalProperties": false,
+            "description": "Experimental-condition ontology annotation (EFO), e.g. a diet or a temperature treatment.",
+            "properties": {
+                "label": {
+                    "description": "Human-readable label. For a real term it is the ontology label. When ``ontology_term_id`` is ``unavailable`` it carries the free-text value; when it is ``unknown`` or ``na`` it repeats that sentinel. Must be non-empty.",
+                    "pattern": "^.+$",
+                    "type": "string"
+                },
+                "ontology_term_id": {
+                    "description": "CURIE for the ontology term (e.g. \"NCBITaxon:9606\"), or one of the sentinels (``unknown`` / ``na`` / ``unavailable``) where the subclass permits it.",
+                    "pattern": "^(EFO:\\d+|unknown|na|unavailable)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "ontology_term_id",
+                "label"
+            ],
+            "title": "ConditionTerm",
             "type": "object"
         },
         "Detector": {
@@ -1026,6 +1107,17 @@
             ],
             "description": "A perturbation definition (the \"codebook\" entry), reusable across wells. Modality-agnostic core (mapped to the OME ``Reagent`` entity) plus an optional chemical or genetic block selected by ``modality``.",
             "properties": {
+                "biological": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/BiologicalPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The biological agent \u2014 RECOMMENDED when ``modality`` is ``biological`` (validators warn when it is missing)."
+                },
                 "chemical": {
                     "anyOf": [
                         {
@@ -1036,6 +1128,17 @@
                         }
                     ],
                     "description": "Chemical identifiers \u2014 present when ``modality = compound``."
+                },
+                "condition": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ConditionPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The condition applied \u2014 RECOMMENDED when ``modality`` is ``diet``, ``temperature`` or ``physical`` (validators warn when it is missing)."
                 },
                 "description": {
                     "type": [
@@ -1081,6 +1184,17 @@
                         "string",
                         "null"
                     ]
+                },
+                "protein": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ProteinPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The protein applied \u2014 RECOMMENDED when ``modality`` is ``protein`` (validators warn when it is missing)."
                 }
             },
             "required": [
@@ -1412,6 +1526,7 @@
                 "physical",
                 "biological",
                 "not reported",
+                "unknown",
                 "other"
             ],
             "title": "PerturbationModality",
@@ -1457,6 +1572,29 @@
             ],
             "title": "ProcessingStep",
             "type": "string"
+        },
+        "ProteinPerturbation": {
+            "additionalProperties": false,
+            "description": "A protein applied to the material, e.g. a growth factor, cytokine or antibody.",
+            "properties": {
+                "gene_symbol": {
+                    "description": "Symbol of the gene encoding the protein (the human-readable label).",
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "uniprot_id": {
+                    "description": "UniProtKB accession of the protein as a colon CURIE (e.g. \"uniprot:P01308\" for insulin), resolvable via the ``prefixes`` block; the same ``uniprot:`` form CELLxGENE uses to identify a protein treatment. ``na`` when the protein has no UniProtKB entry (e.g. an engineered fusion).",
+                    "pattern": "^(uniprot:([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})(-\\d+)?|na)$",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "uniprot_id"
+            ],
+            "title": "ProteinPerturbation",
+            "type": "object"
         },
         "Provenance": {
             "additionalProperties": false,

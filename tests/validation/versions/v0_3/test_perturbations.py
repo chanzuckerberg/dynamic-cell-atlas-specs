@@ -13,6 +13,7 @@ import pytest
 from dca_helpers.validation.validator import _WELL_PERTURBATION_VALIDATORS
 from dca_helpers.validation.versions.v0_3.experimental_metadata import (
     GENETIC_MODALITIES,
+    RECOMMENDED_BLOCK,
     validate_experimental_metadata_v0_3,
     validate_perturbation_v0_3,
     validate_well_perturbation_v0_3,
@@ -46,6 +47,26 @@ def _treatment(modality: str, **blocks) -> dict:
 
 GENETIC = {"genetic": {"gene_symbol": "TP53"}}
 CHEMICAL = {"chemical": {"pubchem_cid": "PubChem:2244"}}
+ZIKA = {
+    "biological": {
+        "organism": {"ontology_term_id": "NCBITaxon:64320", "label": "Zika virus"},
+        "strain": "PRVABC59",
+        "multiplicity_of_infection": 0.5,
+    }
+}
+INSULIN = {"protein": {"uniprot_id": "uniprot:P01308", "gene_symbol": "INS"}}
+HEAT = {
+    "condition": {
+        "condition": {"ontology_term_id": "EFO:0001702", "label": "temperature"},
+        "value": 42.0,
+        "unit": "degree Celsius",
+    }
+}
+ABLATION = {
+    "condition": {
+        "condition": {"ontology_term_id": "unavailable", "label": "laser ablation"}
+    }
+}
 
 VALID = {
     "no perturbations": {"modality": "no perturbations"},
@@ -54,16 +75,14 @@ VALID = {
     **{f"genetic: {m}": _treatment(m, **GENETIC) for m in sorted(GENETIC_MODALITIES)},
     **{
         f"no typed block: {m}": _treatment(m)
-        for m in (
-            "diet",
-            "protein",
-            "temperature",
-            "physical",
-            "biological",
-            "not reported",
-            "other",
-        )
+        for m in ("not reported", "unknown", "other")
     },
+    # Recommended, not required: valid without their block (a warning, see below).
+    **{f"recommended block missing: {m}": _treatment(m) for m in RECOMMENDED_BLOCK},
+    "biological with its block": _treatment("biological", **ZIKA),
+    "protein with its block": _treatment("protein", **INSULIN),
+    "temperature with its block": _treatment("temperature", **HEAT),
+    "physical with an unavailable EFO term": _treatment("physical", **ABLATION),
     "negative control": {
         "control_class": "negcon",
         "definition": {"perturbation_id": "ntc", "modality": "CRISPR knockout screen"}
@@ -87,17 +106,30 @@ INVALID = {
     },
     "treatment without definition": {"control_class": "treatment"},
     "removed value crispr": _treatment("crispr", **GENETIC),
-    "removed value unknown": _treatment("unknown"),
     "no perturbations as a definition modality": _treatment("no perturbations"),
     "CRISPR without the genetic block": _treatment("CRISPR interference screen"),
     "compound without the chemical block": _treatment("compound"),
+    "biological block without an organism": _treatment(
+        "biological", biological={"strain": "PRVABC59"}
+    ),
+    "protein id without the uniprot prefix": _treatment(
+        "protein", protein={"uniprot_id": "P01308"}
+    ),
+    "condition term outside EFO": _treatment(
+        "temperature",
+        condition={"condition": {"ontology_term_id": "CHEBI:15377", "label": "water"}},
+    ),
+    "negative multiplicity of infection": _treatment(
+        "biological",
+        biological={**ZIKA["biological"], "multiplicity_of_infection": -1.0},
+    ),
 }
 
 
 def _model_accepts(block: dict) -> bool:
-    return (
-        validate_well_perturbation_v0_3({"plate": "P1", "well": "A01", **block}) == []
-    )
+    """No errors; recommendation warnings do not make a block invalid."""
+    issues = validate_well_perturbation_v0_3({"plate": "P1", "well": "A01", **block})
+    return not [i for i in issues if i.severity.value == "error"]
 
 
 @pytest.mark.parametrize("name", list(VALID))
@@ -181,3 +213,53 @@ def test_bare_definition_uses_the_v0_3_vocabulary():
 def test_plate_walk_checks_well_rows_with_the_version_s_rules():
     assert _WELL_PERTURBATION_VALIDATORS["0.3"] is validate_well_perturbation_v0_3
     assert _WELL_PERTURBATION_VALIDATORS["0.2"] is not validate_well_perturbation_v0_3
+
+
+def _warnings(issues):
+    return [i for i in issues if i.severity.value == "warning"]
+
+
+@pytest.mark.parametrize("modality,block", sorted(RECOMMENDED_BLOCK.items()))
+def test_missing_recommended_block_warns(modality, block):
+    issues = validate_perturbation_v0_3({"perturbation_id": "p1", "modality": modality})
+    assert [i.message for i in issues if i.severity.value == "error"] == []
+    assert any(
+        i.loc == (block,) and f"recommended when modality is '{modality}'" in i.message
+        for i in _warnings(issues)
+    )
+
+
+def test_block_present_does_not_warn():
+    issues = validate_perturbation_v0_3(
+        {"perturbation_id": "z", "modality": "biological"} | ZIKA
+    )
+    assert issues == []
+
+
+def test_recommendation_on_a_cotreatment_is_reported_at_its_path():
+    issues = validate_experimental_metadata_v0_3(
+        _experimental(
+            _treatment("compound", **CHEMICAL)
+            | {"cotreatment": {"perturbation_id": "z", "modality": "biological"}}
+        )
+    )
+    assert any(
+        i.loc == ("perturbation", "cotreatment", "biological")
+        for i in _warnings(issues)
+    )
+
+
+def test_recommendation_does_not_hide_an_assignment_error():
+    """The warning pass is separate, so a missing control_class is still an error."""
+    row = {
+        "plate": "P1",
+        "well": "A01",
+        "definition": {"perturbation_id": "z", "modality": "biological"},
+    }
+    issues = validate_well_perturbation_v0_3(row)
+    assert any(
+        "control_class is required" in i.message
+        for i in issues
+        if i.severity.value == "error"
+    )
+    assert _warnings(issues)

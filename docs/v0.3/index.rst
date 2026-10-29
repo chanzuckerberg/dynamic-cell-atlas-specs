@@ -49,8 +49,9 @@ Changes from v0.2
   recommended step vocabulary, instead of a single string, and a new free-text
   ``image_data.processing_description`` holds the full processing text.
 * **Perturbations** are aligned with the CELLxGENE 7.1 perturbation fields: the
-  ``modality`` vocabulary replaces ``crispr`` with four CRISPR values, adds ``diet`` /
-  ``protein`` / ``temperature`` / ``not reported`` and drops ``unknown``, and the
+  ``modality`` vocabulary replaces ``crispr`` with four CRISPR values and adds ``diet``
+  / ``protein`` / ``temperature`` / ``not reported``; typed ``biological``,
+  ``protein`` and ``condition`` blocks join ``chemical`` and ``genetic``; and the
   ``perturbation`` block is required on every image group, as
   ``{"modality": "no perturbations"}`` when nothing was applied. See
   :ref:`Perturbation Metadata <v03-experimental-perturbation-modality>`.
