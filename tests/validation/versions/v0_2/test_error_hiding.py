@@ -19,15 +19,7 @@ from .test_models import (
 pytestmark = pytest.mark.unit
 
 SAMPLE_STATS = {"p1": 1.0, "p5": 5.0, "p95": 95.0, "p99": 99.0}
-NESTED_HIDING = "nested-model failures hide store-level rules"
-FIELD_LEVEL_HIDING = "field-level validator failures hide store-level rules"
 ALWAYS_REPORTED = ("dimension_names_mismatch", "channel_missing_name")
-XFAIL_NESTED = pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason=NESTED_HIDING
-)
-XFAIL_FIELD_LEVEL = pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason=FIELD_LEVEL_HIDING
-)
 
 
 @dataclass(frozen=True)
@@ -38,6 +30,8 @@ class Defect:
     apply: Callable[[dict], None]
     nested: bool = False
     level_rule: bool = False
+    untrusts_order: bool = False
+    needs_trusted_order: bool = True
 
 
 def shard_below_1gb(store):
@@ -113,6 +107,8 @@ DEFECTS = [
         "dimension_names",
         dimension_names_mismatch,
         nested=True,
+        untrusts_order=True,
+        needs_trusted_order=False,
     ),
     Defect(
         "channel_missing_name",
@@ -120,6 +116,7 @@ DEFECTS = [
         "Field required",
         channel_missing_name,
         nested=True,
+        needs_trusted_order=False,
     ),
     Defect("axis_units_missing", Severity.ERROR, "has no unit", axis_units_missing),
     Defect(
@@ -151,6 +148,7 @@ DEFECTS = [
 ]
 
 BY_NAME = {d.name: d for d in DEFECTS}
+STORE_LEVEL_DEFECTS = [d for d in DEFECTS if not d.nested]
 
 
 def build_store(defects):
@@ -163,26 +161,30 @@ def build_store(defects):
 
 def unreported(defects):
     issues = validate_store(build_store(defects))
+    order_untrusted = any(d.untrusts_order for d in defects)
     return [
         d.name
         for d in defects
-        if not any(d.marker in i.message and i.severity == d.severity for i in issues)
+        if not (order_untrusted and d.needs_trusted_order)
+        and not any(d.marker in i.message and i.severity == d.severity for i in issues)
     ]
 
 
-def hides(a, b):
-    if a.nested != b.nested:
-        return True
-    has_dimension_names = "dimension_names_mismatch" in {a.name, b.name}
-    return has_dimension_names and (a.level_rule or b.level_rule)
+def wrongly_reported(defects):
+    if not any(d.untrusts_order for d in defects):
+        return []
+    issues = validate_store(build_store(defects))
+    return [
+        d.name
+        for d in defects
+        if d.needs_trusted_order
+        and any(d.marker in i.message and i.severity == d.severity for i in issues)
+    ]
 
 
 def pair_params():
     for a, b in itertools.combinations(DEFECTS, 2):
-        marks = []
-        if hides(a, b):
-            marks.append(XFAIL_NESTED)
-        yield pytest.param(a, b, marks=marks, id=f"{a.name}+{b.name}")
+        yield pytest.param(a, b, id=f"{a.name}+{b.name}")
 
 
 @pytest.mark.parametrize("defect", DEFECTS, ids=lambda d: d.name)
@@ -205,7 +207,6 @@ def test_every_level_spec_rule_is_reported_together():
     assert unreported(level_rules) == []
 
 
-@XFAIL_NESTED
 def test_all_defects_are_reported_together():
     assert unreported(DEFECTS) == []
 
@@ -241,22 +242,75 @@ def drop_dca(store):
     del store["dca"]
 
 
-def reorder_axes(store):
-    store["axes"] = ["t", "c", "y", "x", "z"]
-
-
-@XFAIL_FIELD_LEVEL
-@pytest.mark.parametrize(
-    "apply,marker",
-    [(drop_dca, "Missing 'dca' key"), (reorder_axes, "Axes must be")],
-    ids=["dca_missing", "axes_order"],
-)
-def test_field_level_failure_does_not_hide_store_rules(apply, marker):
+def test_missing_dca_does_not_hide_store_rules():
     store = build_store([BY_NAME["no_coarse_level"]])
-    apply(store)
+    drop_dca(store)
     messages = [i.message for i in validate_store(store)]
-    assert any(marker in m for m in messages)
+    assert any("Missing 'dca' key" in m for m in messages)
     assert any("No scale level has all spatial" in m for m in messages)
+
+
+def reorder_to_xyzct(store):
+    names = ["x", "y", "z", "c", "t"]
+    store["axes"] = names
+    for level in store["levels"]:
+        level["shape"] = list(reversed(level["shape"]))
+        level["chunk_shape"] = list(reversed(level["chunk_shape"]))
+        level["dimension_names"] = names
+
+
+def assert_only_order_errors(issues):
+    assert issues
+    assert all(
+        i.message.startswith(("Axes must be", "dimension_names")) for i in issues
+    )
+
+
+def test_wrong_axis_order_reports_only_the_order_errors():
+    store = copy.deepcopy(valid_store())
+    reorder_to_xyzct(store)
+    issues = validate_store(store)
+    assert any(i.message.startswith("Axes must be") for i in issues)
+    assert_only_order_errors(issues)
+
+
+def test_wrong_axis_order_skips_the_label_store_rules():
+    store = copy.deepcopy(valid_label_store())
+    reorder_to_xyzct(store)
+    issues = validate_label_store(store)
+    assert any(i.message.startswith("Axes must be") for i in issues)
+    assert_only_order_errors(issues)
+
+
+def test_permuted_level_dimension_names_report_only_the_names_error():
+    store = copy.deepcopy(valid_store())
+    store["levels"][1]["dimension_names"] = ["t", "c", "y", "z", "x"]
+    store["levels"][1]["shape"] = [1, 1, 256, 128, 256]
+    issues = validate_store(store)
+    assert [i.severity for i in issues] == [Severity.ERROR]
+    assert_only_order_errors(issues)
+
+
+def test_invalid_dimension_names_skip_the_level_rules():
+    store = copy.deepcopy(valid_store())
+    store["levels"][0]["dimension_names"] = ["t", "z", "c", "y", "x"]
+    store["levels"][0]["chunk_shape"] = [1, 1, 64, 64, 64]
+    issues = validate_store(store)
+    assert_only_order_errors(issues)
+    assert not any("recommended 1 MB" in i.message for i in issues)
+
+
+def test_uppercase_axes_still_get_the_store_rules():
+    store = copy.deepcopy(valid_store())
+    names = ["T", "C", "Z", "Y", "X"]
+    store["axes"] = names
+    store["axis_units"] = {"T": "second", "C": None, "Z": None, "Y": None, "X": None}
+    for level in store["levels"]:
+        level["dimension_names"] = names
+    store["levels"][0]["chunk_shape"] = [1, 1, 64, 64, 64]
+    issues = validate_store(store)
+    assert any("recommended 1 MB" in i.message for i in issues)
+    assert sum("has no unit" in i.message for i in issues) == 3
 
 
 def test_label_level_reports_dtype_chunk_and_shard_together():
@@ -275,3 +329,53 @@ def test_label_level_reports_dtype_chunk_and_shard_together():
     ]
     for severity, marker in expected:
         assert any(i.severity == severity and marker in i.message for i in issues)
+
+
+def messages_of(defects):
+    return [i.message for i in validate_store(build_store(defects))]
+
+
+@pytest.mark.parametrize("a,b", pair_params())
+def test_no_message_is_reported_twice_for_a_pair(a, b):
+    messages = messages_of([a, b])
+    assert len(messages) == len(set(messages))
+
+
+def test_no_message_is_reported_twice_for_every_defect():
+    messages = messages_of(DEFECTS)
+    assert len(messages) == len(set(messages))
+
+
+@pytest.mark.parametrize("defect", STORE_LEVEL_DEFECTS, ids=lambda d: d.name)
+def test_store_level_defect_alone_is_reported_once(defect):
+    messages = [m for m in messages_of([defect]) if defect.marker in m]
+    assert len(messages) >= 1
+    assert len(messages) == len(set(messages))
+
+
+def test_label_dtype_warning_does_not_hide_the_coarse_level_error():
+    store = copy.deepcopy(valid_label_store(n_levels=1))
+    store["levels"][0]["shape"][2:] = [4096, 4096, 4096]
+    store["levels"][0]["dtype"] = "uint16"
+    issues = validate_label_store(store)
+    assert any(
+        i.severity == Severity.WARNING and "label array" in i.message for i in issues
+    )
+    assert any(
+        i.severity == Severity.ERROR and "spatial dimensions" in i.message
+        for i in issues
+    )
+
+
+def test_all_defects_except_the_order_defect_are_reported_together():
+    defects = [d for d in DEFECTS if not d.untrusts_order]
+    assert unreported(defects) == []
+
+
+@pytest.mark.parametrize("a,b", pair_params())
+def test_order_dependent_defects_are_skipped_when_the_order_defect_is_present(a, b):
+    assert wrongly_reported([a, b]) == []
+
+
+def test_order_dependent_defects_are_skipped_in_the_all_defects_case():
+    assert wrongly_reported(DEFECTS) == []

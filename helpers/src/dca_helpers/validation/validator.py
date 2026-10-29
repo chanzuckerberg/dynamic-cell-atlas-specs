@@ -25,6 +25,7 @@ parent_path set to the image/field path.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -58,6 +59,8 @@ from dca_helpers.validation.versions.v0_3.experimental_metadata import (
 )
 from dca_helpers.validation.versions.v0_3.models import check_projection_v0_3
 from dca_helpers.validation.zarr_node import ZarrNodeType, classify_group
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import zarr
@@ -853,16 +856,35 @@ def _run_dca_validation(
         ModelClass.model_validate(node_dict)
     except pydantic.ValidationError as exc:
         issues.extend(_convert_errors(exc))
+    except Exception as exc:
+        issues.append(_unexpected_error_issue("model validation", exc))
 
     if isinstance(dca, dict) and spec_version in _EXPERIMENTAL_SPEC_VERSIONS:
-        issues.extend(
-            _EXPERIMENTAL_VALIDATORS[spec_version](dca, check_ontology=check_ontology)
-        )
+        try:
+            issues.extend(
+                _EXPERIMENTAL_VALIDATORS[spec_version](
+                    dca, check_ontology=check_ontology
+                )
+            )
+        except Exception as exc:
+            issues.append(_unexpected_error_issue("experimental metadata", exc))
 
     if group_attrs is not None and spec_version in PROJECTION_SPEC_VERSIONS:
-        issues.extend(check_projection_v0_3(node_dict, dca, group_attrs))
+        try:
+            issues.extend(check_projection_v0_3(node_dict, dca, group_attrs))
+        except Exception as exc:
+            issues.append(_unexpected_error_issue("projection rules", exc))
 
     return issues
+
+
+def _unexpected_error_issue(stage: str, exc: Exception) -> Issue:
+    logger.warning("Unexpected %s during %s", type(exc).__name__, stage, exc_info=exc)
+    return Issue(
+        loc=(stage,),
+        message=f"Unexpected {type(exc).__name__} during {stage}: {exc}",
+        severity=Severity.ERROR,
+    )
 
 
 def _image_facts(node_dict: dict, dca: object) -> "ImageFacts | None":
