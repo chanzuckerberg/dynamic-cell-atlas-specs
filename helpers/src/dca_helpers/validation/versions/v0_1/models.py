@@ -374,13 +374,21 @@ class DCAScaleLevelSpec(BaseModel):
     def dtype_rule(level: Any) -> list[str]:
         return dtype_messages(level)
 
+    @staticmethod
+    def order_is_trusted(data: Any) -> bool:
+        return True
+
     @model_validator(mode="wrap")
     @classmethod
     def collect_array_rules_on_field_failure(cls, data: Any, handler: Any) -> Any:
         try:
             return handler(data)
         except ValidationError as exc:
-            messages = raw_rule_messages(raw_array_rule_messages, data, cls.dtype_rule)
+            messages = (
+                raw_rule_messages(raw_array_rule_messages, data, cls.dtype_rule)
+                if cls.order_is_trusted(data)
+                else []
+            )
             if not messages:
                 raise
             raise merge_validation_error(exc, data, messages) from None
@@ -445,6 +453,10 @@ def downsampling_factor_messages(levels: Sequence[Any]) -> list[str]:
     return must_errors + should_warnings
 
 
+def is_accepted_order(value: object) -> bool:
+    return isinstance(value, (list, tuple)) and list(value) in AXES_ACCEPTED
+
+
 def _is_int_list(value: object, length: int = 5) -> bool:
     return (
         isinstance(value, (list, tuple))
@@ -467,7 +479,7 @@ def raw_shape_view(data: object) -> SimpleNamespace | None:
 
 
 def raw_shape_views(levels: object) -> list[SimpleNamespace] | None:
-    if not isinstance(levels, list):
+    if not isinstance(levels, (list, tuple)):
         return None
     views = [raw_shape_view(level) for level in levels]
     return None if any(view is None for view in views) else views
@@ -573,7 +585,8 @@ class DCAStoreSpecV0_1(BaseModel):
         try:
             return handler(data)
         except ValidationError as exc:
-            levels = data.get("levels") if isinstance(data, dict) else None
+            trusted = isinstance(data, dict) and is_accepted_order(data.get("axes"))
+            levels = data.get("levels") if trusted else None
             messages = raw_rule_messages(raw_downsampling_messages, levels)
             if not messages:
                 raise

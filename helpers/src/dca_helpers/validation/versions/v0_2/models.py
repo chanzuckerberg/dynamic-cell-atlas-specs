@@ -69,6 +69,7 @@ from dca_helpers.validation.versions.v0_1.models import (
 )
 from dca_helpers.validation.versions.v0_1.models import (
     downsampling_factor_messages,
+    is_accepted_order,
     merge_validation_error,
     raw_rule_messages,
     raw_shape_views,
@@ -231,6 +232,10 @@ class DCAScaleLevelSpecV0_2(DCAScaleLevelSpecV0_1):
                 "(ome-zarr-metadata.rst § Dimensions)."
             )
         return raw
+
+    @staticmethod
+    def order_is_trusted(data: Any) -> bool:
+        return isinstance(data, dict) and is_accepted_order(data.get("dimension_names"))
 
 
 def label_dtype_messages(level: Any) -> list[str]:
@@ -548,6 +553,15 @@ def coarse_level_messages(levels: Sequence[Any]) -> list[str]:
     ]
 
 
+def raw_order_is_trusted(data: object) -> bool:
+    if not isinstance(data, dict) or not is_accepted_order(data.get("axes")):
+        return False
+    levels = data.get("levels")
+    return isinstance(levels, (list, tuple)) and all(
+        DCAScaleLevelSpecV0_2.order_is_trusted(level) for level in levels
+    )
+
+
 def _is_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
@@ -601,7 +615,7 @@ class StoreRuleInputs:
 
     @classmethod
     def from_raw(cls, data: object) -> "StoreRuleInputs | None":
-        if not isinstance(data, dict):
+        if not raw_order_is_trusted(data):
             return None
         levels = raw_shape_views(data.get("levels"))
         if not levels:
@@ -638,7 +652,9 @@ def label_store_rule_messages(levels: Sequence[Any]) -> list[str]:
 
 
 def raw_label_store_rule_messages(data: object) -> list[str]:
-    levels = raw_shape_views(data.get("levels")) if isinstance(data, dict) else None
+    if not raw_order_is_trusted(data):
+        return []
+    levels = raw_shape_views(data.get("levels"))
     return label_store_rule_messages(levels) if levels else []
 
 
