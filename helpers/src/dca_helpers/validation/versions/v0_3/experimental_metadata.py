@@ -8,9 +8,10 @@ v0.2 in two places:
   a single string, with a recommended ``ProcessingStep`` vocabulary.
 * Perturbations: the ``PerturbationModality`` vocabulary is aligned with CELLxGENE
   7.1 (four CRISPR values replace ``crispr``; ``diet`` / ``protein`` / ``temperature``
-  / ``not reported`` are added), typed ``biological`` / ``protein`` / ``condition``
-  blocks join ``chemical`` / ``genetic``, and ``perturbation`` is required on every
-  image group, as ``{"modality": "no perturbations"}`` when nothing was applied.
+  / ``not reported`` are added), typed ``biological`` / ``protein`` / ``diet`` /
+  ``temperature`` / ``physical`` blocks join ``chemical`` / ``genetic``, and
+  ``perturbation`` is required on every image group, as
+  ``{"modality": "no perturbations"}`` when nothing was applied.
 
 Every other block is unchanged, so this module reuses the v0.2 rule classes and
 overrides only ``image_data`` and the perturbation classes. If a later edit to the
@@ -104,9 +105,9 @@ _ASSIGNMENT_FIELDS: tuple[str, ...] = (
 RECOMMENDED_BLOCK: dict[str, str] = {
     "biological": "biological",
     "protein": "protein",
-    "diet": "condition",
-    "temperature": "condition",
-    "physical": "condition",
+    "diet": "diet",
+    "temperature": "temperature",
+    "physical": "physical",
 }
 
 # A literal renamed in a schema regen would silently disable its rule; fail at import.

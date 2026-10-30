@@ -48,11 +48,12 @@ Changes from v0.2
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
   recommended step vocabulary, instead of a single string, and a new free-text
   ``image_data.processing_description`` holds the full processing text.
-* **Perturbations** are aligned with the CELLxGENE 7.1 perturbation fields: the
-  ``modality`` vocabulary replaces ``crispr`` with four CRISPR values and adds ``diet``
-  / ``protein`` / ``temperature`` / ``not reported``; typed ``biological``,
-  ``protein`` and ``condition`` blocks join ``chemical`` and ``genetic``; and the
-  ``perturbation`` block is required on every image group, as
+* **Perturbations** are aligned with the perturbation fields of the
+  `CELLxGENE schema 7.1 <https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/7.1.0/schema.md>`__:
+  the ``modality`` vocabulary replaces ``crispr`` with four CRISPR values and adds
+  ``diet``, ``protein``, ``temperature`` and ``not reported``; typed ``biological``,
+  ``protein``, ``diet``, ``temperature`` and ``physical`` blocks join ``chemical`` and
+  ``genetic``; and the ``perturbation`` block is required on every image group, as
   ``{"modality": "no perturbations"}`` when nothing was applied. See
   :ref:`Perturbation Metadata <v03-experimental-perturbation-modality>`.
   These and the ``image_data`` change are the only changes to the

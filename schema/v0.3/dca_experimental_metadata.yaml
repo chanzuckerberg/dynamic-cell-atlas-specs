@@ -1336,10 +1336,24 @@ classes:
           (validators warn when it is missing).
         range: ProteinPerturbation
         inlined: true
-      condition:
+      diet:
         description: >-
-          The condition applied — RECOMMENDED when ``modality`` is ``diet``,
-          ``temperature`` or ``physical`` (validators warn when it is missing).
+          The diet applied — RECOMMENDED when ``modality`` is ``diet`` (validators
+          warn when it is missing).
+        range: ConditionPerturbation
+        inlined: true
+      temperature:
+        description: >-
+          The temperature treatment (e.g. a heat or cold shock) — RECOMMENDED when
+          ``modality`` is ``temperature`` (validators warn when it is missing). Not
+          the imaging temperature, which is ``AcquisitionMetadata.temperature_c``.
+        range: ConditionPerturbation
+        inlined: true
+      physical:
+        description: >-
+          The physical treatment (e.g. irradiation, laser ablation, mechanical
+          stress) — RECOMMENDED when ``modality`` is ``physical`` (validators warn
+          when it is missing).
         range: ConditionPerturbation
         inlined: true
 
@@ -1461,10 +1475,11 @@ classes:
 
   ConditionPerturbation:
     description: >-
-      An environmental or physical condition applied as a perturbation: a diet, a
-      temperature, or another physical treatment (e.g. irradiation, mechanical stress).
+      The shape shared by the ``diet``, ``temperature`` and ``physical`` blocks: an
+      environmental or physical condition applied as a perturbation, as an EFO term
+      plus an optional magnitude.
     attributes:
-      condition:
+      term:
         description: >-
           The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO
           CURIE, e.g. "EFO:0001702" (temperature). CELLxGENE reads ``diet`` from

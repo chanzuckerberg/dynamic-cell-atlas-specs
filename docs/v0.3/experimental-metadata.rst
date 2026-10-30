@@ -593,14 +593,17 @@ Perturbation Metadata
 ---------------------
 
 Perturbation metadata is modeled as a **modality-agnostic ``Perturbation``**
-(mapped to the OME ``Reagent`` entity), specialized by a ``modality`` discriminator
-into a **chemical** or **genetic** block. This generalizes beyond chemical
-perturbation to **CRISPR / gene knockout / ORF** (and diet, protein, temperature,
-physical and biological perturbations).
+(mapped to the OME ``Reagent`` entity). Its ``modality`` names the kind of
+perturbation, and a **typed block** records what was applied, such as a compound's
+PubChem ID or a pathogen's NCBITaxon term (see
+:ref:`Typed blocks <v03-experimental-typed-blocks>` below).
+
 The genetic block carries the gene target that CellPainting Gallery cannot express
-(its ``Treatment_Category`` enum names ``CRISPR``/``ORF`` but provides no gene
-field). The fields are harmonized across two sources: OME/Bio-Formats ``Reagent``
-and the CellPainting Gallery ``Treatment_*`` fields.
+(its ``Treatment_Category`` enum names ``CRISPR``/``ORF`` but provides no gene field).
+The chemical and genetic fields are harmonized across two sources: OME/Bio-Formats
+``Reagent`` and the CellPainting Gallery ``Treatment_*`` fields. The other blocks use
+the ontologies the `CELLxGENE schema 7.1 <https://github.com/chanzuckerberg/single-cell-curation/blob/main/schema/7.1.0/schema.md>`__ uses for the same perturbations
+(NCBITaxon, UniProt, EFO).
 
 These fields apply to **any perturbation dataset**, not just CellPainting Gallery
 ones; the ``cpg:`` entries are alignment mappings (provenance), not a
@@ -624,37 +627,58 @@ of a screen's layout. The ``chemical`` vs ``genetic`` block is required accordin
 
    {"perturbation": {"modality": "no perturbations"}}
 
+.. _v03-experimental-typed-blocks:
+
 **Typed blocks.** Each kind of perturbation has a block on the ``definition`` that
 records *what* was applied in a structured, resolvable form:
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 18 52
+   :widths: 13 27 60
 
-   * - ``modality``
-     - Block
-     - Key field
-   * - ``compound``
-     - ``chemical`` (**required**)
-     - ``pubchem_cid``, ``inchikey``, ``smiles``, …
-   * - the CRISPR values, ``orf``, ``shrna``, ``mirna``, ``sirna``
-     - ``genetic`` (**required**)
-     - ``gene_symbol``, ``ncbi_gene_id``, ``ensembl_gene_id``, …
-   * - ``biological``
-     - ``biological`` (recommended)
-     - ``organism``: an NCBITaxon term for the agent (e.g. ``NCBITaxon:64320``,
-       Zika virus); optional ``strain`` and ``multiplicity_of_infection``
-   * - ``protein``
-     - ``protein`` (recommended)
-     - ``uniprot_id``: a UniProtKB accession (``uniprot:P01308``, insulin), or ``na``
-   * - ``diet`` / ``temperature`` / ``physical``
-     - ``condition`` (recommended)
-     - ``condition``: an EFO term (``EFO:0001702``, temperature), or ``unavailable``
-       with a descriptive label when EFO has none; optional ``value`` and ``unit``
+   * - Group
+     - ``modality`` values
+     - Typed block and what it records
+   * - chemical
+     - ``compound``
+     - ``chemical`` (**required**): compound identifiers such as ``pubchem_cid``,
+       ``inchikey``, ``smiles`` and ``chembl_id``.
+   * - genetic
+     - the four CRISPR values, ``orf``, ``shrna``, ``mirna``, ``sirna``
+     - ``genetic`` (**required**): the gene target (``gene_symbol``,
+       ``ensembl_gene_id``, ``ncbi_gene_id``) and construct details such as ``vector``.
+   * - biological
+     - ``biological``
+     - ``biological`` (recommended): the agent's ``organism`` as an NCBITaxon term
+       (e.g. ``NCBITaxon:64320``, Zika virus); optional ``strain`` and
+       ``multiplicity_of_infection``.
+   * - protein
+     - ``protein``
+     - ``protein`` (recommended): the protein's UniProtKB accession ``uniprot_id``
+       (e.g. ``uniprot:P01308``, insulin), or ``na``; optional ``gene_symbol``.
+   * - diet
+     - ``diet``
+     - ``diet`` (recommended): the diet as an EFO ``term``; optional ``value`` and
+       ``unit``.
+   * - temperature
+     - ``temperature``
+     - ``temperature`` (recommended): the treatment as an EFO ``term``
+       (``EFO:0001702``); optional ``value`` and ``unit`` (e.g. 42 degree Celsius).
+   * - physical
+     - ``physical``
+     - ``physical`` (recommended): the treatment as an EFO ``term``, or
+       ``unavailable`` with a descriptive label when EFO has none (e.g. "laser
+       ablation"); optional ``value`` and ``unit`` (e.g. 5 Gy).
+   * - —
+     - ``not reported``, ``unknown``, ``other``
+     - No typed block. Describe the perturbation in the definition's ``name`` and
+       ``description``. This is unrelated to ``no perturbations``, which means nothing
+       was applied.
 
-A recommended block that is missing is a validator warning, not an error, so a
-dataset can be curated before every agent has been identified. ``not reported``,
-``unknown`` and ``other`` have no block.
+The ``diet``, ``temperature`` and ``physical`` blocks share one shape: an EFO ``term``,
+plus an optional ``value`` and ``unit``. A recommended block that is missing is a
+validator warning, not an error, so a dataset can be curated before every agent has
+been identified.
 
 .. _v03-experimental-perturbation-placement:
 
@@ -793,8 +817,7 @@ the two can never disagree:
 * ``not reported`` is for a perturbation of a kind the source does not state;
   ``unknown`` is for one whose kind cannot be determined at all.
 * The typed blocks carry the term CELLxGENE itself looks for: a ``protein`` block's
-  ``uniprot:`` accession, and the EFO diet or temperature term of a ``condition``
-  block.
+  ``uniprot:`` accession, and the EFO ``term`` of a ``diet`` or ``temperature`` block.
 * CELLxGENE 7.1 itself lists only ``chemical`` / ``diet`` / ``genetic`` / ``protein`` /
   ``temperature`` as types and the four CRISPR strategies plus ``control``; the values
   marked as DCA extensions go beyond it.

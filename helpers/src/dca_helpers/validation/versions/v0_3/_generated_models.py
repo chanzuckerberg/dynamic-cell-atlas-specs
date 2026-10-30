@@ -1261,7 +1261,9 @@ class Perturbation(ConfiguredBaseModel):
     genetic: Optional[GeneticPerturbation] = Field(default=None, description="""Genetic-target identifiers — present when ``modality`` is one of the four CRISPR values or orf / shrna / mirna / sirna. This is the genetic-perturbation extension (knockout, knockdown, or overexpression of a gene target).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
     biological: Optional[BiologicalPerturbation] = Field(default=None, description="""The biological agent — RECOMMENDED when ``modality`` is ``biological`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
     protein: Optional[ProteinPerturbation] = Field(default=None, description="""The protein applied — RECOMMENDED when ``modality`` is ``protein`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
-    condition: Optional[ConditionPerturbation] = Field(default=None, description="""The condition applied — RECOMMENDED when ``modality`` is ``diet``, ``temperature`` or ``physical`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
+    diet: Optional[ConditionPerturbation] = Field(default=None, description="""The diet applied — RECOMMENDED when ``modality`` is ``diet`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    temperature: Optional[ConditionPerturbation] = Field(default=None, description="""The temperature treatment (e.g. a heat or cold shock) — RECOMMENDED when ``modality`` is ``temperature`` (validators warn when it is missing). Not the imaging temperature, which is ``AcquisitionMetadata.temperature_c``.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
+    physical: Optional[ConditionPerturbation] = Field(default=None, description="""The physical treatment (e.g. irradiation, laser ablation, mechanical stress) — RECOMMENDED when ``modality`` is ``physical`` (validators warn when it is missing).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation']} })
 
 
 class ChemicalPerturbation(ConfiguredBaseModel):
@@ -1430,11 +1432,11 @@ class ConditionTerm(OntologyTerm):
 
 class ConditionPerturbation(ConfiguredBaseModel):
     """
-    An environmental or physical condition applied as a perturbation: a diet, a temperature, or another physical treatment (e.g. irradiation, mechanical stress).
+    The shape shared by the ``diet``, ``temperature`` and ``physical`` blocks: an environmental or physical condition applied as a perturbation, as an EFO term plus an optional magnitude.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/chanzuckerberg/dynamic-cell-atlas-specs/schema/dca_experimental_metadata'})
 
-    condition: ConditionTerm = Field(default=..., description="""The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Perturbation', 'ConditionPerturbation']} })
+    term: ConditionTerm = Field(default=..., description="""The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ConditionPerturbation']} })
     value: Optional[float] = Field(default=None, description="""The condition's magnitude, e.g. 42 for a 42 °C heat shock.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AdditionalMetadataField',
                        'Concentration',
                        'ConditionPerturbation']} })

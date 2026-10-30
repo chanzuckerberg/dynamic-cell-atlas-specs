@@ -382,9 +382,9 @@
         },
         "ConditionPerturbation": {
             "additionalProperties": false,
-            "description": "An environmental or physical condition applied as a perturbation: a diet, a temperature, or another physical treatment (e.g. irradiation, mechanical stress).",
+            "description": "The shape shared by the ``diet``, ``temperature`` and ``physical`` blocks: an environmental or physical condition applied as a perturbation, as an EFO term plus an optional magnitude.",
             "properties": {
-                "condition": {
+                "term": {
                     "$ref": "#/$defs/ConditionTerm",
                     "description": "The condition as an ``ontology_term_id`` + ``label`` pair; the id is an EFO CURIE, e.g. \"EFO:0001702\" (temperature). CELLxGENE reads ``diet`` from EFO:0002755, its descendants or EFO:0002756, and ``temperature`` from EFO:0001702. ``unavailable`` (with a descriptive ``label``) when EFO has no term for it, e.g. a laser ablation."
                 },
@@ -404,7 +404,7 @@
                 }
             },
             "required": [
-                "condition"
+                "term"
             ],
             "title": "ConditionPerturbation",
             "type": "object"
@@ -1129,7 +1129,13 @@
                     ],
                     "description": "Chemical identifiers \u2014 present when ``modality = compound``."
                 },
-                "condition": {
+                "description": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "diet": {
                     "anyOf": [
                         {
                             "$ref": "#/$defs/ConditionPerturbation"
@@ -1138,13 +1144,7 @@
                             "type": "null"
                         }
                     ],
-                    "description": "The condition applied \u2014 RECOMMENDED when ``modality`` is ``diet``, ``temperature`` or ``physical`` (validators warn when it is missing)."
-                },
-                "description": {
-                    "type": [
-                        "string",
-                        "null"
-                    ]
+                    "description": "The diet applied \u2014 RECOMMENDED when ``modality`` is ``diet`` (validators warn when it is missing)."
                 },
                 "genetic": {
                     "anyOf": [
@@ -1185,6 +1185,17 @@
                         "null"
                     ]
                 },
+                "physical": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ConditionPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The physical treatment (e.g. irradiation, laser ablation, mechanical stress) \u2014 RECOMMENDED when ``modality`` is ``physical`` (validators warn when it is missing)."
+                },
                 "protein": {
                     "anyOf": [
                         {
@@ -1195,6 +1206,17 @@
                         }
                     ],
                     "description": "The protein applied \u2014 RECOMMENDED when ``modality`` is ``protein`` (validators warn when it is missing)."
+                },
+                "temperature": {
+                    "anyOf": [
+                        {
+                            "$ref": "#/$defs/ConditionPerturbation"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ],
+                    "description": "The temperature treatment (e.g. a heat or cold shock) \u2014 RECOMMENDED when ``modality`` is ``temperature`` (validators warn when it is missing). Not the imaging temperature, which is ``AcquisitionMetadata.temperature_c``."
                 }
             },
             "required": [

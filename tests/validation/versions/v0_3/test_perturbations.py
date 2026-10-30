@@ -56,16 +56,14 @@ ZIKA = {
 }
 INSULIN = {"protein": {"uniprot_id": "uniprot:P01308", "gene_symbol": "INS"}}
 HEAT = {
-    "condition": {
-        "condition": {"ontology_term_id": "EFO:0001702", "label": "temperature"},
+    "temperature": {
+        "term": {"ontology_term_id": "EFO:0001702", "label": "temperature"},
         "value": 42.0,
         "unit": "degree Celsius",
     }
 }
 ABLATION = {
-    "condition": {
-        "condition": {"ontology_term_id": "unavailable", "label": "laser ablation"}
-    }
+    "physical": {"term": {"ontology_term_id": "unavailable", "label": "laser ablation"}}
 }
 
 VALID = {
@@ -117,7 +115,7 @@ INVALID = {
     ),
     "condition term outside EFO": _treatment(
         "temperature",
-        condition={"condition": {"ontology_term_id": "CHEBI:15377", "label": "water"}},
+        temperature={"term": {"ontology_term_id": "CHEBI:15377", "label": "water"}},
     ),
     "negative multiplicity of infection": _treatment(
         "biological",
