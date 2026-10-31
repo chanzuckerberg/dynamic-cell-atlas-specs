@@ -4,7 +4,8 @@ Builders for v0.3 source / projection store pairs, for the projection tests.
 Starts from the committed v0.2 plate fixture (zarr.json files only, a 3D plate
 with z=16 at level 0) and writes, under a temporary directory:
 
-* ``plate.ome.zarr``     — the source, upgraded to dca.version "0.3"
+* ``plate.ome.zarr``     — the source, upgraded to dca.version "0.3" (which adds the
+  required ``study.is_pii`` / ``study.is_phi``)
 * ``plate_mip.ome.zarr`` — its maximum intensity projection: z=1 at every
   level, z scale 1.0, ``dca.projection`` (uniform form) and the MIP processing step
 
@@ -47,10 +48,21 @@ def edit_field_attrs(
     write_json(p, group)
 
 
+def add_privacy_flags(dca: dict, is_pii: bool = False, is_phi: bool = False) -> None:
+    """Add the v0.3-required ``study.is_pii`` / ``study.is_phi`` to a v0.2 ``dca``
+    block in place, with provenance entries when the block carries a provenance map."""
+    dca["study"]["is_pii"] = is_pii
+    dca["study"]["is_phi"] = is_phi
+    if isinstance(dca.get("provenance"), dict):
+        for flag in ("is_pii", "is_phi"):
+            dca["provenance"][f"study.{flag}"] = {"source_kind": "human"}
+
+
 def _to_v03_source(store: Path, steps: list[str]) -> None:
     def upgrade(attrs: dict) -> None:
         attrs["dca"]["version"] = "0.3"
         attrs["dca"]["image_data"] = {"processing_variant": steps}
+        add_privacy_flags(attrs["dca"])
 
     edit_field_attrs(store, upgrade)
 
