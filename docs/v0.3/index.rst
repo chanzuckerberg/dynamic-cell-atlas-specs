@@ -47,8 +47,12 @@ Changes from v0.2
 * ``dca.version`` is ``"0.3"``.
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
   recommended step vocabulary, instead of a single string, and a new free-text
-  ``image_data.processing_description`` holds the full processing text. These are the
-  only changes to the experimental-metadata schema
+  ``image_data.processing_description`` holds the full processing text.
+* ``study.is_pii`` and ``study.is_phi`` (new, required): dataset-level booleans stating
+  whether the data contains personally identifiable or protected health information,
+  matching the Scientific Dataset Catalog's ``governance`` flags. See
+  :ref:`Privacy flags <v03-experimental-privacy>`. With the ``processing_variant``
+  change above, these are the only changes to the experimental-metadata schema
   (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
   cross-store projection checks and an opt-in ``--require-projection`` (see the

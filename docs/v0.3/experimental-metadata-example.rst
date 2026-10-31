@@ -51,6 +51,8 @@ are illustrative.
            "dataset_name": "example",
            "release_date": "2023-05-01",
            "license": "CC-BY-4.0",
+           "is_pii": false,
+           "is_phi": false,
            "experimenter": [
              {"first_name": "Jane", "last_name": "Doe", "institution": "Example Imaging Lab"},
              {"first_name": "John", "last_name": "Roe", "institution": "Example Imaging Lab"}
@@ -81,6 +83,8 @@ are illustrative.
            "study.dataset_name": {"source_kind": "human"},
            "study.release_date": {"source_kind": "human"},
            "study.license": {"source_kind": "human"},
+           "study.is_pii": {"source_kind": "human"},
+           "study.is_phi": {"source_kind": "human"},
            "study.experimenter": {"source_kind": "human"},
            "biosample.group_id": {"source_kind": "human"},
            "biosample.tissue_type": {"source_kind": "human"},

@@ -179,7 +179,8 @@ All experimental metadata lives in the Parquet and is mirrored into ``zarr.json`
   a value does not exist or apply, state it with a sentinel (see the sentinel definitions
   below) rather than dropping the field, so a missing value is always *stated*, never
   silently omitted or fabricated. Most required fields apply **unconditionally** (the
-  cross-modality term annotations, ``year_imaged``, ``imaging_method``); others are
+  cross-modality term annotations, ``year_imaged``, ``imaging_method``, ``is_pii`` /
+  ``is_phi``); others are
   **required only when a
   condition holds** and omitted otherwise (the perturbation fields when a dataset has
   perturbations, ``cell_line_name`` for ``tissue_type`` "cell line", ``cp_version`` for a
@@ -279,6 +280,16 @@ exhaustive, authoritative list.
      - ``license``
      - Required
      - schema.org (``sc:license``)
+   * - Study
+     - ``is_pii``
+     - Required (no sentinel)
+     - boolean; Scientific Dataset Catalog ``governance.is_pii``. See
+       :ref:`Privacy flags <v03-experimental-privacy>`
+   * - Study
+     - ``is_phi``
+     - Required (no sentinel)
+     - boolean; Scientific Dataset Catalog ``governance.is_phi``. See
+       :ref:`Privacy flags <v03-experimental-privacy>`
    * - Study
      - ``experimenter`` (name / email / institution)
      - Required
@@ -490,7 +501,9 @@ The sub-groups, and the standard each field draws on:
   CellPainting Gallery study fields (``Source``, ``DOI_to_Cite``, ``Year_Imaged``);
   people on OME ``Experimenter`` (name, email, institution); dataset-level
   ``dataset_name`` / ``license`` / ``related_publication`` / ``release_date`` on
-  **schema.org** (``name`` / ``license`` / ``citation`` / ``datePublished``).
+  **schema.org** (``name`` / ``license`` / ``citation`` / ``datePublished``); the
+  ``is_pii`` / ``is_phi`` privacy flags on the Scientific Dataset Catalog's
+  ``governance`` block (see :ref:`Privacy flags <v03-experimental-privacy>`).
 * ``study_component`` — two experiment-class descriptors, each an
   ``ontology_term_id`` + ``label`` pair: ``assay``
   (`EFO <https://www.ebi.ac.uk/ols4/ontologies/efo>`_: the assay / experiment class,
@@ -500,6 +513,67 @@ The sub-groups, and the standard each field draws on:
   experiment", FBbi "how was it imaged". Both are REQUIRED for every imaging dataset
   (``imaging_method`` uses ``unavailable`` with a free-text label only when no FBbi term
   fits; ``unknown`` and ``na`` are not permitted).
+
+.. _v03-experimental-privacy:
+
+Privacy flags
+~~~~~~~~~~~~~
+
+``study.is_pii`` and ``study.is_phi`` state whether the dataset contains personally
+identifiable information (PII) or protected health information (PHI). Both are REQUIRED
+booleans with the same names and meaning as the Scientific Dataset Catalog's required
+``governance.is_pii`` and ``governance.is_phi``, so the value decided at curation is the
+value the catalog records.
+
+* **Dataset-level.** The flags describe the dataset as a whole and MUST be identical in
+  every image group's ``study`` block. If any image group contains PII, ``is_pii`` is
+  ``true`` in all of them. The validator checks one image group at a time and does not
+  compare groups.
+* **No sentinel.** ``unknown`` and ``na`` are not accepted. "Not sure" is not ``false``:
+  the value is settled with the dataset's data steward before it is written.
+* **Independent.** PHI is narrower than PII, but the two are recorded separately and the
+  validator does not infer one from the other. A dataset can be either, both, or
+  neither.
+* **Scoped to the data subjects.** PII here means information about a person the data
+  were derived from or who appears in it. The study's own attribution fields
+  (``experimenter``, ``related_publication``) are published by design and do not set
+  ``is_pii``.
+* **Decided by a person.** The provenance ``source_kind`` SHOULD be ``human`` or
+  ``original_data``. An agent can propose a value, but whether data carries PII or PHI
+  is a governance decision rather than a fact extracted from a source page. The
+  validator does not check this.
+
+In imaging data, PII is most often found outside the biology: identifiers burned into
+the pixels or an overlay (a slide label, a scanner annotation), identifying features in
+the image itself (a face), and patient or donor identifiers embedded in sample, well, or
+file names.
+
+.. list-table:: Typical values
+   :header-rows: 1
+   :widths: 60 20 20
+
+   * - Dataset
+     - ``is_pii``
+     - ``is_phi``
+   * - Non-human organism
+     - ``false``
+     - ``false``
+   * - Human cell line identified only by its public Cellosaurus record (e.g. U2OS,
+       WTC-11)
+     - ``false``
+     - ``false``
+   * - Human material de-identified before it reached the dataset (e.g. HIPAA Safe
+       Harbor or Expert Determination), with no identifier in pixels, overlays, or names
+     - ``false``
+     - ``false``
+   * - Healthy volunteer donor named in sample or file names, with no clinical data in
+       the dataset
+     - ``true``
+     - ``false``
+   * - Patient-derived specimen labeled with an identifier plus its diagnosis,
+       treatment, or date of service
+     - ``true``
+     - ``true``
 
 Biosample and Specimen
 ----------------------

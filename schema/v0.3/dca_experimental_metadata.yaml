@@ -696,6 +696,42 @@ classes:
         required: true
         exact_mappings: [sc:license]
         close_mappings: [sdc:governance.license]
+      is_pii:
+        description: >-
+          Whether the dataset contains **personally identifiable information** about a
+          person the data were derived from or who appears in it: names, contact
+          details, dates of birth, precise locations, government or institutional IDs
+          (e.g. a medical record number), or any combination that could re-identify
+          a person. In imaging data this includes identifiers burned into pixels or
+          overlays (slide labels, scanner annotations), identifying features in the
+          image itself (a face), and identifiers embedded in sample, well, or file
+          names. ``true`` when any image group of the dataset contains it; the value
+          is a property of the dataset, so it is the same in every image group.
+          REQUIRED with no sentinel: "not sure" is not ``false``, so the value is
+          settled with the dataset's data steward before it is written. The study's
+          own attribution fields (``experimenter``, ``related_publication``) are
+          published by design and do not make a dataset PII. Same name, type, and
+          meaning as the Scientific Dataset Catalog's required ``governance.is_pii``,
+          so a DCA dataset registers in the catalog without re-deciding it.
+        range: boolean
+        required: true
+        exact_mappings: [sdc:governance.is_pii]
+      is_phi:
+        description: >-
+          Whether the dataset contains **protected health information**: clinical,
+          diagnostic, treatment, or payment data tied to an identifiable individual
+          (e.g. a patient-derived specimen labeled with an identifier plus its
+          diagnosis or date of service). Narrower than ``is_pii`` but with stricter
+          handling obligations, which is why it is a separate flag. The two are
+          independent: a dataset can be either, both, or neither, and the validator
+          does not infer one from the other. Data de-identified before it reached the
+          dataset (e.g. by HIPAA Safe Harbor or Expert Determination) is ``false``.
+          REQUIRED, dataset-level, and settled with the data steward like
+          ``is_pii``. Same name, type, and meaning as the Scientific Dataset
+          Catalog's required ``governance.is_phi``.
+        range: boolean
+        required: true
+        exact_mappings: [sdc:governance.is_phi]
       related_publication:
         range: Publication
         multivalued: true
