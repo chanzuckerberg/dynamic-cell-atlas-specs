@@ -2,10 +2,11 @@
 v0.3 ``ExperimentalMetadata`` validation.
 
 The v0.3 LinkML schema (schema/v0.3/dca_experimental_metadata.yaml) differs from
-v0.2 in one slot: ``ImageData.processing_variant`` is an ordered list of processing
-steps instead of a single string, with a recommended ``ProcessingStep`` vocabulary.
-Every other block is unchanged, so this module reuses the v0.2 rule classes and
-overrides only ``image_data``. If a later edit to the v0.3 schema touches another
+v0.2 in two blocks: ``ImageData.processing_variant`` is an ordered list of processing
+steps instead of a single string, with a recommended ``ProcessingStep`` vocabulary, and
+``Study`` gains the required ``is_pii`` / ``is_phi`` privacy flags. Every other block is
+unchanged, so this module reuses the v0.2 rule classes and overrides only
+``image_data`` and ``study``. If a later edit to the v0.3 schema touches another
 block, override that block here too; the drift test in
 tests/validation/versions/v0_3/test_experimental_metadata.py fails if the generated
 v0.3 models stop matching the v0.2 ones anywhere else.
@@ -24,12 +25,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     DCAExperimentalMetadataV0_2,
     _coverage_issues,
     _sentinel_label_issues,
+    conditional_study_errors,
     experimental_block_keys,
 )
 from dca_helpers.validation.versions.v0_3 import _generated_models
@@ -55,9 +57,23 @@ PROJECTION_STEP_BY_METHOD: dict[str, str] = {
 PROJECTION_STEPS: frozenset[str] = frozenset(PROJECTION_STEP_BY_METHOD.values())
 
 
-class DCAExperimentalMetadataV0_3(DCAExperimentalMetadataV0_2):
-    """v0.3 ``ExperimentalMetadata``: the v0.2 rules with the v0.3 ``ImageData``."""
+class _StudyV0_3(_generated_models.Study):  # type: ignore[misc, valid-type]
+    """v0.3 ``Study``: the generated model, which requires the privacy flags, with the
+    v0.2 conditional rules restated on it."""
 
+    @model_validator(mode="after")
+    def _require_conditional_study_fields(self):
+        errors = conditional_study_errors(self)
+        if errors:
+            raise ValueError("\n".join(errors))
+        return self
+
+
+class DCAExperimentalMetadataV0_3(DCAExperimentalMetadataV0_2):
+    """v0.3 ``ExperimentalMetadata``: the v0.2 rules with the v0.3 ``Study`` and
+    ``ImageData``."""
+
+    study: _StudyV0_3 = Field(default=...)
     image_data: Optional[_generated_models.ImageData] = Field(default=None)
 
 

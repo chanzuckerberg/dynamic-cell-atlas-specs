@@ -1,6 +1,7 @@
 """
 Unit tests for versions/v0_3/experimental_metadata.py: the processing_variant
-list rules, and the guard that keeps the v0.2-class reuse honest.
+list rules, the required study privacy flags, and the guard that keeps the
+v0.2-class reuse honest.
 """
 
 import json
@@ -14,6 +15,8 @@ from dca_helpers.validation.versions.v0_3.experimental_metadata import (
     validate_dca_experimental_metadata_v0_3,
 )
 
+from ...projection_fixtures import add_privacy_flags
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURE_FIELD = (
     REPO_ROOT
@@ -22,8 +25,15 @@ FIXTURE_FIELD = (
 PV_LOC = ("dca", "image_data", "processing_variant")
 
 
-def _dca(steps) -> dict:
+def _base_dca() -> dict:
+    """The v0.2 fixture's ``dca`` block with the v0.3-required privacy flags."""
     dca = json.loads(FIXTURE_FIELD.read_text())["attributes"]["dca"]
+    add_privacy_flags(dca)
+    return dca
+
+
+def _dca(steps) -> dict:
+    dca = _base_dca()
     dca["image_data"] = {"processing_variant": steps}
     dca["provenance"] = {
         **dca["provenance"],
@@ -39,8 +49,7 @@ def _at(issues, loc=PV_LOC):
 @pytest.mark.unit
 class TestProcessingVariantList:
     def test_fixture_without_image_data_is_clean(self):
-        dca = json.loads(FIXTURE_FIELD.read_text())["attributes"]["dca"]
-        assert validate_dca_experimental_metadata_v0_3(dca) == []
+        assert validate_dca_experimental_metadata_v0_3(_base_dca()) == []
 
     def test_ordered_list_of_known_steps_passes(self):
         steps = ["deconvolved", "registered", "maximum intensity projection"]
@@ -89,10 +98,56 @@ class TestProcessingVariantList:
 
 
 @pytest.mark.unit
-def test_v0_3_schema_differs_from_v0_2_only_in_image_data():
+class TestPrivacyFlags:
+    @pytest.mark.parametrize("flag", ["is_pii", "is_phi"])
+    def test_missing_flag_is_error(self, flag):
+        dca = _base_dca()
+        del dca["study"][flag]
+        del dca["provenance"][f"study.{flag}"]
+        issues = _at(
+            validate_dca_experimental_metadata_v0_3(dca), ("dca", "study", flag)
+        )
+        assert [i.severity for i in issues] == [Severity.ERROR]
+
+    @pytest.mark.parametrize("flag", ["is_pii", "is_phi"])
+    @pytest.mark.parametrize("value", ["unknown", "na", None])
+    def test_sentinel_or_null_is_error(self, flag, value):
+        dca = _base_dca()
+        dca["study"][flag] = value
+        issues = _at(
+            validate_dca_experimental_metadata_v0_3(dca), ("dca", "study", flag)
+        )
+        assert [i.severity for i in issues] == [Severity.ERROR]
+
+    @pytest.mark.parametrize(
+        "is_pii, is_phi", [(False, False), (True, False), (False, True), (True, True)]
+    )
+    def test_flags_are_independent(self, is_pii, is_phi):
+        dca = _base_dca()
+        add_privacy_flags(dca, is_pii=is_pii, is_phi=is_phi)
+        assert validate_dca_experimental_metadata_v0_3(dca) == []
+
+    def test_flag_without_provenance_is_warning(self):
+        dca = _base_dca()
+        del dca["provenance"]["study.is_pii"]
+        issues = validate_dca_experimental_metadata_v0_3(dca)
+        assert [i.severity for i in issues] == [Severity.WARNING]
+        assert "study.is_pii" in issues[0].message
+
+    def test_v0_2_study_rules_still_apply(self):
+        dca = _base_dca()
+        dca["study"]["study_type"] = ["Other"]
+        dca["study"].pop("study_type_other", None)
+        issues = _at(validate_dca_experimental_metadata_v0_3(dca), ("dca", "study"))
+        assert any("study_type_other" in i.message for i in issues)
+
+
+@pytest.mark.unit
+def test_v0_3_schema_differs_from_v0_2_only_in_overridden_blocks():
     """v0_3/experimental_metadata.py reuses the v0.2 rule classes for every block
-    but image_data. That is only correct while the two generated schemas agree
-    everywhere else; if this fails, override the changed block in the v0.3 module."""
+    but image_data and study. That is only correct while the two generated schemas
+    agree everywhere else; if this fails, override the changed block in the v0.3
+    module."""
 
     def load(version):
         path = (
@@ -102,7 +157,7 @@ def test_v0_3_schema_differs_from_v0_2_only_in_image_data():
         return json.loads(path.read_text())
 
     v2, v3 = load("0.2"), load("0.3")
-    changed = {"ImageData", "ProcessingStep"}
+    changed = {"ImageData", "ProcessingStep", "Study"}
     assert set(v3["$defs"]) - set(v2["$defs"]) == {"ProcessingStep"}
     for name in v2["$defs"]:
         if name not in changed:

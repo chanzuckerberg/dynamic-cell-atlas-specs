@@ -226,28 +226,38 @@ class _StudyV0_2(_StudyBase):  # type: ignore[misc, valid-type]
 
     @model_validator(mode="after")
     def _require_conditional_study_fields(self):
-        errors: list[str] = []
-
-        name = getattr(self, "dataset_name", None)
-        if isinstance(name, str) and _JUMP_CP_DATASET.match(name):
-            if not _is_populated(getattr(self, "cp_version", None)):
-                errors.append(
-                    "cp_version is required when dataset_name identifies a JUMP-CP "
-                    f"dataset (got dataset_name='{name}')"
-                )
-
-        types = {_enum_value(v) for v in getattr(self, "study_type", None) or ()}
-        if "Other" in types:
-            if not _is_populated(getattr(self, "study_type_other", None)):
-                errors.append(
-                    "study_type_other is required when study_type includes 'Other' "
-                    "(the OME Experiment.Type vocabulary did not adequately describe "
-                    "the study)"
-                )
-
+        errors = conditional_study_errors(self)
         if errors:
             raise ValueError("\n".join(errors))
         return self
+
+
+def conditional_study_errors(study: object) -> list[str]:
+    """The ``Study`` MUST-rule messages for ``study``, empty when it satisfies them.
+
+    Shared with later versions whose ``Study`` subclasses a different generated base
+    but keeps these two rules.
+    """
+    errors: list[str] = []
+
+    name = getattr(study, "dataset_name", None)
+    if isinstance(name, str) and _JUMP_CP_DATASET.match(name):
+        if not _is_populated(getattr(study, "cp_version", None)):
+            errors.append(
+                "cp_version is required when dataset_name identifies a JUMP-CP "
+                f"dataset (got dataset_name='{name}')"
+            )
+
+    types = {_enum_value(v) for v in getattr(study, "study_type", None) or ()}
+    if "Other" in types:
+        if not _is_populated(getattr(study, "study_type_other", None)):
+            errors.append(
+                "study_type_other is required when study_type includes 'Other' "
+                "(the OME Experiment.Type vocabulary did not adequately describe "
+                "the study)"
+            )
+
+    return errors
 
 
 class _BiosampleV0_2(_BiosampleBase):  # type: ignore[misc, valid-type]
