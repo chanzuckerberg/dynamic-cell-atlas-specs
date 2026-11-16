@@ -1,0 +1,104 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_YJ75"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "LINTERNA A549"
+      },
+      {
+       "type": "synonym",
+       "value": "LINTERNA-A549"
+      },
+      {
+       "type": "synonym",
+       "value": "TurboGFP A549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0023"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "A-549"
+      },
+      {
+       "type": "synonym",
+       "value": "A 549"
+      },
+      {
+       "type": "synonym",
+       "value": "A549"
+      },
+      {
+       "type": "synonym",
+       "value": "NCI-A549"
+      },
+      {
+       "type": "synonym",
+       "value": "A549/ATCC"
+      },
+      {
+       "type": "synonym",
+       "value": "A549 ATCC"
+      },
+      {
+       "type": "synonym",
+       "value": "A549ATCC"
+      },
+      {
+       "type": "synonym",
+       "value": "hA549"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5NW"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE A549-Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "A549-Cas9"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "sy:\"A549\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}

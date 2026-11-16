@@ -16,6 +16,10 @@ from dca_helpers.validation.versions.v0_2.models import (
     DCALabelStoreSpecV0_2,
     DCAStoreSpecV0_2,
 )
+from dca_helpers.validation.versions.v0_3.models import (
+    DCALabelStoreSpecV0_3,
+    DCAStoreSpecV0_3,
+)
 
 
 class UnsupportedSpecVersionError(ValueError):
@@ -32,11 +36,13 @@ class UnsupportedSpecVersionError(ValueError):
 _REGISTRY: dict[str, type[BaseModel]] = {
     "0.1": DCAStoreSpecV0_1,
     "0.2": DCAStoreSpecV0_2,
+    "0.3": DCAStoreSpecV0_3,
 }
 
 # Label image model registry.
 _LABEL_REGISTRY: dict[str, type[BaseModel]] = {
     "0.2": DCALabelStoreSpecV0_2,
+    "0.3": DCALabelStoreSpecV0_3,
 }
 
 

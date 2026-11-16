@@ -15,6 +15,10 @@ from dca_helpers.validation.versions.v0_2.models import (
     DCALabelStoreSpecV0_2,
     DCAStoreSpecV0_2,
 )
+from dca_helpers.validation.versions.v0_3.models import (
+    DCALabelStoreSpecV0_3,
+    DCAStoreSpecV0_3,
+)
 
 
 @pytest.mark.unit
@@ -25,9 +29,12 @@ class TestGetModel:
     def test_v0_2_returns_correct_class(self):
         assert get_model("0.2") is DCAStoreSpecV0_2
 
+    def test_v0_3_returns_correct_class(self):
+        assert get_model("0.3") is DCAStoreSpecV0_3
+
     def test_unsupported_version_raises(self):
         with pytest.raises(UnsupportedSpecVersionError):
-            get_model("0.3")
+            get_model("0.9")
 
     def test_unsupported_version_message_contains_version(self):
         with pytest.raises(UnsupportedSpecVersionError, match="0.9"):
@@ -35,7 +42,7 @@ class TestGetModel:
 
     def test_unsupported_version_message_lists_supported(self):
         with pytest.raises(UnsupportedSpecVersionError, match="0.1"):
-            get_model("0.3")
+            get_model("0.9")
 
     def test_empty_string_raises(self):
         with pytest.raises(UnsupportedSpecVersionError):
@@ -43,7 +50,7 @@ class TestGetModel:
 
     def test_unsupported_version_is_value_error(self):
         with pytest.raises(ValueError):
-            get_model("0.3")
+            get_model("0.9")
 
 
 @pytest.mark.unit
@@ -55,9 +62,12 @@ class TestGetLabelModel:
     def test_v0_2_returns_correct_class(self):
         assert get_label_model("0.2") is DCALabelStoreSpecV0_2
 
+    def test_v0_3_returns_correct_class(self):
+        assert get_label_model("0.3") is DCALabelStoreSpecV0_3
+
     def test_unsupported_version_raises(self):
         with pytest.raises(UnsupportedSpecVersionError):
-            get_label_model("0.3")
+            get_label_model("0.9")
 
     def test_error_message_contains_version(self):
         with pytest.raises(UnsupportedSpecVersionError, match="0.1"):

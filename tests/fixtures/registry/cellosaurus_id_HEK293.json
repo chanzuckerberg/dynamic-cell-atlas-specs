@@ -1,0 +1,124 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0045"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "Hek293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK/293"
+      },
+      {
+       "type": "synonym",
+       "value": "(HEK)293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK;293"
+      },
+      {
+       "type": "synonym",
+       "value": "293"
+      },
+      {
+       "type": "synonym",
+       "value": "293 HEK"
+      },
+      {
+       "type": "synonym",
+       "value": "293 Ad5"
+      },
+      {
+       "type": "synonym",
+       "value": "Graham 293"
+      },
+      {
+       "type": "synonym",
+       "value": "Graham-293"
+      },
+      {
+       "type": "synonym",
+       "value": "Human Embryonic Kidney 293"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_0296"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 482R"
+      },
+      {
+       "type": "synonym",
+       "value": "482R-HEK293"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK-293 482R"
+      },
+      {
+       "type": "synonym",
+       "value": "HEK 293 482R"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_5I97"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HEK293 AequoScreen"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "id:\"HEK293\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}

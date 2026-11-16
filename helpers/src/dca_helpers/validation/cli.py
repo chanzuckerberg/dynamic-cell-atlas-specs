@@ -191,6 +191,19 @@ def _print_json(run: ValidationRun, show_warnings: bool = False) -> None:
     help="Validate at most this many fields (after --field-offset) per selected well.",
 )
 @click.option(
+    "--require-projection",
+    "--require-mip",
+    "require_projection",
+    is_flag=True,
+    default=False,
+    help=(
+        "Require every 3D image store under PATH to have a projection store "
+        "(e.g. <name>_proj.ome.zarr) naming it as dca.projection.source_store. "
+        "Off by default: the spec does not require projections. Needs "
+        "--spec-version 0.3 or later, and PATH must contain both stores."
+    ),
+)
+@click.option(
     "--list-wells",
     is_flag=True,
     default=False,
@@ -218,6 +231,7 @@ def main(
     wells: str | None,
     field_offset: int,
     field_limit: int | None,
+    require_projection: bool,
     list_wells: bool,
     snapshot_id: str | None,
 ) -> None:
@@ -276,6 +290,7 @@ def main(
             field_offset=field_offset,
             field_limit=field_limit,
             **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
+            require_projection=require_projection,
         )
     except ValueError as exc:
         raise click.UsageError(str(exc)) from exc

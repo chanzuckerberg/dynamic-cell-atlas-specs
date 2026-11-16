@@ -39,6 +39,25 @@ class PlateSubsetInfo:
 
 
 @dataclass
+class ImageFacts:
+    """Level-0 facts about one validated image group, kept for cross-store checks.
+
+    The projection pairing pass (validation/pairing.py) compares a projection with
+    its source from these, so it needs no second read of either store. Not part of
+    the report: reporter._NODE_RESULT_EXCLUDED_FIELDS drops it.
+    """
+
+    axes: tuple[str, ...]  # lowercased
+    level0_shape: tuple[int, ...]
+    level0_dtype: str
+    level0_scale: dict[str, "float | None"]  # by lowercased axis name
+    projection: "dict | None"  # raw dca.projection, when present
+    channel_names: tuple[str, ...] = ()  # dca.channels[].name, in c order
+    processing_variant: "tuple[str, ...] | None" = None  # dca.image_data steps
+    processing_description: "str | None" = None  # dca.image_data free text
+
+
+@dataclass
 class ZarrNodeValidationResult:
     """Aggregated validation outcome for one Zarr store."""
 
@@ -46,7 +65,8 @@ class ZarrNodeValidationResult:
     spec_version: str | None
     passed: bool
     parent_path: str | None = (
-        None  # plate root path for HCS field results; None for standalone images
+        None  # plate root for HCS field results, image/field path for label results;
+        # None for standalone images
     )
     ngff_version: str | None = (
         None  # highest OME-NGFF version that passed ("0.5", "0.4", or None)
@@ -59,13 +79,16 @@ class ZarrNodeValidationResult:
     skipped: bool = False  # store was intentionally not validated (e.g., GEFF)
     subset_coverage: PlateSubsetInfo | None = None  # set on the plate-root result
     # of a partial (well/field-subset) HCS plate run; None otherwise
+    image_facts: ImageFacts | None = None  # set on image results; internal, for
+    # cross-store checks only (not serialized into reports)
 
     # Versioned metadata-only evidence used by cross-chunk HCS rollup.
     # JSON keeps arbitrary perturbation metadata lossless in Parquet.
     hcs_facts: str | None = None
 
     # For HCS plates, one result is produced per field image (parent_path = plate root).
-    # For standalone images, parent_path is None.
+    # Label groups under an image or field get their own result (parent_path = that
+    # image/field path). For standalone images, parent_path is None.
     # Sum across results to get totals:
     #   nodes validated            = len(results)
     #   level zarr.json validated  = sum(r.multiscale_level_count or 0 for r in results)

@@ -20,6 +20,7 @@ flowchart LR
   subgraph pydantic["Pydantic models"]
     v01["DCA v0.1"]
     v02["DCA v0.2"]
+    v03["DCA v0.3"]
   end
 ```
 
@@ -41,6 +42,10 @@ Options:
   --check-ontology         Resolve every ontology_term_id against its source
                            registry and check its label. Makes network
                            requests; off by default.
+  --require-projection     Require every 3D image store under PATH to have a
+  (alias --require-mip)    projection store naming it as
+                           dca.projection.source_store. Needs --spec-version
+                           0.3+; off by default.
 ```
 
 `--spec-version` defaults to `CURRENT_SPEC_VERSION` — the installed `dca_helpers` package version truncated to `major.minor` (e.g. `0.2`) — not a hardcoded string; `--help` renders that concrete value, not the symbolic name.
@@ -108,6 +113,7 @@ for r in run:   # ValidationRun is iterable over ZarrNodeValidationResult
 helpers/src/dca_helpers/validation/
 ├── cli.py        # dca-validate entry point
 ├── discovery.py  # find Zarr store roots (local os.walk; S3 via obstore glob/walk)
+├── pairing.py    # cross-store projection checks (v0.3+), incl. --require-projection
 ├── registry.py   # spec version → DCAStoreSpec / DCALabelStoreSpec model class
 ├── result.py     # Issue, Severity, ZarrNodeValidationResult, ValidationSummary, ValidationRun
 ├── runner.py     # validate() — discover + concurrently validate stores under a path
@@ -115,10 +121,11 @@ helpers/src/dca_helpers/validation/
 ├── zarr_node.py  # ZarrNodeType enum; classify_group()
 └── versions/
     ├── v0_1/models.py                        # DCA v0.1 rules
-    └── v0_2/{models.py,experimental_metadata.py}  # DCA v0.2 rules + LinkML-derived metadata
+    ├── v0_2/{models.py,experimental_metadata.py}  # DCA v0.2 rules + LinkML-derived metadata
+    └── v0_3/{models.py,experimental_metadata.py}  # v0.2 + projections; list processing_variant
 ```
 
-Adding a spec version means adding `versions/vX_Y/models.py` and one registry entry — nothing else changes.
+Adding a spec version means adding `versions/vX_Y/models.py` and one registry entry. A version that adds per-store checks outside the Pydantic models (v0.3's projection rules) also registers them in `validator.py`, and a version that adds cross-store checks wires them into `runner.validate()` — both keyed on a version set, so earlier versions are unaffected.
 
 ---
 
@@ -160,15 +167,17 @@ plate.ome.zarr/
 | Structure | NGFF validation | DCA validation |
 |---|---|---|
 | Single image | Full | Full |
-| Image + labels | Image root only | Image pyramid only — nested `labels/<name>/` image groups are never traversed by `validate_zarr_node`, regardless of whether the store root was found via discovery or passed directly; they're validated only if that label path itself is passed to `validate()` |
+| Image + labels | Image root, plus `labels/` loaded by `open_ome_zarr` | Image pyramid, plus each label declared in `ome.labels` (`IMAGE_LABEL` rows with `parent_path` = the image) |
 | HCS plate | Structural checks via raw attrs | Plate structure + per-field image |
-| HCS plate + labels | Structural checks via raw attrs | Plate structure + per-field image — field label groups not validated |
+| HCS plate + labels | Structural checks via raw attrs | Plate structure + per-field image, plus each selected field's labels (`parent_path` = the field) |
 
-Two distinct gaps affect label arrays:
+Label groups are reached from `validate_zarr_node`, not from discovery: discovery still returns only outermost store roots, so no label store is validated twice. `_validate_labels_of` reads `<image>/labels`, validates each name in `ome.labels` once, and never looks for a label's own `labels/`. Details:
 
-- **Discovery never descends into sub-groups.** `discovery.py` stops at the outermost `zarr.json` (`dirnames.clear()` locally; an ancestor filter on S3), so `labels/segmentation/` is invisible to `discover_zarr_stores` unless the caller points at it directly.
-- **No v0.1 label model.** Pointing directly at a label group correctly classifies it as `IMAGE_LABEL`, but v0.1 has no registered label model — `get_label_model` raises `UnsupportedSpecVersionError`, caught by the caller to produce `passed=True` with a WARNING instead of running the wrong (image) model. v0.2 registers `DCALabelStoreSpecV0_2`, so v0.2 label groups are fully validated when addressed directly.
-
+- Each label listed in `ome.labels` is checked against the same rules as `ome-zarr-models` (missing group, non-integer dtype, level-count mismatch). These defects fail the parent with `ngff_validation` and skip its DCA checks, because ome-zarr-models loads `labels/` when it opens the image. The label rows still carry the DCA findings.
+- DCA adds three checks. A listed group without `ome.image-label` is an error. An empty name, a name with a path separator, or `..` is an error. Groups under `labels/` that `ome.labels` does not list give one WARNING row (`LABELS_LIST`). Duplicate names are validated once. A missing `labels/` group is not an error.
+- `--wells`, `--field-offset` and `--field-limit` apply to labels: only the labels of selected fields are validated.
+- A store whose only defect is in a label has a passing root row, as with HCS fields. Query child rows by `parent_path`.
+- **No v0.1 label model.** v0.1 has no registered label model — `get_label_model` raises `UnsupportedSpecVersionError`, which becomes `passed=True` with a WARNING per label. v0.2 registers `DCALabelStoreSpecV0_2`.
 ---
 
 ## Validation Pipeline
@@ -191,7 +200,7 @@ Five structurally distinct `zarr.json` schemas. `IMAGE` and `IMAGE_LABEL` share 
 | `IMAGE` | `ome.multiscales` | `_build_node_dict` → registered `DCAStoreSpec.model_validate`, with raw `dca` attrs injected |
 | `IMAGE_LABEL` | `ome.multiscales` + `ome.image-label` | Same extraction, `dca=None`; uses `get_label_model(spec_version)` if registered (v0.2), else `passed=True` + WARNING (v0.1) |
 | `HCS_PLATE` | `ome.plate` | Reached via the Step 3 fast path — never via `classify_group` |
-| `LABELS_LIST` | `ome.labels` | Container listing label names, no arrays — `passed=True` immediately |
+| `LABELS_LIST` | `ome.labels` | Container listing label names, no arrays — the container passes, and each declared label is validated as `IMAGE_LABEL` |
 | `GEFF` | `geff` (root, no `ome` key) | Reached via the Step 2 fast path — `skipped=True`, not validated |
 
 ### DCA checks by node type (v0.1)
@@ -226,7 +235,7 @@ The plate root's `ome.plate` is a manifest of wells/rows/columns/acquisitions �
 - **Local**: `os.walk`, calling `dirnames.clear()` once a root is found so it never descends into that store's sub-groups (scale-level arrays, `labels/`, wells).
 - **S3**: `glob` (paginated flat prefix scan, filtered to outermost roots) or `walk` (BFS via `list_with_delimiter`, pruning descent at each root) — see `--strategy` above.
 
-Consequence: once `validate_zarr_node` receives a store root, only scale-level arrays and (for HCS) wells/fields are visited. A `labels/` container is classified `LABELS_LIST` and stops — the label image groups nested under it (`labels/nuclei/zarr.json`, etc.) are never reached unless that path is passed to `validate` directly.
+Consequence: discovery does not find label groups. `validate_zarr_node` validates them from the store root it receives (see Current coverage above).
 
 ---
 
@@ -250,9 +259,9 @@ New spec version → new `versions/vX_Y/models.py` + one entry in each dict. Exi
 
 `versions/v0_1/models.py` — `model_config = ConfigDict(extra="allow")` throughout, so unrecognized future keys don't fail older models. MUST violations raise `ValueError` unprefixed; SHOULD violations prefix `[SHOULD]`, converted to `Severity.WARNING` by `_convert_errors`.
 
-**`DCAScaleLevelSpec`** (one Zarr array): `path, dtype, shape, chunk_shape, shard_shape, codec_id, codec_level`. Enforces the array-level rows of the table above via `field_validator("codec_id")` and `model_validator`s `check_chunk_size`, `check_chunk_shape_recommendations`, `check_shard_size`, `check_compression_recommendation`, `check_dtype_recommendation`.
+**`DCAScaleLevelSpec`** (one Zarr array): `path, dtype, shape, chunk_shape, shard_shape, codec_id, codec_level`. Enforces the array-level rows of the table above via `field_validator("codec_id")` and one `model_validator`, `check_array_rules`, which collects the messages from the chunk-size, channel-chunk, shard-size, compression and dtype rules and raises once.
 
-> **Validator ordering caveat**: Pydantic v2 runs `mode="after"` validators in sequence and stops at the first raise. A SHOULD warning from an earlier validator (e.g. `check_chunk_size`) therefore suppresses any later one (e.g. `check_dtype_recommendation`) for that model instance — issues surface one at a time across repeated runs as earlier ones are fixed. This applies throughout v0.1 and v0.2.
+> **Validator ordering caveat**: Pydantic v2 stops a model's `mode="after"` validator chain at the first raise. The level spec and the v0.2 store models therefore use one collecting validator each (`check_array_rules`, `check_store_rules`), so the rules in that chain never hide each other. The v0.1 store has a single after-validator, `check_downsampling_factors`. Two gaps remain. A failed field-level validator (for example `axes`, a missing `dca`, or the v0.1 level count) skips the model's after-validators. A failed nested model (for example a level with a chunk-size SHOULD, a bad `dimension_names`, or a channel missing a required field) skips the parent's after-validators. In both cases the store-level rules do not run. This applies throughout v0.1 and v0.2.
 
 **`DCAStoreSpecV0_1`** (root model, entry point for `model_validate()`): `spec_version, axes, multiscale_level_count, levels`. Enforces the group-level rows via `axes_must_be_tczyx`, `must_have_minimum_scales`, `check_downsampling_factors`.
 
@@ -274,14 +283,15 @@ Adds channel metadata and `dca`-block validation; replaces the minimum-scale-cou
 | Level-0 `t` scale is 1 when sampling is `variable` | MUST | new |
 | `dca` key present | MUST | new |
 | Channel count matches C axis size | SHOULD | new |
+| `normalization_statistics[*].timepoint_statistics`, when present, has keys exactly `"0"` to `"T-1"` as strings (T read from the level-0 shape) | MUST | new |
 
 **`DCAGroupMetadataV0_2`** (the `dca` root object): `version: Literal["0.2"], url, channels: list[DCAChannelMetadataV0_2], normalization_statistics`. Channel `index` values must be unique. Each channel carries `channel_type` (SHOULD be in `{fluorescence, labelfree, predicted}`, and SHOULD have `biological_annotation` when fluorescence/predicted) and an optional `biological_annotation.marker_type` (SHOULD be in a fixed vocabulary).
 
-**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes). `normalization_statistics.timepoint_statistics` keys are not checked for covering all T timepoints — partial coverage passes silently.
+**Known gaps**: `dca.url` is required but its format is never checked (spec says it MUST point to the GitHub spec repo; any string passes).
 
 **Experimental metadata** (`dca.study`/`dca.biosample`/`dca.provenance`/etc.) is validated separately by `versions/v0_2/experimental_metadata.py` against a LinkML-generated model, enforcing conditional rules (e.g. `source_kind: agent ⇒ citation` required) that `gen-pydantic` records but doesn't itself enforce, plus a provenance-coverage check with no LinkML equivalent. See that module's docstring for why each piece is structured the way it is — it's a self-contained sub-design, not part of the core array/channel pipeline described here.
 
-**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`), subject to the same validator-ordering caveat above.
+**`DCALabelStoreSpecV0_2`** — standalone root model for `IMAGE_LABEL` nodes. No `dca` field (label groups carry no channel metadata); otherwise identical MUST/SHOULD rules to `DCAStoreSpecV0_2`. Its `DCALabelScaleLevelSpecV0_2` overrides only the dtype recommendation, through the `_dtype_messages` hook: SHOULD warn unless dtype is `uint32` (vs. v0.1's `{uint8, uint16, uint32}`). The validator-ordering caveat above applies.
 
 ---
 
@@ -335,6 +345,34 @@ class ValidationRun:
 ```
 
 `passed` is `True` iff `issues` has no `ERROR`. Warnings never flip it.
+
+## Pydantic Models — v0.3
+
+v0.3 inherits every v0.2 image and label rule unchanged and adds projections (`docs/v0.3/projections.rst`: maximum, mean, sum or single-plane, uniform or per channel, recording the planes actually used) and a list-valued `processing_variant`.
+
+**Per image group** (`versions/v0_3/models.py`):
+
+| Rule | Severity |
+|---|---|
+| `dca.version == "0.3"` | MUST |
+| `dca.projection`: exactly one of `method` (uniform form) and `channels` (per-channel form); methods in `max` / `mean` / `sum` / `slice`. `source_store` is required only when the 3D source is in the DCA, which the cross-store pass checks | MUST |
+| Plane ranges (both forms): `z_start`/`z_end` together, absolute and half-open, `0 <= z_start < z_end <= z_dim_source`; `z_dim_source` given when any range is; no `z_step` without a range; `slice` selects exactly one plane | MUST |
+| Per-channel form: every key is one of the image's `dca.channels` names (unlisted channels were not projected); per-timepoint `z_start`/`z_end` lists have one entry per level-0 timepoint | MUST |
+| `focus` (optional provenance): `z` for `per: fov`, `z_per_t` for `per: timepoint` (one entry per level-0 timepoint); `null` where no in-focus plane was found; given planes below `z_dim_source` | MUST |
+| `dca.projection` present ⇒ `processing_variant` lists exactly the projection steps of the methods used | MUST |
+| A projection step listed without `dca.projection` (fine for an image projected before deposit; an error across stores when its 3D source is in the run) | SHOULD |
+| A projection has z of size 1 at every level | MUST |
+| `z_fraction` agrees with `(z_end - z_start) / z_dim_source` (±2 planes) | SHOULD |
+| With `z_step > 1`, `z_end` is the last plane used + 1 (any value up to the last plane + `z_step` selects the same planes) | SHOULD |
+| No top-level `mip` attribute (the v0.2-era placement) | MUST |
+
+The relational rules are a standalone function, `check_projection_v0_3`, called from `validator._run_dca_validation`, rather than more `mode="after"` validators on `DCAStoreSpecV0_3`: pydantic stops a model's after-validators at the first raise, so an inherited v0.2 SHOULD would otherwise skip them.
+
+**Experimental metadata** (`versions/v0_3/experimental_metadata.py`): the v0.3 LinkML schema differs from v0.2 only in `ImageData.processing_variant` (a non-empty list) and the new `ProcessingStep` vocabulary, so the module reuses the v0.2 rule classes and overrides only `image_data`. A test fails if the generated v0.3 schema ever differs from v0.2 anywhere else. Added rules: `raw` alone (MUST); items in `ProcessingStep` (SHOULD).
+
+**Across stores** (`pairing.py`, run once by `runner.validate()` after every store is validated): a store named after a 3D sibling in the run (`<name>_proj.ome.zarr` / `<name>_mip.ome.zarr` next to `<name>.ome.zarr`, or the same with `.zarr`, in either combination of extensions) is its projection and must carry `dca.projection` with `source_store` on every image group. A projection that names no source and has no such sibling was projected before deposit, and the rest is skipped. Otherwise, each projection's `source_store` resolves to a store (a bare name is a sibling; a URL or absolute path is used as given, falling back to a same-named sibling in the run for local mirrors); the projection mirrors the source's image groups; and per image group the t/y/x sizes and t/y/x scales match the source's level 0, `z_dim_source` matches its z, `focus` planes lie within its z (which also covers a block without `z_dim_source`), the uniform form keeps every source channel in order, each per-channel `source_channel` (default: the output name) and `focus.channel` is a source channel, the dtype equals the source's when every method is `max`/`slice` (otherwise the source's or a float type), `processing_variant` starts with the source's steps followed only by projection steps, and `processing_description` equals the source's (absent when the source has none). The store name should insert `_proj` before its extension (`.ome.zarr` or `.zarr`; `_mip` is accepted when every channel uses `max`). A missing source is an error; a source that exists but is not part of the run is a warning, since the comparison needs both stores in one run. The comparison reads `ImageFacts` recorded on each result during validation, so it costs no extra I/O; `ImageFacts` is excluded from reports.
+
+**`--require-projection`** (alias `--require-mip`; opt-in, since the spec does not require projections): every 3D image store in the run that is not itself a projection must be named as the `source_store` of some projection in the run.
 
 ---
 

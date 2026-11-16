@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Literal
 
+import obstore.exceptions as _obs_exc
 from rich.live import Live
 
 from dca_helpers import CURRENT_SPEC_VERSION, __version__
@@ -31,6 +32,7 @@ from dca_helpers.validation.discovery import (
     is_zarr_store,
     open_zarr_group,
 )
+from dca_helpers.validation.pairing import check_projection_pairs
 from dca_helpers.validation.progress_tree import _TreeDisplay
 from dca_helpers.validation.registry import get_model
 from dca_helpers.validation.result import (
@@ -39,6 +41,7 @@ from dca_helpers.validation.result import (
     ZarrNodeValidationResult,
 )
 from dca_helpers.validation.validator import (
+    PROJECTION_SPEC_VERSIONS,
     declared_well_paths,
     is_hcs_plate,
     ome_attrs_of,
@@ -74,6 +77,7 @@ def validate(
     field_offset: int = 0,
     field_limit: "int | None" = None,
     snapshot_id: str | None = None,
+    require_projection: bool = False,
 ) -> ValidationRun:
     """
     Validate Zarr stores at or under `path`.
@@ -100,6 +104,10 @@ def validate(
         (raises ValueError otherwise — subsetting a multi-store discovery
         root is ambiguous) and is forwarded to `validate_zarr_node`, which
         errors if the resolved store isn't an HCS plate.
+    require_projection : when True, every 3D image store in the run must have a
+        projection store in the run naming it as dca.projection.source_store
+        (see validation/pairing.py). Opt-in because the spec does not require
+        projections. Needs a spec version that defines dca.projection (0.3+).
 
     Returns
     -------
@@ -108,6 +116,11 @@ def validate(
     if snapshot_id is not None and not snapshot_id.strip():
         raise ValueError("snapshot_id must be nonempty when supplied")
     ModelClass = get_model(spec_version)
+    if require_projection and spec_version not in PROJECTION_SPEC_VERSIONS:
+        raise ValueError(
+            f"require_projection needs a spec version that defines dca.projection "
+            f"({sorted(PROJECTION_SPEC_VERSIONS)}); got {spec_version!r}"
+        )
     path_is_store = is_zarr_store(path)
 
     has_subset_flags = wells is not None or field_offset or field_limit is not None
@@ -152,6 +165,11 @@ def validate(
         )
     )
 
+    # Cross-store projection checks need every store's results, so they run once
+    # here rather than inside validate_zarr_node.
+    if spec_version in PROJECTION_SPEC_VERSIONS:
+        check_projection_pairs(results, require_projection=require_projection)
+
     duration = time.monotonic() - t0
     summary = ValidationSummary.from_results(
         results,
@@ -188,8 +206,9 @@ def list_plate_wells(path: str) -> list[tuple[str, int]]:
     on plate-declaration order, so executor.map below is used purely for the
     parallelism speedup, not to preserve any particular order.
 
-    Raises ValueError if `path` doesn't resolve to a single store, or if that
-    store isn't an HCS plate.
+    Raises ValueError if `path` doesn't resolve to a single store, if that
+    store isn't an HCS plate, or if opening a well fails with an S3 access
+    error (network/throttling/auth).
     """
     if not is_zarr_store(path):
         raise ValueError(f"{path!r} does not point directly at a single Zarr store")
@@ -212,6 +231,11 @@ def list_plate_wells(path: str) -> list[tuple[str, int]]:
     def _count_one(well_path: str) -> "tuple[str, int] | None":
         try:
             well_group = open_zarr_group(f"{node_path}/{well_path}")
+        except _obs_exc.BaseError as exc:
+            raise ValueError(
+                f"S3 access error (network/throttling/auth) opening well "
+                f"{well_path!r} under {path!r}: {exc}"
+            ) from exc
         except Exception as exc:
             # A dropped well silently understates the listing's total field
             # count — since --list-wells exists to plan a chunking scheme,

@@ -205,6 +205,35 @@ class TestListPlateWellsUnit:
         assert wells == [("A/1", 1)]
         assert "B/2" in caplog.text
 
+    def test_s3_error_opening_well_becomes_value_error(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        import obstore.exceptions as obs_exc
+
+        from dca_helpers.validation.runner import list_plate_wells
+
+        plate_mock = MagicMock()
+        plate_mock.attrs = {
+            "ome": {
+                "plate": {"wells": [{"path": "A/1"}, {"path": "B/2"}]},
+                "version": "0.5",
+            }
+        }
+        well_mock = MagicMock()
+        well_mock.attrs = {"ome": {"well": {"images": [{"path": "0"}]}}}
+
+        def _open(path, *a, **kw):
+            if path == "/fake/plate/B/2":
+                raise obs_exc.GenericError("slow down")
+            return well_mock if path == "/fake/plate/A/1" else plate_mock
+
+        monkeypatch.setattr(
+            "dca_helpers.validation.runner.is_zarr_store", lambda p: True
+        )
+        monkeypatch.setattr("dca_helpers.validation.discovery.zarr.open_group", _open)
+        with pytest.raises(ValueError, match=r"S3 access error.*B/2"):
+            list_plate_wells("/fake/plate")
+
     def test_plate_root_open_failure_becomes_value_error(self, monkeypatch):
         # An open failure on the plate root itself (e.g. S3/network/auth
         # error) must surface as ValueError — the CLI's --list-wells branch

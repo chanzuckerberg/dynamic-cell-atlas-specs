@@ -1,0 +1,212 @@
+{
+ "body": {
+  "Cellosaurus": {
+   "cell-line-list": [
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_F5Q7"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "EDITGENE HeLa-Cas9"
+      },
+      {
+       "type": "synonym",
+       "value": "HeLa-Cas9"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE39"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-527"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE40"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-528"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE41"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-529"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE42"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-530"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE43"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-531"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE44"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-532"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE45"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-533"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE46"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-534"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE47"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-535"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE48"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-536"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_XE49"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa-Cas9-537"
+      }
+     ]
+    },
+    {
+     "accession-list": [
+      {
+       "type": "primary",
+       "value": "CVCL_C8PX"
+      }
+     ],
+     "name-list": [
+      {
+       "type": "identifier",
+       "value": "HeLa/Cas9 AAVS1"
+      },
+      {
+       "type": "synonym",
+       "value": "HeLa-Cas9 AAVS1"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "request": {
+  "params": {
+   "fld": [
+    "ac",
+    "id",
+    "sy"
+   ],
+   "format": "json",
+   "q": "id:\"HeLa Cas9\"",
+   "rows": 100
+  },
+  "url": "https://api.cellosaurus.org/search/cell-line"
+ },
+ "status_code": 200
+}

@@ -211,7 +211,7 @@
         },
         "timepoint_statistics": {
           "type": "object",
-          "description": "Per-timepoint statistics keyed by zero-based timepoint index.",
+          "description": "Per-timepoint statistics keyed by zero-based timepoint index. If present, the keys MUST be exactly \"0\" to \"T-1\", where T is the number of timepoints in the dataset. This dataset-dependent rule cannot be expressed in JSON Schema and is enforced by the validator.",
           "patternProperties": {
             "^[0-9]+$": {
               "$ref": "#/$defs/IntensityStatistics"

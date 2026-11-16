@@ -113,6 +113,23 @@ class TestInvalidImages:
         assert run.summary.stores_failed > 0
         assert any("not permitted" in i.message for i in _all_issues(run))
 
+    def test_chunk_warning_does_not_hide_shard_error(self):
+        run = validate(
+            str(FIXTURES / "v0_1/invalid_chunk_warning_with_shard_error.ome.zarr"),
+            spec_version="0.1",
+            show_progress=False,
+        )
+        issues = _all_issues(run)
+        assert run.summary.stores_failed == 1
+        assert len(issues) == 2
+        assert any(
+            i.severity == Severity.WARNING and "recommended 1 MB" in i.message
+            for i in issues
+        )
+        assert any(
+            i.severity == Severity.ERROR and "shard size" in i.message for i in issues
+        )
+
 
 @pytest.mark.functional
 class TestValidStoresV02:
@@ -171,6 +188,24 @@ class TestInvalidStoresV02:
         )
         assert run.summary.stores_failed > 0
         assert any("spatial dimensions" in i.message for i in _all_issues(run))
+
+    def test_no_coarse_level_also_reports_downsampling_warnings(self):
+        run = validate(
+            str(FIXTURES / "v0_2/invalid_no_coarse_level.ome.zarr"),
+            spec_version="0.2",
+            show_progress=False,
+        )
+        issues = _all_issues(run)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        downsampling = [
+            i
+            for i in issues
+            if i.severity == Severity.WARNING and "downsampling factor" in i.message
+        ]
+        assert run.summary.stores_failed == 1
+        assert len(errors) == 1
+        assert "spatial dimensions" in errors[0].message
+        assert len(downsampling) == 2
 
 
 @pytest.mark.functional

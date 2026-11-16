@@ -1,7 +1,7 @@
 # Regenerate the artifacts derived from the LinkML source of truth.
 #
-# The LinkML schema (schema/v0.2/dca_experimental_metadata.yaml) is the single
-# source of truth. Both the JSON Schema and the Pydantic models are generated
+# Each version's LinkML schema (schema/v<X.Y>/dca_experimental_metadata.yaml) is the
+# single source of truth for that version. Both the JSON Schema and the Pydantic models are generated
 # from it and committed; nothing is hand-edited. CI re-runs this and fails if
 # the committed artifacts drift from the schema (see
 # tests/validation/test_generated_artifacts.py).
@@ -13,11 +13,9 @@
 # artifact, not on the runtime path. linkml is a dev-only tool, not a runtime
 # dependency of dca_helpers.
 #
-# Commands mirror docs/v0.2/experimental-metadata.rst § Validation.
+# Commands mirror docs/v0.3/experimental-metadata.rst § Validation.
 
-SCHEMA       := schema/v0.2/dca_experimental_metadata.yaml
-JSON_OUT     := schema/v0.2/generated/dca_experimental_metadata.schema.json
-PYDANTIC_OUT := helpers/src/dca_helpers/validation/versions/v0_2/_generated_models.py
+VERSIONS := 0.2 0.3
 
 # Always regenerate: file-mtime prerequisites are unreliable here because git
 # operations (checkout, rebase) can leave the YAML older than the artifacts,
@@ -25,5 +23,9 @@ PYDANTIC_OUT := helpers/src/dca_helpers/validation/versions/v0_2/_generated_mode
 # the source of truth for staleness in CI.
 .PHONY: schema
 schema:
-	gen-json-schema --no-metadata $(SCHEMA) > $(JSON_OUT)
-	gen-pydantic $(SCHEMA) > $(PYDANTIC_OUT)
+	@for v in $(VERSIONS); do \
+	  vu=$$(echo $$v | tr . _); \
+	  echo "schema v$$v"; \
+	  gen-json-schema --no-metadata schema/v$$v/dca_experimental_metadata.yaml > schema/v$$v/generated/dca_experimental_metadata.schema.json || exit 1; \
+	  gen-pydantic schema/v$$v/dca_experimental_metadata.yaml > helpers/src/dca_helpers/validation/versions/v$$vu/_generated_models.py || exit 1; \
+	done

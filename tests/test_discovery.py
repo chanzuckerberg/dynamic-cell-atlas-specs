@@ -113,7 +113,7 @@ class TestDiscoverZarrStoresS3:
     def test_glob_strategy(self):
         chunks = [[{**_OBJ, "path": "prefix/plate.ome.zarr/zarr.json"}]]
         with (
-            patch("dca_helpers.validation.discovery.S3Store"),
+            patch("dca_helpers.validation.discovery._s3_bucket_store"),
             patch(
                 "dca_helpers.validation.discovery.obstore.list",
                 return_value=iter(chunks),
@@ -133,7 +133,7 @@ class TestDiscoverZarrStoresS3:
             },
         ]
         with (
-            patch("dca_helpers.validation.discovery.S3Store"),
+            patch("dca_helpers.validation.discovery._s3_bucket_store"),
             patch(
                 "dca_helpers.validation.discovery.obstore.list_with_delimiter",
                 side_effect=side_effects,
@@ -152,7 +152,7 @@ class TestDiscoverZarrStoresS3:
             ]
         ]
         with (
-            patch("dca_helpers.validation.discovery.S3Store"),
+            patch("dca_helpers.validation.discovery._s3_bucket_store"),
             patch(
                 "dca_helpers.validation.discovery.obstore.list",
                 return_value=iter(chunks),

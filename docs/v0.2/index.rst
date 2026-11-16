@@ -1,5 +1,5 @@
-🚧 Version 0.2 Specification - WIP
-====================================
+Version 0.2 Specification
+=========================
 
 Last updated: |last_updated_v02|
 
