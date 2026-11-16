@@ -188,7 +188,7 @@ class TestToRows:
             assert row["input_path"] == "s3://bucket/plate.ome.zarr"
             assert row["dca_spec_version"] == "0.1"
             assert row["dca_validator_version"] == "1.2.3"
-            assert row["reporting_format_version"] == "1.0.0"
+            assert row["reporting_format_version"] == "1.1.0"
             assert row["start_timestamp"] == "2026-01-01T00:00:00Z"
             assert row["completion_timestamp"] == self.TS
 
@@ -349,6 +349,7 @@ class TestSchemaMatchesDataclassFields:
         shared_fields = {
             "record_type",
             "input_path",
+            "snapshot_id",
             "dca_spec_version",
             "dca_validator_version",
             "reporting_format_version",

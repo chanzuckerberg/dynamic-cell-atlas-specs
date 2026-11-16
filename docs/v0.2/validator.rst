@@ -44,6 +44,7 @@ CLI
                                     order) within each selected well [default: 0]
      --field-limit INTEGER RANGE    Validate at most this many fields (after
                                     --field-offset) per selected well
+     --snapshot-id TEXT             Immutable dataset revision for HCS rollup
      --list-wells                   List PATH's wells and their declared field
                                     counts, then exit without validating.
      --help                         Show this message and exit.
@@ -134,6 +135,95 @@ Two strategies are available for discovering Zarr stores under an S3 prefix:
 
 * ``0`` — all stores pass (SHOULD warnings permitted unless ``--strict``)
 * ``1`` — one or more stores fail, or ``--strict`` and warnings are present
+
+Cross-chunk HCS consistency
+---------------------------
+
+When a well is split across validation jobs, each job sees only its selected
+fields. To check perturbation agreement and plate-wide layout across all jobs,
+create an explicit coverage manifest, save the chunk reports as Parquet, and
+run one offline rollup for the plate:
+
+.. code-block:: bash
+
+   dca-rollup manifest path/to/plate.ome.zarr \
+       --snapshot-id immutable-revision-42 --output-file manifest.json
+
+   dca-validate path/to/plate.ome.zarr --field-limit 5000 \
+       --snapshot-id immutable-revision-42 --output parquet \
+       --output-directory reports
+   dca-validate path/to/plate.ome.zarr --field-offset 5000 --field-limit 5000 \
+       --snapshot-id immutable-revision-42 --output parquet \
+       --output-directory reports
+   # Continue until every declared field of every well has been covered.
+
+   dca-rollup check manifest.json reports/*.parquet --show-warnings
+
+The offset and limit apply independently within each selected well. Jobs may
+also use ``--wells``. The manifest always describes the whole plate; the final
+rollup needs every declared well and field, including empty wells. Manifest
+creation reads only plate/well metadata and never opens field image groups.
+It preserves declared fields even when their groups are missing, and rejects
+unreadable wells, duplicate declarations, and ambiguous field identities.
+
+**Snapshot contract.** ``--snapshot-id`` is a caller-supplied immutable storage
+revision, shared by the manifest and all jobs. Keep that dataset unchanged
+throughout the workflow. A matching token or timestamp does not itself freeze a
+mutable store. Plate/well metadata fingerprints detect changed observed
+metadata; they cannot prove that disjoint field data remained immutable.
+If the dataset changes, create a new manifest and fresh reports for its new
+revision. The rollup rejects mismatched paths, snapshot IDs, spec versions,
+validator versions, metadata fingerprints, and unsupported report/fact versions.
+
+The rollup reads only the manifest and persisted reports. It does not reread the
+source store, decode image chunks, or perform another field validation. Its
+checks use the same rules as ordinary validation:
+
+* Fields within each well must agree on their complete perturbation assignment.
+  The optional well index must agree with that consensus. Disagreement is an
+  ERROR. Different wells may have different assignments.
+* Omitted and explicit-null dictionary properties compare equally, recursively.
+  List order and all other existing equality rules are unchanged.
+* Axes and level-0 chunk-shape nonuniformity across the plate remain WARNINGs.
+  ``--strict`` makes warnings cause a nonzero exit, as with ``dca-validate``.
+
+Identical retries and overlapping chunks are deduplicated by field identity.
+Conflicting retry facts or validation outcomes are rejected rather than choosing
+an arbitrary attempt. Supply only the intended attempts after investigating a
+conflict. Existing field and structural findings are retained. Only positively
+identified chunk-local cross-field checks are replaced by the whole-plate checks;
+schema errors at the same metadata location are retained.
+
+A rollup with missing expected fields, failed metadata reads, or unobserved wells
+is explicitly PARTIAL and exits nonzero. Coverage findings have the location
+``rollup.coverage``; they describe unavailable evidence, not a biological
+inconsistency. A complete rollup can still fail because a field or a structural
+rule failed validation. The command supports ``--output text``, ``json``, and
+``parquet``; ``--output-directory`` applies to Parquet output only.
+
+Parquet reporting format 1.1.0 adds nullable ``snapshot_id`` and ``hcs_facts``
+columns and an optional ``code`` in each issue. Existing columns, node rows, and
+the run-summary row are retained. HCS facts are versioned JSON strings so nested
+perturbation metadata round-trips without Arrow type inference. Format 1.0.0
+reports lack this evidence and must be regenerated for rollup. Ordinary JSON
+output remains the existing display format; Parquet is the archival rollup input.
+
+The Python equivalents are:
+
+.. code-block:: python
+
+   from dca_helpers.validation import create_hcs_manifest, rollup_reports, validate
+   from dca_helpers.validation.reporter import build_report
+
+   manifest = create_hcs_manifest("path/to/plate.ome.zarr", "immutable-revision-42")
+   # Persist manifest.model_dump_json(); load with HCSManifest.model_validate_json().
+   first = validate(manifest.plate_path, snapshot_id=manifest.snapshot_id,
+                    field_limit=5000, show_progress=False)
+   rest = validate(manifest.plate_path, snapshot_id=manifest.snapshot_id,
+                   field_offset=5000, show_progress=False)
+   combined = rollup_reports([build_report(first), build_report(rest)], manifest)
+   assert not combined.summary.is_partial
+   # Check combined.summary.stores_failed as well before reporting a pass.
 
 Python API
 ----------

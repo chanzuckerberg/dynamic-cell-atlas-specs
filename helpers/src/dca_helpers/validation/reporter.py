@@ -52,7 +52,7 @@ from dca_helpers.validation.result import (
     ZarrNodeValidationResult,
 )
 
-_REPORTING_FORMAT_VERSION = "1.0.0"
+_REPORTING_FORMAT_VERSION = "1.1.0"
 
 _RECORD_TYPE_VALIDATION_RUN_SUMMARY = "validation_run_summary"
 _RECORD_TYPE_NODE = "node"
@@ -174,6 +174,7 @@ def _issue_to_dict(issue: Issue) -> dict:
     # rather than left for pyarrow to reject as a mixed-type list.
     return {
         "severity": issue.severity.value,
+        "code": issue.code,
         "loc": [str(x) for x in issue.loc],
         "message": issue.message,
     }
@@ -194,6 +195,7 @@ def _shared_fields(run: ValidationRun, completion_timestamp: str) -> dict:
     """Provenance columns present on every row, regardless of `record_type`."""
     return {
         "input_path": run.path,
+        "snapshot_id": run.snapshot_id,
         "dca_spec_version": run.spec_version,
         "dca_validator_version": run.validator_version,
         "reporting_format_version": _REPORTING_FORMAT_VERSION,
@@ -223,6 +225,7 @@ def _validation_run_summary_row(run: ValidationRun, completion_timestamp: str) -
         "node_type": None,
         "skipped": None,
         "subset_coverage": None,
+        "hcs_facts": None,
     }
 
 
@@ -272,6 +275,7 @@ def to_rows(run: ValidationRun, completion_timestamp: str) -> list[dict]:
 _ISSUE_TYPE = pa.struct(
     [
         pa.field("severity", pa.string()),
+        pa.field("code", pa.string()),
         pa.field("loc", pa.list_(pa.string())),
         pa.field("message", pa.string()),
     ]
@@ -294,6 +298,7 @@ REPORT_SCHEMA = pa.schema(
         # rows from one run. start_timestamp/completion_timestamp together
         # let a query derive duration without a separately-stored value.
         pa.field("input_path", pa.string()),
+        pa.field("snapshot_id", pa.string()),
         pa.field("dca_spec_version", pa.string()),
         pa.field("dca_validator_version", pa.string()),
         pa.field("reporting_format_version", pa.string()),
@@ -310,6 +315,7 @@ REPORT_SCHEMA = pa.schema(
         pa.field("node_type", pa.string()),
         pa.field("skipped", pa.bool_()),
         pa.field("subset_coverage", _SUBSET_COVERAGE_TYPE),
+        pa.field("hcs_facts", pa.string()),
     ]
 )
 

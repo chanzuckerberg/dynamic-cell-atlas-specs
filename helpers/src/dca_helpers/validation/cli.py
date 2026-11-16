@@ -212,6 +212,11 @@ def _print_json(run: ValidationRun, show_warnings: bool = False) -> None:
         "validating. Requires PATH to point directly at a single HCS plate store."
     ),
 )
+@click.option(
+    "--snapshot-id",
+    default=None,
+    help="Immutable dataset revision shared by the manifest and all HCS chunk reports.",
+)
 @click.pass_context
 def main(
     ctx: click.Context,
@@ -228,6 +233,7 @@ def main(
     field_limit: int | None,
     require_projection: bool,
     list_wells: bool,
+    snapshot_id: str | None,
 ) -> None:
     """Validate Zarr stores at or under PATH against the DCA spec.
 
@@ -283,6 +289,7 @@ def main(
             wells=wells,
             field_offset=field_offset,
             field_limit=field_limit,
+            **({"snapshot_id": snapshot_id} if snapshot_id is not None else {}),
             require_projection=require_projection,
         )
     except ValueError as exc:
