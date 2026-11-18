@@ -207,6 +207,25 @@ class TestInvalidStoresV02:
         assert "spatial dimensions" in errors[0].message
         assert len(downsampling) == 2
 
+    def test_level_warning_does_not_hide_store_level_errors(self):
+        run = validate(
+            str(FIXTURES / "v0_2/invalid_nested_and_store_rules.ome.zarr"),
+            spec_version="0.2",
+            show_progress=False,
+        )
+        issues = _all_issues(run)
+        unit_errors = [
+            i
+            for i in issues
+            if i.severity == Severity.ERROR and "has no unit" in i.message
+        ]
+        assert run.summary.stores_failed == 1
+        assert len(unit_errors) == 4
+        assert any(
+            i.severity == Severity.WARNING and "recommended 1 MB" in i.message
+            for i in issues
+        )
+
 
 @pytest.mark.functional
 class TestWellFieldSubsetting:
