@@ -648,6 +648,123 @@
           }
         }
       ]
+    },
+    "StoreTable": {
+      "type": "object",
+      "description": "Attributes of a table group, <store>/tables/<name>/zarr.json (tables.rst): ngio's table attributes, with the Parquet backend. Not part of an image group's dca block.",
+      "required": [
+        "type",
+        "table_version",
+        "backend"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "feature_table",
+            "masking_roi_table",
+            "roi_table",
+            "condition_table",
+            "generic_table"
+          ]
+        },
+        "table_version": {
+          "const": "1"
+        },
+        "backend": {
+          "const": "parquet"
+        },
+        "index_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index_type": {
+          "enum": [
+            "int",
+            "str"
+          ]
+        },
+        "instance_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^\\.\\./labels/[^/]+$",
+              "description": "The label image the table describes, ../labels/<label_name>, resolved from each row's image group."
+            }
+          }
+        }
+      },
+      "not": {
+        "required": [
+          "dca"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "feature_table",
+                  "masking_roi_table"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "index_key",
+              "index_type",
+              "instance_key",
+              "region"
+            ],
+            "properties": {
+              "index_key": {
+                "const": "label"
+              },
+              "instance_key": {
+                "const": "label"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "condition_table"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "index_key",
+              "index_type"
+            ],
+            "properties": {
+              "index_key": {
+                "const": "zarr_path"
+              },
+              "index_type": {
+                "const": "str"
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
