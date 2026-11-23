@@ -57,7 +57,8 @@ Changes from v0.2
   only changes to the experimental-metadata schema
   (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
-  cross-store projection checks and an opt-in ``--require-projection`` (see the
+  cross-store projection checks, an opt-in ``--require-projection``, and the
+  store-level table checks listed in :doc:`tables` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
   spec version stays 0.2 until v0.3 is released.
 

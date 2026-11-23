@@ -310,6 +310,39 @@ The ``zarr.json`` of the condition table, ``tables/obs``:
      }
    }
 
+Validation
+----------
+
+``dca-validate --spec-version 0.3`` checks the tables of every store it validates from a
+few metadata reads: the ``tables/`` listing, each table's ``zarr.json`` and Parquet
+footer, and only the key columns where values are needed. v0.2 stores are not checked.
+
+Errors (MUST):
+
+* The store has no ``tables/obs`` condition table, or ``tables/obs`` keeps the v0.2
+  ``obs.parquet`` instead of ``table.parquet``; ``tables/obs`` is not a
+  ``condition_table``, or another table is.
+* ``tables/zarr.json`` is missing, or its ``tables`` attribute does not list exactly the
+  table groups present.
+* A table group has no ``zarr.json``, or its attributes do not match
+  ``$defs/StoreTable`` of the v0.3 schema; ``table.parquet`` is missing or unreadable.
+* ``tables/obs`` has no ``zarr_path`` column, a ``zarr_path`` twice, or ``zarr_path``
+  values that are not the store's image groups (for a plate, the fields its wells
+  declare; for a store whose root is the image group, one row). When ``--wells``
+  selects some wells, only their fields are checked for a row.
+* A table of objects has no ``zarr_path`` or ``label`` column, a ``label`` that is not
+  an integer greater than 0, only one of ``parent_label_name`` and ``parent_label``, or
+  no ``t`` column while its label image has more than one timepoint.
+* Two rows of a ``masking_roi_table`` share (``zarr_path``, ``t``, ``label``).
+* A validated image group of a plate has its own ``tables`` group.
+
+Warnings (SHOULD):
+
+* A table of objects in a plate has no ``row``, ``column`` or ``path_in_well`` column.
+* A label image of a validated image group has no ``masking_roi_table`` whose ``region``
+  names it. Only an instance label image needs an object index, and the metadata does not
+  say which label images are instance segmentations, so this is not an error.
+
 Relation to other conventions
 -----------------------------
 
