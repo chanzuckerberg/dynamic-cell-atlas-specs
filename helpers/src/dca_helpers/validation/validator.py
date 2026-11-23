@@ -21,6 +21,10 @@ Flow for one Zarr store:
 Label groups under an IMAGE node, and under each selected HCS field, are
 validated by _validate_labels_of() and reported as IMAGE_LABEL results with
 parent_path set to the image/field path.
+
+For spec versions that define store-level tables (v0.3), an IMAGE store and an
+HCS plate also get the checks of validation/tables.py, reported on the image's
+result or the plate-root result.
 """
 
 from __future__ import annotations
@@ -48,6 +52,11 @@ from dca_helpers.validation.result import (
     PlateSubsetInfo,
     Severity,
     ZarrNodeValidationResult,
+)
+from dca_helpers.validation.tables import (
+    TABLES_SPEC_VERSIONS,
+    check_store_tables,
+    has_tables_group,
 )
 from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     validate_dca_experimental_metadata_v0_2,
@@ -1256,6 +1265,10 @@ def _validate_hcs_plate(
     field_results: list[ZarrNodeValidationResult] = []
     perturbation_by_field: dict[str, object] = {}
 
+    check_tables = spec_version in TABLES_SPEC_VERSIONS
+    labels_by_field: dict[str, set[str]] = {}
+    fields_with_tables: list[str] = []
+
     def _field_and_labels(fp: str):
         field_out = _validate_field(
             node_path,
@@ -1268,7 +1281,8 @@ def _validate_hcs_plate(
         label_results = _validate_labels_of(
             f"{node_path}/{fp}", spec_version, check_ontology
         )
-        return field_out, label_results
+        own_tables = check_tables and has_tables_group(f"{node_path}/{fp}")
+        return field_out, label_results, own_tables
 
     with ThreadPoolExecutor() as executor:
         futures = {
@@ -1276,9 +1290,14 @@ def _validate_hcs_plate(
         }
         for future in as_completed(futures):
             fp = futures[future]
-            (result, axes, chunk_shape, perturbation), label_results = future.result()
+            (result, axes, chunk_shape, perturbation), label_results, own_tables = (
+                future.result()
+            )
             field_results.append(result)
             field_results.extend(label_results)
+            labels_by_field[fp] = _label_names(label_results, f"{node_path}/{fp}")
+            if own_tables:
+                fields_with_tables.append(fp)
             perturbation_by_field[fp] = perturbation
             if axes is not None:
                 seen_axes.append(axes)
@@ -1291,6 +1310,34 @@ def _validate_hcs_plate(
         plate_issues.extend(
             _check_well_perturbation_agreement(
                 selected_field_paths, perturbation_by_field, well_perturbation_by_well
+            )
+        )
+
+    if check_tables:
+        for fp in sorted(fields_with_tables):
+            plate_issues.append(
+                Issue(
+                    loc=("tables", "image_group", fp),
+                    message=(
+                        f"Image group '{fp}' has its own tables/ group; tables "
+                        f"belong at the store root, <store>/tables/<name>/"
+                    ),
+                    severity=Severity.ERROR,
+                )
+            )
+        # Every declared well opened (no --wells, none failed to open) means
+        # field_paths is every image group of the plate.
+        wells_declared = sum(1 for w in declared_wells if _entry_path(w))
+        plate_issues.extend(
+            check_store_tables(
+                node_path,
+                is_plate=True,
+                image_groups=field_paths,
+                image_groups_complete=(
+                    well_filter is None
+                    and len(well_perturbation_by_well) == wells_declared
+                ),
+                labels_by_image=labels_by_field,
             )
         )
 
@@ -1354,6 +1401,22 @@ def _validate_hcs_plate(
     )
 
     return [plate_result] + field_results
+
+
+def _label_names(
+    label_results: list[ZarrNodeValidationResult], image_path: str
+) -> set[str]:
+    """Names of the label images of `image_path` that were opened and validated,
+    from its label results (not those reported missing or unopenable)."""
+    prefix = f"{image_path}/labels/"
+    return {
+        name
+        for r in label_results
+        if r.node_type == ZarrNodeType.IMAGE_LABEL
+        and r.multiscale_level_count is not None
+        and r.node_path.startswith(prefix)
+        and "/" not in (name := r.node_path[len(prefix) :])
+    }
 
 
 def _validate_label_group(
@@ -1823,4 +1886,16 @@ def validate_zarr_node(
         group_attrs=raw_attrs,
     )
     results = _tag_node_type(results, node_type)
-    return results + _validate_labels_of(node_path, spec_version, check_ontology)
+    label_results = _validate_labels_of(node_path, spec_version, check_ontology)
+    if spec_version in TABLES_SPEC_VERSIONS:
+        table_issues = check_store_tables(
+            node_path,
+            is_plate=False,
+            image_groups=None,
+            image_groups_complete=True,
+            labels_by_image={"": _label_names(label_results, node_path)},
+        )
+        results[0].issues.extend(table_issues)
+        if any(i.severity == Severity.ERROR for i in table_issues):
+            results[0].passed = False
+    return results + label_results

@@ -44,6 +44,12 @@ Changes from v0.2
   model is adapted from biahub's ``project`` command. Its uniform form keeps
   the field names of the top-level ``mip`` attribute that v0.2-era projection stores
   carry. See :doc:`projections`.
+* **Tables** (new): tables are ngio tables (``tables/<name>/``, Parquet, ngio's attributes
+  and table types), kept once at the store root, one table per label image, with rows for
+  every image group of the store. Every instance label image has an **object index**
+  that lists each of its objects once, keyed by image group, timepoint and label value.
+  ``tables/obs`` becomes ngio's condition table, and its data moves from ``obs.parquet``
+  to ``table.parquet`` so that ngio can open it. See :doc:`tables`.
 * ``dca.version`` is ``"0.3"``.
 * ``image_data.processing_variant`` is an ordered list of processing steps, with a
   recommended step vocabulary, instead of a single string, and a new free-text
@@ -51,7 +57,8 @@ Changes from v0.2
   only changes to the experimental-metadata schema
   (``schema/v0.3/dca_experimental_metadata.yaml``).
 * The validator supports v0.3 with ``dca-validate --spec-version 0.3``, including the
-  cross-store projection checks and an opt-in ``--require-projection`` (see the
+  cross-store projection checks, an opt-in ``--require-projection``, and the
+  store-level table checks listed in :doc:`tables` (see the
   :doc:`v0.2 validator page </v0.2/validator>` for everything unchanged). The default
   spec version stays 0.2 until v0.3 is released.
 
@@ -63,6 +70,7 @@ Contents
 
    array-standard
    projections
+   tables
 
 .. toctree::
    :maxdepth: 3

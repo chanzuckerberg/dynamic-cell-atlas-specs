@@ -4,7 +4,8 @@ Builders for v0.3 source / projection store pairs, for the projection tests.
 Starts from the committed v0.2 plate fixture (zarr.json files only, a 3D plate
 with z=16 at level 0) and writes, under a temporary directory:
 
-* ``plate.ome.zarr``     — the source, upgraded to dca.version "0.3"
+* ``plate.ome.zarr``     — the source, upgraded to dca.version "0.3", with the
+  ``tables/obs`` condition table every v0.3 store has
 * ``plate_mip.ome.zarr`` — its maximum intensity projection: z=1 at every
   level, z scale 1.0, ``dca.projection`` (uniform form) and the MIP processing step
 
@@ -21,6 +22,8 @@ import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+
+from .table_fixtures import add_condition_table
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 BASE_PLATE = FIXTURES / "v0_2" / "valid_plate.ome.zarr"
@@ -53,6 +56,7 @@ def _to_v03_source(store: Path, steps: list[str]) -> None:
         attrs["dca"]["image_data"] = {"processing_variant": steps}
 
     edit_field_attrs(store, upgrade)
+    add_condition_table(store, [FIELD])
 
 
 def _project(store: Path, source_name: str, steps: list[str]) -> None:
