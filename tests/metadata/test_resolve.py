@@ -5,6 +5,7 @@ one-item-list collapse), then :func:`resolve_dca` and :func:`validate_dca`.
 """
 
 import copy
+import json
 
 import pytest
 
@@ -900,3 +901,120 @@ def test_validation_error_lists_every_must_finding_with_its_field():
     assert sorted(err.fields) == ["biosample.organism", "study.release_date"]
     assert all(issue.startswith(field) for issue, field in zip(err.issues, err.fields))
     assert isinstance(err, ValueError)
+
+
+# --- spec version ---------------------------------------------------------------
+
+#: id -> (block, metadata). Representative blocks for the default-version regression:
+#: curated literals, a column-fed and mapped perturbation, a list field fed by a scalar,
+#: provenance in nested form, and a channel catalogue.
+_VERSION_CASES = {
+    "minimal": (min_dca_block(), {}),
+    "perturbation": (
+        {**_MIN, "perturbation": _PERT},
+        {"cls": "cmpd", "pid": "X", "solv": "DMSO"},
+    ),
+    "column-fed-list-and-provenance": (
+        min_dca_block(
+            study={**_MIN["study"], "study_type": {"column": "kind"}},
+            image_data={"processing_variant": {"column": "variant"}},
+            provenance={"study": {"study_type": {"source_kind": "human"}}},
+        ),
+        {"kind": "Screen", "variant": "raw"},
+    ),
+    "channels": (
+        min_dca_block(channels={"DNA": {"name": {"value": "Hoechst"}}}),
+        {},
+    ),
+}
+
+
+@pytest.mark.parametrize("case_id", sorted(_VERSION_CASES))
+def test_default_version_is_v0_2_byte_for_byte(case_id):
+    """Passing ``version="0.2"`` changes nothing, and the default output is v0.2's."""
+    block, metadata = _VERSION_CASES[case_id]
+    keys = list(block.get("channels") or []) or None
+
+    default = resolve_dca(block, metadata, channel_keys=keys)
+    explicit = resolve_dca(block, metadata, channel_keys=keys, version="0.2")
+    assert json.dumps(default) == json.dumps(explicit)
+
+    default_out = validate_dca(default, where="g")
+    explicit_out = validate_dca(explicit, where="g", version="0.2")
+    assert json.dumps(default_out) == json.dumps(explicit_out)
+
+
+def test_default_version_keeps_the_v0_2_processing_variant_string():
+    block, metadata = _VERSION_CASES["column-fed-list-and-provenance"]
+    out = validate_dca(resolve_dca(block, metadata), where="g")
+    assert out["image_data"] == {"processing_variant": "raw"}
+    assert out["study"]["study_type"] == ["Screen"]
+    assert out["provenance"]["study.study_type"]["field_path"] == "study.study_type"
+
+
+_PV_BLOCK = min_dca_block(image_data={"processing_variant": {"value": "raw"}})
+
+
+def test_v0_3_resolves_processing_variant_as_a_list():
+    """v0.3 made ``processing_variant`` a list; the same config wraps under v0.3 only."""
+    assert resolve_dca(_PV_BLOCK, {})["image_data"] == {"processing_variant": "raw"}
+    v03 = resolve_dca(_PV_BLOCK, {}, version="0.3")
+    assert v03["image_data"] == {"processing_variant": ["raw"]}
+    out = validate_dca(v03, where="g", version="0.3")
+    assert out["image_data"] == {"processing_variant": ["raw"]}
+
+
+def test_version_is_honoured_by_the_gate():
+    v03 = resolve_dca(_PV_BLOCK, {}, version="0.3")
+    with pytest.raises(DcaValidationError) as exc:
+        validate_dca(v03, where="g")  # the v0.2 gate rejects the v0.3 list
+    assert exc.value.fields == ["image_data.processing_variant"]
+
+    v02 = resolve_dca(_PV_BLOCK, {})
+    with pytest.raises(DcaValidationError) as exc:
+        validate_dca(v02, where="g", version="0.3")  # and v0.3 rejects the v0.2 string
+    assert exc.value.fields == ["image_data.processing_variant"]
+
+
+def test_v0_3_accepts_a_v0_3_only_field_that_v0_2_rejects():
+    block = min_dca_block(
+        image_data={
+            "processing_variant": ["deconvolved"],
+            "processing_description": "deconvolved upstream",
+        }
+    )
+    out = validate_dca(resolve_dca(block, {}, version="0.3"), where="g", version="0.3")
+    assert out["image_data"]["processing_description"] == "deconvolved upstream"
+    with pytest.raises(DcaValidationError) as exc:
+        validate_dca(resolve_dca(block, {}), where="g")
+    assert "image_data.processing_description" in exc.value.fields
+
+
+def test_v0_3_gate_runs_the_v0_3_only_rules():
+    """``raw`` must stand alone: a v0.3 MUST that the v0.2 validator does not have."""
+    block = min_dca_block(image_data={"processing_variant": ["raw", "deconvolved"]})
+    with pytest.raises(DcaValidationError) as exc:
+        validate_dca(resolve_dca(block, {}, version="0.3"), where="g", version="0.3")
+    assert any("MUST be the only item" in issue for issue in exc.value.issues)
+
+
+def test_v0_3_normalisation_still_downgrades_should_raises():
+    """The SHOULD-neutralising ``Biosample`` override applies under v0.3 too."""
+    block = _block_with_a_should_finding()
+    w02: list[str] = []
+    w03: list[str] = []
+    v02 = validate_dca(copy.deepcopy(block), where="g", warnings=w02)
+    v03 = validate_dca(copy.deepcopy(block), where="g", warnings=w03, version="0.3")
+    assert v02 == v03
+    assert w02 == w03
+    assert any("tissue" in w for w in w03)
+
+
+@pytest.mark.parametrize("version", ["0.1", "1.0", "v0.3", "", None])
+def test_unsupported_version_names_the_supported_ones(version):
+    for call in (
+        lambda: resolve_dca(min_dca_block(), {}, version=version),
+        lambda: validate_dca(min_dca_block(), where="g", version=version),
+    ):
+        with pytest.raises(ValueError, match=r"Supported versions: \['0.2', '0.3'\]"):
+            call()
