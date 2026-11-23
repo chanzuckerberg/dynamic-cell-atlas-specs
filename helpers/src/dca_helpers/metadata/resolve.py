@@ -50,6 +50,10 @@ from dca_helpers.validation.versions.v0_2.experimental_metadata import (
     _BiosampleV0_2,
     validate_experimental_metadata_v0_2,
 )
+from dca_helpers.validation.versions.v0_3.experimental_metadata import (
+    DCAExperimentalMetadataV0_3,
+    validate_experimental_metadata_v0_3,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,25 @@ DCA_KEY = "dca"
 #: ``dca_helpers.validation.validator._SHOULD_MARKER``, which is what turns a raised
 #: message into ``Severity.WARNING`` rather than ``Severity.ERROR``.
 _SHOULD_MARKER = "[SHOULD]"
+
+#: Spec version -> (``ExperimentalMetadata`` model, its issue-list validator). The model
+#: decides the shape :func:`resolve_dca` resolves against and the one
+#: :func:`validate_dca` normalises through; the validator is the gate.
+_EXPERIMENTAL: dict[str, tuple[type, Callable[[dict], list[Any]]]] = {
+    "0.2": (DCAExperimentalMetadataV0_2, validate_experimental_metadata_v0_2),
+    "0.3": (DCAExperimentalMetadataV0_3, validate_experimental_metadata_v0_3),
+}
+
+
+def _experimental(version: str) -> tuple[type, Callable[[dict], list[Any]]]:
+    """The model and validator for spec *version*, or ``ValueError``."""
+    try:
+        return _EXPERIMENTAL[version]
+    except (KeyError, TypeError):
+        raise ValueError(
+            f"DCA spec version {version!r} is not supported by the resolver. "
+            f"Supported versions: {sorted(_EXPERIMENTAL)}"
+        ) from None
 
 
 class DcaValidationError(ValueError):
@@ -415,8 +438,14 @@ def resolve_dca(
     *,
     channel_keys: Sequence[str] | None = None,
     where: str = "this group",
+    version: str = "0.2",
 ) -> dict:
     """Resolve a whole ``[dca]`` block, selecting this store's channels by key.
+
+    *version* is the DCA spec version (``"0.2"`` or ``"0.3"``) whose
+    ``ExperimentalMetadata`` model shapes the result; pass the same one to
+    :func:`validate_dca`. It matters where the versions differ in shape: under ``"0.3"``
+    ``image_data.processing_variant`` is a list, so a single authored value is wrapped.
 
     *channel_keys* is the store's source channel keys in C order, from
     :meth:`IngestConfig.channels_for_store`. It is required whenever the block declares
@@ -425,9 +454,11 @@ def resolve_dca(
     """
     catalogue = block.get("channels")
     provenance = block.get("provenance")
+    model, _ = _experimental(version)
     resolved = _resolve_experimental(
         {k: v for k, v in block.items() if k not in ("channels", "provenance")},
         metadata,
+        model,
     )
     # `provenance` resolves as a map of independent records (each prunes on its own —
     # see `_resolve_map`; a record is any mapping carrying `source_kind`), and the
@@ -592,7 +623,9 @@ def _resolve_against(
 
 
 def _resolve_experimental(
-    block: Mapping[str, Any], metadata: Mapping[str, Any]
+    block: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    model: type = DCAExperimentalMetadataV0_2,
 ) -> dict:
     """Resolve the experimental blocks of a ``[dca]`` block schema-driven, in one path.
 
@@ -609,7 +642,7 @@ def _resolve_experimental(
     This one dispatch is why the block reaches :func:`validate_dca` already model-shaped
     (every list field wrapped by construction), so no separate re-listing repair is needed.
     """
-    fields = DCAExperimentalMetadataV0_2.model_fields
+    fields = model.model_fields
     out: dict[Any, Any] = {}
     for key, child in block.items():
         annotation = fields[key].annotation if key in fields else None
@@ -631,9 +664,9 @@ def _every_line_is_should(message: str) -> bool:
     return bool(lines) and all(line.startswith(_SHOULD_MARKER) for line in lines)
 
 
-@lru_cache(maxsize=1)
-def _normalising_model() -> type:
-    """The spec model with its SHOULD-raising validators neutralised.
+@lru_cache(maxsize=None)
+def _normalising_model(version: str = "0.2") -> type:
+    """The spec model for *version* with its SHOULD-raising validators neutralised.
 
     **For normalisation only.** The gate is the issue list; see :func:`validate_dca`.
 
@@ -651,10 +684,13 @@ def _normalising_model() -> type:
     anything that is not wholly SHOULD, so a MUST added to that same validator later is
     still fatal rather than silently swallowed.
 
+    v0.3 reuses the v0.2 ``Biosample`` rules unchanged, so the same override applies to
+    both versions.
+
     Built lazily and cached, so the subclass costs a few hundred microseconds once per
-    process. If ``_BiosampleV0_2`` ever disappears from the validation package, importing
-    this module raises ``ImportError`` naming the symbol, which is the right failure for a
-    coupling this deliberate.
+    process and version. If ``_BiosampleV0_2`` ever disappears from the validation
+    package, importing this module raises ``ImportError`` naming the symbol, which is the
+    right failure for a coupling this deliberate.
     """
 
     class _NormalisingBiosample(_BiosampleV0_2):  # type: ignore[misc, valid-type]
@@ -667,7 +703,9 @@ def _normalising_model() -> type:
                     return self
                 raise
 
-    class _NormalisingExperimentalMetadata(DCAExperimentalMetadataV0_2):
+    base, _ = _experimental(version)
+
+    class _NormalisingExperimentalMetadata(base):  # type: ignore[misc, valid-type]
         biosample: _NormalisingBiosample
 
     return _NormalisingExperimentalMetadata
@@ -703,12 +741,22 @@ def dca_read_columns(block: Any) -> frozenset[str]:
     return frozenset(out)
 
 
-def validate_dca(block: dict, *, where: str, warnings: list[str] | None = None) -> dict:
-    """Validate *block* and return it normalised, or raise.
+def validate_dca(
+    block: dict,
+    *,
+    where: str,
+    warnings: list[str] | None = None,
+    version: str = "0.2",
+) -> dict:
+    """Validate *block* against DCA spec *version* and return it normalised, or raise.
 
     Two jobs, and keeping them apart is the whole point of this function's shape:
 
-    **The gate** is ``validate_experimental_metadata_v0_2``, whose issue list carries a
+    *version* is ``"0.2"`` (the default) or ``"0.3"``; any other raises ``ValueError``.
+    It picks both the gate and the normalising model, and should match the *version*
+    the block was resolved with by :func:`resolve_dca`.
+
+    **The gate** is ``validate_experimental_metadata_v0_<N>``, whose issue list carries a
     severity per finding. Only MUST-severity findings are fatal. SHOULD findings are
     logged and the build proceeds — a recommendation is not a reason to refuse to
     describe a dataset.
@@ -748,11 +796,12 @@ def validate_dca(block: dict, *, where: str, warnings: list[str] | None = None) 
     so a pipeline that validates once per field of view can deduplicate and report them
     once. When it is ``None``, the findings are logged as one warning naming *where*.
     """
+    _, validate_experimental = _experimental(version)
     experimental = {k: v for k, v in block.items() if k != "channels"}
 
     errors: list[Any] = []
     shoulds: list[Any] = []
-    for issue in validate_experimental_metadata_v0_2(experimental):
+    for issue in validate_experimental(experimental):
         severity = getattr(issue.severity, "value", issue.severity)
         (errors if severity == "error" else shoulds).append(issue)
 
@@ -774,7 +823,7 @@ def validate_dca(block: dict, *, where: str, warnings: list[str] | None = None) 
         logger.warning("DCA metadata warnings for %s: %s", where, render(shoulds))
 
     try:
-        model = _normalising_model().model_validate(experimental)
+        model = _normalising_model(version).model_validate(experimental)
     except ValidationError as exc:
         details = exc.errors()
         raise DcaValidationError(

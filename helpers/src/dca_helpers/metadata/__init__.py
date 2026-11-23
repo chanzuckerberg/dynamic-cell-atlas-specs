@@ -5,6 +5,9 @@ normalization statistics. After writing a store, gate it with
 ``dca_helpers.validation.runner.validate(<store>, spec_version="0.2")``, which checks the
 full ``dca`` block, channels and statistics included.
 
+:func:`resolve_dca` and :func:`validate_dca` target spec v0.2 by default; pass
+``version="0.3"`` to both to resolve and validate against v0.3 instead.
+
 Pass ``warnings=`` a list to collect SHOULD findings from :func:`validate_dca` instead of
 logging them, and ``run_attrs=`` to have :func:`merge_dca_attributes` record the writing
 tool's version and git sha beside the ``dca`` block.
